@@ -48,7 +48,7 @@ const adminController = {
       await user.save();
 
       // Generate and send credentials email
-      await sendCredentialsEmail(email, password, role);
+      // await sendCredentialsEmail(email, password, role);
 
       res.status(201).json(user);
     } catch (error) {
