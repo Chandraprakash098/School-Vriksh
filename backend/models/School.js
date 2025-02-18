@@ -1,0 +1,31 @@
+const mongoose = require('mongoose');
+
+const schoolSchema = new mongoose.Schema({
+  name: { type: String, required: true },
+  address: { type: String, required: true },
+  contact: { type: String, required: true },
+  email: { type: String, required: true, unique: true },
+  registrationDate: { type: Date, default: Date.now },
+  subscriptionStatus: { 
+    type: String, 
+    enum: ['active', 'inactive', 'pending'], 
+    default: 'active' 
+  },
+  subscriptionDetails: {
+    plan: String,
+    startDate: Date,
+    endDate: Date,
+    paymentStatus: String
+  },
+  customFormFields: [{ 
+    fieldName: String, 
+    fieldType: String, 
+    required: Boolean 
+  }],
+  rteQuota: {
+    totalSeats: { type: Number, default: 0 },
+    occupied: { type: Number, default: 0 }
+  }
+}, { timestamps: true });
+
+module.exports = mongoose.model('School', schoolSchema);
