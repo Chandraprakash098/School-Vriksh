@@ -17,10 +17,163 @@ const mongoose = require('mongoose');
 
 const adminController = {
   // ============ User Management ============
+  // createUser: async (req, res) => {
+  //   try {
+  //     const { name, email, password, role, profile } = req.body;
+  //     // const { schoolId } = req.params;
+
+  //     // Check if email already exists
+  //     const existingUser = await User.findOne({ email });
+  //     if (existingUser) {
+  //       return res.status(400).json({ message: 'Email already registered' });
+  //     }
+
+  //     // Generate hashed password
+  //     const salt = await bcrypt.genSalt(10);
+  //     const hashedPassword = await bcrypt.hash(password, salt);
+
+  //     // Set default permissions based on role
+  //     const permissions = getDefaultPermissions(role);
+
+  //     const user = new User({
+  //       // school: schoolId,
+  //       name,
+  //       email,
+  //       password: hashedPassword,
+  //       role,
+  //       profile,
+  //       permissions
+  //     });
+
+  //     await user.save();
+
+  //     // Generate and send credentials email
+  //     // await sendCredentialsEmail(email, password, role);
+
+  //     res.status(201).json(user);
+  //   } catch (error) {
+  //     res.status(500).json({ error: error.message });
+  //   }
+  // },
+
+
+  // createTeacher: async (req, res) => {
+  //   try {
+  //     const { 
+  //       name, 
+  //       email, 
+  //       password, 
+  //       phone, 
+  //       address, 
+  //       photo,
+  //       isClassTeacher, 
+  //       classId, 
+  //       subjectAssignments 
+  //     } = req.body;
+  //     const { schoolId } = req.params;
+  
+  //     const session = await mongoose.startSession();
+  //     session.startTransaction();
+  
+  //     try {
+  //       // Check if email already exists
+  //       const existingUser = await User.findOne({ email });
+  //       if (existingUser) {
+  //         return res.status(400).json({ message: 'Email already registered' });
+  //       }
+  
+  //       // Generate hashed password
+  //       const salt = await bcrypt.genSalt(10);
+  //       const hashedPassword = await bcrypt.hash(password, salt);
+  
+  //       // Set up initial permissions
+  //       let permissions = {
+  //         canTakeAttendance: [],
+  //         canEnterMarks: [],
+  //         canPublishAnnouncements: true,
+  //         canManageInventory: false,
+  //         canManageFees: false,
+  //         canManageLibrary: false
+  //       };
+  
+  //       // If assigned as class teacher, add attendance permission for that class
+  //       if (isClassTeacher && classId) {
+  //         permissions.canTakeAttendance.push(classId);
+  //       }
+  
+  //       // Add permissions for subject marks entry
+  //       if (subjectAssignments && subjectAssignments.length > 0) {
+  //         permissions.canEnterMarks = subjectAssignments.map(assignment => ({
+  //           class: assignment.classId,
+  //           subject: assignment.subjectId
+  //         }));
+  //       }
+  
+  //       // Create the teacher user
+  //       const teacher = new User({
+  //         school: schoolId,
+  //         name,
+  //         email,
+  //         password: hashedPassword,
+  //         role: 'teacher',
+  //         profile: {
+  //           phone,
+  //           address,
+  //           photo
+  //         },
+  //         permissions
+  //       });
+  
+  //       await teacher.save({ session });
+  
+  //       // Create teacher assignment record
+  //       const assignment = new TeacherAssignment({
+  //         school: schoolId,
+  //         teacher: teacher._id,
+  //         class: isClassTeacher ? classId : null,
+  //         subjects: subjectAssignments.map(assignment => ({
+  //           class: assignment.classId,
+  //           subject: assignment.subjectId
+  //         })),
+  //         assignmentType: isClassTeacher ? 'classTeacher' : 'subjectTeacher',
+  //         academicYear: getCurrentAcademicYear() // Implement this helper function
+  //       });
+  
+  //       await assignment.save({ session });
+  
+  //       // If assigned as class teacher, update the class document
+  //       if (isClassTeacher && classId) {
+  //         await Class.findByIdAndUpdate(
+  //           classId,
+  //           { classTeacher: teacher._id },
+  //           { session }
+  //         );
+  //       }
+  
+  //       // Generate and send credentials email
+  //       // await sendCredentialsEmail(email, password, 'teacher');
+  
+  //       await session.commitTransaction();
+  //       res.status(201).json({ 
+  //         teacher,
+  //         assignment,
+  //         message: 'Teacher created successfully with appropriate permissions'
+  //       });
+  //     } catch (error) {
+  //       await session.abortTransaction();
+  //       throw error;
+  //     } finally {
+  //       session.endSession();
+  //     }
+  //   } catch (error) {
+  //     res.status(500).json({ error: error.message });
+  //   }
+  // },
+
   createUser: async (req, res) => {
     try {
       const { name, email, password, role, profile } = req.body;
-      // const { schoolId } = req.params;
+      const schoolId = req.user.school; // Get school ID from logged-in admin
 
       // Check if email already exists
       const existingUser = await User.findOne({ email });
@@ -36,7 +189,7 @@ const adminController = {
       const permissions = getDefaultPermissions(role);
 
       const user = new User({
-        // school: schoolId,
+        school: schoolId,
         name,
         email,
         password: hashedPassword,
@@ -46,16 +199,11 @@ const adminController = {
       });
 
       await user.save();
-
-      // Generate and send credentials email
-      // await sendCredentialsEmail(email, password, role);
-
       res.status(201).json(user);
     } catch (error) {
       res.status(500).json({ error: error.message });
     }
   },
-
 
   createTeacher: async (req, res) => {
     try {
@@ -70,22 +218,22 @@ const adminController = {
         classId, 
         subjectAssignments 
       } = req.body;
-      const { schoolId } = req.params;
-  
+      const schoolId = req.user.school; // Get school ID from logged-in admin
+
       const session = await mongoose.startSession();
       session.startTransaction();
-  
+
       try {
         // Check if email already exists
         const existingUser = await User.findOne({ email });
         if (existingUser) {
           return res.status(400).json({ message: 'Email already registered' });
         }
-  
+
         // Generate hashed password
         const salt = await bcrypt.genSalt(10);
         const hashedPassword = await bcrypt.hash(password, salt);
-  
+
         // Set up initial permissions
         let permissions = {
           canTakeAttendance: [],
@@ -95,21 +243,18 @@ const adminController = {
           canManageFees: false,
           canManageLibrary: false
         };
-  
-        // If assigned as class teacher, add attendance permission for that class
+
         if (isClassTeacher && classId) {
           permissions.canTakeAttendance.push(classId);
         }
-  
-        // Add permissions for subject marks entry
+
         if (subjectAssignments && subjectAssignments.length > 0) {
           permissions.canEnterMarks = subjectAssignments.map(assignment => ({
             class: assignment.classId,
             subject: assignment.subjectId
           }));
         }
-  
-        // Create the teacher user
+
         const teacher = new User({
           school: schoolId,
           name,
@@ -123,10 +268,9 @@ const adminController = {
           },
           permissions
         });
-  
+
         await teacher.save({ session });
-  
-        // Create teacher assignment record
+
         const assignment = new TeacherAssignment({
           school: schoolId,
           teacher: teacher._id,
@@ -136,12 +280,11 @@ const adminController = {
             subject: assignment.subjectId
           })),
           assignmentType: isClassTeacher ? 'classTeacher' : 'subjectTeacher',
-          academicYear: getCurrentAcademicYear() // Implement this helper function
+          academicYear: getCurrentAcademicYear()
         });
-  
+
         await assignment.save({ session });
-  
-        // If assigned as class teacher, update the class document
+
         if (isClassTeacher && classId) {
           await Class.findByIdAndUpdate(
             classId,
@@ -149,10 +292,7 @@ const adminController = {
             { session }
           );
         }
-  
-        // Generate and send credentials email
-        // await sendCredentialsEmail(email, password, 'teacher');
-  
+
         await session.commitTransaction();
         res.status(201).json({ 
           teacher,
