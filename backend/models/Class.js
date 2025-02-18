@@ -48,11 +48,17 @@ const classSchema = new mongoose.Schema({
   },
   academicYear: { type: String, required: true },
   students: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+  // schedule: {
+  //   startTime: { type: String, required: true },
+  //   endTime: { type: String, required: true },
+  //   periodsPerDay: { type: Number, required: true },
+  //   periodDuration: { type: Number, required: true }
+  // }
   schedule: {
-    startTime: { type: String, required: true },
-    endTime: { type: String, required: true },
-    periodsPerDay: { type: Number, required: true },
-    periodDuration: { type: Number, required: true }
+    startTime: { type: String, default: "09:00" }, // Set defaults
+    endTime: { type: String, default: "15:00" },
+    periodsPerDay: { type: Number, default: 8 },
+    periodDuration: { type: Number, default: 45 } // in minutes
   }
 }, { timestamps: true });
 
