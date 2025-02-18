@@ -238,21 +238,46 @@ const adminController = {
     }
   },
 
+  // getSubjectsByClass: async (req, res) => {
+  //   try {
+  //     const { classId } = req.params;
+  //     const schoolId = req.user.school;
+
+  //     const subjects = await Subject.find({
+  //       school: schoolId,
+  //       class: classId
+  //     }).select('name');
+
+  //     res.json(subjects);
+  //   } catch (error) {
+  //     res.status(500).json({ error: error.message });
+  //   }
+  // },
+
   getSubjectsByClass: async (req, res) => {
     try {
-      const { classId } = req.params;
-      const schoolId = req.user.school;
+        const { classId } = req.params;
+        const schoolId = req.user.school;
+        
+        if (!classId || !schoolId) {
+            return res.status(400).json({ error: "Invalid classId or schoolId" });
+        }
 
-      const subjects = await Subject.find({
-        school: schoolId,
-        class: classId
-      }).select('name');
+        const subjects = await Subject.find({
+            school: schoolId,
+            class: classId
+        }).select('name');
 
-      res.json(subjects);
+        if (!subjects) {
+            return res.status(404).json({ error: "No subjects found" });
+        }
+
+        res.json(subjects);
     } catch (error) {
-      res.status(500).json({ error: error.message });
+        console.error("Error fetching subjects:", error);
+        res.status(500).json({ error: "Internal Server Error" });
     }
-  },
+},
 
 
 
