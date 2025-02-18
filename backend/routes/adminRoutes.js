@@ -172,6 +172,7 @@ router.get('/attendance', auth, roleCheck(['admin']), adminController.getAttenda
 router.post('/exams', auth, roleCheck(['admin']), adminController.createExam);
 router.post('/exams/:examId/seating', auth, roleCheck(['admin']), adminController.generateSeatingArrangement);
 
+
 // Announcement Management
 router.post('/announcements', auth, roleCheck(['admin']), adminController.createAnnouncement);
 
@@ -187,4 +188,24 @@ router.post('/meetings/:meetingId/minutes', auth, roleCheck(['admin', 'trustee']
 // Trustee Management
 router.put('/trustees/:trusteeId', auth, roleCheck(['admin']), adminController.manageTrustee);
 
+
+//test for exam manage
+
+router.post(
+  '/:schoolId/schedule',
+  [auth, roleCheck(['admin']), schoolCheck],
+  adminController.createExamSchedule
+);
+
+router.post(
+  '/results/:examId/:classId',
+  [auth, roleCheck(['teacher', 'admin']), schoolCheck],
+  adminController.enterResults
+);
+
+router.get(
+  '/report-cards/:examId/:classId',
+  [auth, roleCheck(['teacher', 'admin']), schoolCheck],
+  adminController.generateReportCards
+);
 module.exports = router;
