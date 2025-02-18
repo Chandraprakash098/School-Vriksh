@@ -238,6 +238,24 @@ const adminController = {
     }
   },
 
+  getSubjectsByClass: async (req, res) => {
+    try {
+      const { classId } = req.params;
+      const schoolId = req.user.school;
+
+      const subjects = await Subject.find({
+        school: schoolId,
+        class: classId
+      }).select('name');
+
+      res.json(subjects);
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  },
+
+
+
 
   // createTeacher: async (req, res) => {
   //   try {
@@ -252,7 +270,7 @@ const adminController = {
   //       classId, 
   //       subjectAssignments 
   //     } = req.body;
-  //     const schoolId = req.user.school; // Get school ID from logged-in admin
+  //     const schoolId = req.user.school;
 
   //     const session = await mongoose.startSession();
   //     session.startTransaction();
@@ -262,6 +280,24 @@ const adminController = {
   //       const existingUser = await User.findOne({ email });
   //       if (existingUser) {
   //         return res.status(400).json({ message: 'Email already registered' });
+  //       }
+
+  //       // If class teacher, validate class exists and is available
+  //       if (isClassTeacher && classId) {
+  //         const classExists = await Class.findOne({
+  //           _id: classId,
+  //           school: schoolId,
+  //           $or: [
+  //             { classTeacher: null },
+  //             { classTeacher: { $exists: false } }
+  //           ]
+  //         });
+
+  //         if (!classExists) {
+  //           return res.status(400).json({ 
+  //             message: 'Selected class is not available for assignment' 
+  //           });
+  //         }
   //       }
 
   //       // Generate hashed password
@@ -319,17 +355,30 @@ const adminController = {
 
   //       await assignment.save({ session });
 
+  //       // Update class with new class teacher
   //       if (isClassTeacher && classId) {
   //         await Class.findByIdAndUpdate(
   //           classId,
-  //           { classTeacher: teacher._id },
+  //           { 
+  //             classTeacher: teacher._id,
+  //             lastUpdated: new Date(),
+  //             updatedBy: req.user._id
+  //           },
   //           { session }
   //         );
   //       }
 
   //       await session.commitTransaction();
+
+  //       // Fetch the complete teacher data with populated references
+  //       const populatedTeacher = await User.findById(teacher._id)
+  //         .populate({
+  //           path: 'permissions.canTakeAttendance',
+  //           select: 'name division'
+  //         });
+
   //       res.status(201).json({ 
-  //         teacher,
+  //         teacher: populatedTeacher,
   //         assignment,
   //         message: 'Teacher created successfully with appropriate permissions'
   //       });
@@ -344,7 +393,6 @@ const adminController = {
   //   }
   // },
 
-
   createTeacher: async (req, res) => {
     try {
       const { 
@@ -356,7 +404,7 @@ const adminController = {
         photo,
         isClassTeacher, 
         classId, 
-        subjectAssignments 
+        subjectAssignments // Array of {classId, subjectId}
       } = req.body;
       const schoolId = req.user.school;
 
@@ -388,30 +436,39 @@ const adminController = {
           }
         }
 
+        // Validate subject assignments
+        if (subjectAssignments && subjectAssignments.length > 0) {
+          for (const assignment of subjectAssignments) {
+            const subject = await Subject.findOne({
+              _id: assignment.subjectId,
+              class: assignment.classId,
+              school: schoolId
+            });
+            
+            if (!subject) {
+              return res.status(400).json({
+                message: `Invalid subject assignment for class ${assignment.classId}`
+              });
+            }
+          }
+        }
+
         // Generate hashed password
         const salt = await bcrypt.genSalt(10);
         const hashedPassword = await bcrypt.hash(password, salt);
 
-        // Set up initial permissions
-        let permissions = {
-          canTakeAttendance: [],
-          canEnterMarks: [],
+        // Set up permissions
+        const permissions = {
+          canTakeAttendance: isClassTeacher ? [classId] : [], // Only class teacher can take attendance
+          canEnterMarks: subjectAssignments.map(assignment => ({
+            class: assignment.classId,
+            subject: assignment.subjectId
+          })),
           canPublishAnnouncements: true,
           canManageInventory: false,
           canManageFees: false,
           canManageLibrary: false
         };
-
-        if (isClassTeacher && classId) {
-          permissions.canTakeAttendance.push(classId);
-        }
-
-        if (subjectAssignments && subjectAssignments.length > 0) {
-          permissions.canEnterMarks = subjectAssignments.map(assignment => ({
-            class: assignment.classId,
-            subject: assignment.subjectId
-          }));
-        }
 
         const teacher = new User({
           school: schoolId,
@@ -429,21 +486,19 @@ const adminController = {
 
         await teacher.save({ session });
 
+        // Create teacher assignment
         const assignment = new TeacherAssignment({
           school: schoolId,
           teacher: teacher._id,
           class: isClassTeacher ? classId : null,
-          subjects: subjectAssignments.map(assignment => ({
-            class: assignment.classId,
-            subject: assignment.subjectId
-          })),
+          subjects: subjectAssignments,
           assignmentType: isClassTeacher ? 'classTeacher' : 'subjectTeacher',
           academicYear: getCurrentAcademicYear()
         });
 
         await assignment.save({ session });
 
-        // Update class with new class teacher
+        // Update class if class teacher
         if (isClassTeacher && classId) {
           await Class.findByIdAndUpdate(
             classId,
@@ -456,12 +511,35 @@ const adminController = {
           );
         }
 
+        // Update subjects with new teacher
+        for (const assignment of subjectAssignments) {
+          await Subject.findByIdAndUpdate(
+            assignment.subjectId,
+            {
+              $push: {
+                teachers: {
+                  teacher: teacher._id,
+                  assignedAt: new Date()
+                }
+              }
+            },
+            { session }
+          );
+        }
+
         await session.commitTransaction();
 
-        // Fetch the complete teacher data with populated references
         const populatedTeacher = await User.findById(teacher._id)
           .populate({
             path: 'permissions.canTakeAttendance',
+            select: 'name division'
+          })
+          .populate({
+            path: 'permissions.canEnterMarks.subject',
+            select: 'name'
+          })
+          .populate({
+            path: 'permissions.canEnterMarks.class',
             select: 'name division'
           });
 
@@ -677,10 +755,68 @@ uploadSyllabus: async (req, res) => {
   },
 
   // ============ Subject Management ============
+  // createSubject: async (req, res) => {
+  //   try {
+  //     const { name, classId, teacherIds, syllabus } = req.body;
+  //     const { schoolId } = req.params;
+
+  //     const subject = new Subject({
+  //       school: schoolId,
+  //       name,
+  //       class: classId,
+  //       teachers: teacherIds.map(id => ({
+  //         teacher: id,
+  //         assignedAt: new Date()
+  //       }))
+  //     });
+
+  //     if (syllabus) {
+  //       const syllabusDoc = new Syllabus({
+  //         school: schoolId,
+  //         subject: subject._id,
+  //         class: classId,
+  //         content: syllabus.content,
+  //         documents: syllabus.documents
+  //       });
+  //       await syllabusDoc.save();
+  //       subject.syllabus = syllabusDoc._id;
+  //     }
+
+  //     await subject.save();
+
+  //     // Update teachers' permissions
+  //     await User.updateMany(
+  //       { _id: { $in: teacherIds } },
+  //       {
+  //         $push: {
+  //           'permissions.canEnterMarks': {
+  //             class: classId,
+  //             subject: subject._id
+  //           }
+  //         }
+  //       }
+  //     );
+
+  //     res.status(201).json(subject);
+  //   } catch (error) {
+  //     res.status(500).json({ error: error.message });
+  //   }
+  // },
+
   createSubject: async (req, res) => {
     try {
       const { name, classId, teacherIds, syllabus } = req.body;
-      const { schoolId } = req.params;
+      const schoolId = req.user.school;
+
+      // Validate if class exists
+      const classExists = await Class.findOne({
+        _id: classId,
+        school: schoolId
+      });
+
+      if (!classExists) {
+        return res.status(400).json({ message: 'Invalid class selected' });
+      }
 
       const subject = new Subject({
         school: schoolId,
@@ -719,11 +855,23 @@ uploadSyllabus: async (req, res) => {
         }
       );
 
+      // Add subject to class
+      await Class.findByIdAndUpdate(classId, {
+        $push: {
+          subjects: {
+            name: subject.name,
+            teacher: teacherIds[0], // Assign first teacher as primary
+            syllabus: syllabus ? syllabus.content : null
+          }
+        }
+      });
+
       res.status(201).json(subject);
     } catch (error) {
       res.status(500).json({ error: error.message });
     }
   },
+
 
   // ============ Teacher Assignment ============
   // assignTeacherRole: async (req, res) => {

@@ -9,19 +9,14 @@ const { upload } = require('../config/cloudinary');
 
 
 // User Management
-router.post(
-  '/:schoolId/users',
-  auth,
-  roleCheck(['admin']),
-  adminController.createUser
-);
-
 // router.post(
-//   '/users',
+//   '/:schoolId/users',
 //   auth,
 //   roleCheck(['admin']),
 //   adminController.createUser
 // );
+
+
 
 // router.post(
 //   '/:schoolId/teachers',
@@ -138,6 +133,13 @@ router.post(
   '/:schoolId/subjects',
   [auth, roleCheck(['admin'])],
   adminController.createSubject
+);
+
+router.get(
+  '/classes/:classId/subjects',
+  auth,
+  roleCheck(['admin']),
+  adminController.getSubjectsByClass
 );
 
 // router.post(
