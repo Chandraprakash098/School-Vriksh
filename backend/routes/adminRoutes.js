@@ -4,6 +4,9 @@ const router = express.Router();
 const adminController = require('../controllers/adminController');
 const auth = require('../middleware/auth');
 const roleCheck = require('../middleware/roleCheck');
+const { upload } = require('../config/cloudinary');
+
+
 
 // User Management
 router.post(
@@ -108,11 +111,19 @@ router.post(
   adminController.createSubject
 );
 
+// router.post(
+//   '/:schoolId/subjects/:subjectId/syllabus',
+//   [auth, roleCheck(['admin', 'teacher'])],
+//   adminController.uploadSyllabus
+// );
+
 router.post(
   '/:schoolId/subjects/:subjectId/syllabus',
   [auth, roleCheck(['admin', 'teacher'])],
+  upload.array('documents', 5), // 'documents' is the field name, 5 is the maximum number of files
   adminController.uploadSyllabus
 );
+
 
 router.post(
   '/:schoolId/meetings',

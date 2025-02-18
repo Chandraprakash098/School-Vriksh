@@ -14,6 +14,7 @@ const feeRoutes = require('./routes/feeRoutes')
 const inventoryRoutes = require('./routes/inventoryRoutes')
 const authRoutes = require('./routes/authRoutes')
 const admissionRoutes = require('./routes/admissionRoutes')
+const { multerErrorHandler } = require('./middleware/errorHandler');
 
 // const config = require('./src/config/config');
 
@@ -23,6 +24,7 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(multerErrorHandler);
 
 // Routes
 app.use('/api/owner', ownerRoutes);
