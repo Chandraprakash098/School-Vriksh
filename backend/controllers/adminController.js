@@ -418,7 +418,7 @@ const adminController = {
         name,
         division,
         capacity,
-        classTeacher,
+        // classTeacher,
         subjects,
         rteSeats,
         academicYear,
@@ -427,19 +427,19 @@ const adminController = {
       const schoolId =  req.school;
 
       // Validate class teacher
-      if (classTeacher) {
-        const teacher = await User.findById(classTeacher);
-        if (!teacher || teacher.role !== 'teacher') {
-          return res.status(400).json({ message: 'Invalid class teacher' });
-        }
-      }
+      // if (classTeacher) {
+      //   const teacher = await User.findById(classTeacher);
+      //   if (!teacher || teacher.role !== 'teacher') {
+      //     return res.status(400).json({ message: 'Invalid class teacher' });
+      //   }
+      // }
 
       const newClass = new Class({
         school: schoolId,
         name,
         division,
         capacity,
-        classTeacher,
+        // classTeacher,
         subjects,
         rteSeats,
         academicYear,
@@ -449,11 +449,11 @@ const adminController = {
       await newClass.save();
 
       // Update teacher's permissions for the new class if a class teacher is assigned
-      if (classTeacher) {
-        await User.findByIdAndUpdate(classTeacher, {
-          $push: { 'permissions.canTakeAttendance': newClass._id }
-        });
-      }
+      // if (classTeacher) {
+      //   await User.findByIdAndUpdate(classTeacher, {
+      //     $push: { 'permissions.canTakeAttendance': newClass._id }
+      //   });
+      // }
 
       res.status(201).json(newClass);
     } catch (error) {
