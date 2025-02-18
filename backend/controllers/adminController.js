@@ -1178,15 +1178,15 @@ function calculatePercentage(subjects) {
   return (totalObtained / totalPossible) * 100;
 }
 
-function calculateGrade(subjects) {
-  const percentage = calculatePercentage(subjects);
-  if (percentage >= 90) return 'A+';
-  if (percentage >= 80) return 'A';
-  if (percentage >= 70) return 'B+';
-  if (percentage >= 60) return 'B';
-  if (percentage >= 50) return 'C';
-  return 'F';
-}
+// function calculateGrade(subjects) {
+//   const percentage = calculatePercentage(subjects);
+//   if (percentage >= 90) return 'A+';
+//   if (percentage >= 80) return 'A';
+//   if (percentage >= 70) return 'B+';
+//   if (percentage >= 60) return 'B';
+//   if (percentage >= 50) return 'C';
+//   return 'F';
+// }
 
 function determineStatus(subjects) {
   const failedSubjects = subjects.filter(

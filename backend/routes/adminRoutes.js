@@ -193,19 +193,19 @@ router.put('/trustees/:trusteeId', auth, roleCheck(['admin']), adminController.m
 
 router.post(
   '/:schoolId/schedule',
-  [auth, roleCheck(['admin']), schoolCheck],
+  [auth, roleCheck(['admin']), ],
   adminController.createExamSchedule
 );
 
 router.post(
   '/results/:examId/:classId',
-  [auth, roleCheck(['teacher', 'admin']), schoolCheck],
+  [auth, roleCheck(['teacher', 'admin']), ],
   adminController.enterResults
 );
 
 router.get(
   '/report-cards/:examId/:classId',
-  [auth, roleCheck(['teacher', 'admin']), schoolCheck],
+  [auth, roleCheck(['teacher', 'admin']), ],
   adminController.generateReportCards
 );
 module.exports = router;
