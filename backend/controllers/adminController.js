@@ -560,15 +560,20 @@ const adminController = {
       await subject.save(); 
 
       // Add subject to class 
+      // await Class.findByIdAndUpdate(classId, { 
+      //   $push: { 
+      //     subjects: { 
+      //       name: subject.name, 
+      //       teacher: null, // No assigned teacher 
+      //       syllabus: null 
+      //     } 
+      //   } 
+      // }); 
+
       await Class.findByIdAndUpdate(classId, { 
-        $push: { 
-          subjects: { 
-            name: subject.name, 
-            teacher: null, // No assigned teacher 
-            syllabus: null 
-          } 
-        } 
-      }); 
+        $push: { subjects: subject._id } // Push ObjectId instead of object
+      });
+      
 
       res.status(201).json({
         message: "Subject created successfully",
