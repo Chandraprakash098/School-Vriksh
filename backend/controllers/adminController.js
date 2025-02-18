@@ -792,8 +792,8 @@ const adminController = {
       await exam.save();
 
       // Notify teachers and create exam schedule
-      await createExamSchedule(exam);
-      await notifyExamCreation(exam);
+      // await createExamSchedule(exam);
+      // await notifyExamCreation(exam);
 
       res.status(201).json(exam);
     } catch (error) {
