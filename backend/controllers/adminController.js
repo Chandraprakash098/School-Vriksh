@@ -20,7 +20,7 @@ const adminController = {
   createUser: async (req, res) => {
     try {
       const { name, email, password, role, profile } = req.body;
-      const { schoolId } = req.params;
+      // const { schoolId } = req.params;
 
       // Check if email already exists
       const existingUser = await User.findOne({ email });
@@ -36,7 +36,7 @@ const adminController = {
       const permissions = getDefaultPermissions(role);
 
       const user = new User({
-        school: schoolId,
+        // school: schoolId,
         name,
         email,
         password: hashedPassword,
@@ -243,55 +243,7 @@ const adminController = {
 
   //======= Syllabys =======
 
-  // Add to adminController
-// uploadSyllabus: async (req, res) => {
-//   try {
-//     const { subjectId } = req.params;
-//     const { content, documents } = req.body;
-//     const { schoolId } = req.params;
-//     const uploadedBy = req.user._id;
-
-//     // Check if subject exists
-//     const subject = await Subject.findById(subjectId);
-//     if (!subject) {
-//       return res.status(404).json({ message: 'Subject not found' });
-//     }
-
-//     // Create or update syllabus
-//     let syllabus = await Syllabus.findOne({ subject: subjectId });
-//     if (!syllabus) {
-//       syllabus = new Syllabus({
-//         school: schoolId,
-//         subject: subjectId,
-//         class: subject.class,
-//         content,
-//         documents: documents.map(doc => ({
-//           title: doc.title,
-//           url: doc.url,
-//           uploadedBy
-//         }))
-//       });
-//     } else {
-//       syllabus.content = content;
-//       syllabus.documents = documents.map(doc => ({
-//         title: doc.title,
-//         url: doc.url,
-//         uploadedBy
-//       }));
-//     }
-
-//     await syllabus.save();
-
-//     // Link syllabus to subject
-//     subject.syllabus = syllabus._id;
-//     await subject.save();
-
-//     res.status(201).json(syllabus);
-//   } catch (error) {
-//     res.status(500).json({ error: error.message });
-//   }
-// },
-
+  
 
 uploadSyllabus: async (req, res) => {
   try {
@@ -325,11 +277,7 @@ uploadSyllabus: async (req, res) => {
       });
     }
 
-    // const documents = req.files?.map(file => ({
-    //   title: file.originalname,
-    //   url: file.path, // Cloudinary URL
-    //   uploadedBy
-    // })) || [];
+    
     
 
     // Create or update syllabus
