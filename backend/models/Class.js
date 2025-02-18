@@ -36,11 +36,12 @@ const classSchema = new mongoose.Schema({
   division: { type: String, required: true }, // e.g., "A"
   capacity: { type: Number, required: true },
   classTeacher: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
-  subjects: [{
-    name: { type: String, required: true },
-    teacher: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-    syllabus: { type: String }
-  }],
+  // subjects: [{
+  //   name: { type: String, required: true },
+  //   teacher: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  //   syllabus: { type: String }
+  // }],
+  subjects: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Subject' }],
   rteSeats: {
     total: { type: Number, default: 0 },
     occupied: { type: Number, default: 0 }
