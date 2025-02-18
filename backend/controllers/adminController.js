@@ -259,9 +259,15 @@ const adminController = {
             select: 'name division'
           });
 
+          const updatedClass = classTeacherOf ? 
+                await Class.findById(classTeacherOf)
+                    .populate('classTeacher', 'name email profile')
+                    .populate('subjects') : null;
+
         res.status(201).json({ 
           teacher: populatedTeacher,
           assignment,
+          updatedClass,
           message: 'Teacher created successfully with appropriate permissions'
         });
       } catch (error) {
@@ -412,50 +418,112 @@ const adminController = {
   },
 
   // ============ Class Management ============
-  createClass: async (req, res) => {
+  // createClass: async (req, res) => {
+  //   try {
+  //     const {
+  //       name,
+  //       division,
+  //       capacity,
+  //       // classTeacher,
+  //       subjects,
+  //       rteSeats,
+  //       academicYear,
+  //       schedule
+  //     } = req.body;
+  //     const schoolId =  req.school;
+
+  //     // Validate class teacher
+  //     // if (classTeacher) {
+  //     //   const teacher = await User.findById(classTeacher);
+  //     //   if (!teacher || teacher.role !== 'teacher') {
+  //     //     return res.status(400).json({ message: 'Invalid class teacher' });
+  //     //   }
+  //     // }
+
+  //     const newClass = new Class({
+  //       school: schoolId,
+  //       name,
+  //       division,
+  //       capacity,
+  //       // classTeacher,
+  //       subjects,
+  //       rteSeats,
+  //       academicYear,
+  //       schedule
+  //     });
+
+  //     await newClass.save();
+
+  //     // Update teacher's permissions for the new class if a class teacher is assigned
+  //     // if (classTeacher) {
+  //     //   await User.findByIdAndUpdate(classTeacher, {
+  //     //     $push: { 'permissions.canTakeAttendance': newClass._id }
+  //     //   });
+  //     // }
+
+  //     res.status(201).json(newClass);
+  //   } catch (error) {
+  //     res.status(500).json({ error: error.message });
+  //   }
+  // },
+
+  createClass : async (req, res) => {
     try {
       const {
         name,
         division,
         capacity,
-        // classTeacher,
         subjects,
         rteSeats,
         academicYear,
         schedule
       } = req.body;
-      const schoolId =  req.school;
-
-      // Validate class teacher
-      // if (classTeacher) {
-      //   const teacher = await User.findById(classTeacher);
-      //   if (!teacher || teacher.role !== 'teacher') {
-      //     return res.status(400).json({ message: 'Invalid class teacher' });
-      //   }
-      // }
-
+      const schoolId = req.school;
+  
+      // Check if a teacher is already assigned as class teacher for this class
+      const existingTeacherAssignment = await TeacherAssignment.findOne({
+        school: schoolId,
+        class: null, // Will be updated after class creation
+        assignmentType: 'classTeacher',
+        academicYear: academicYear
+      });
+  
       const newClass = new Class({
         school: schoolId,
         name,
         division,
         capacity,
-        // classTeacher,
+        classTeacher: existingTeacherAssignment ? existingTeacherAssignment.teacher : null,
         subjects,
         rteSeats,
         academicYear,
         schedule
       });
-
+  
       await newClass.save();
-
-      // Update teacher's permissions for the new class if a class teacher is assigned
-      // if (classTeacher) {
-      //   await User.findByIdAndUpdate(classTeacher, {
-      //     $push: { 'permissions.canTakeAttendance': newClass._id }
-      //   });
-      // }
-
-      res.status(201).json(newClass);
+  
+      // If there's a pending class teacher assignment, update it with the new class ID
+      if (existingTeacherAssignment) {
+        await TeacherAssignment.findByIdAndUpdate(
+          existingTeacherAssignment._id,
+          { class: newClass._id }
+        );
+  
+        // Update teacher's permissions to include the new class
+        await User.findByIdAndUpdate(
+          existingTeacherAssignment.teacher,
+          {
+            $push: { 'permissions.canTakeAttendance': newClass._id }
+          }
+        );
+      }
+  
+      // Populate the class teacher details before sending response
+      const populatedClass = await Class.findById(newClass._id)
+        .populate('classTeacher', 'name email profile')
+        .populate('subjects');
+  
+      res.status(201).json(populatedClass);
     } catch (error) {
       res.status(500).json({ error: error.message });
     }
