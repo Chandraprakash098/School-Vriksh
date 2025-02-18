@@ -38,6 +38,13 @@ router.post(
   adminController.createUser
 );
 
+router.get(
+  '/available-classes',
+  auth,
+  roleCheck(['admin']),
+  adminController.getAvailableClasses
+);
+
 router.post(
   '/teachers',
   auth,
