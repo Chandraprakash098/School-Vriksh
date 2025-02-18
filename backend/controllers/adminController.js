@@ -17,159 +17,7 @@ const mongoose = require('mongoose');
 
 const adminController = {
   // ============ User Management ============
-  // createUser: async (req, res) => {
-  //   try {
-  //     const { name, email, password, role, profile } = req.body;
-  //     // const { schoolId } = req.params;
-
-  //     // Check if email already exists
-  //     const existingUser = await User.findOne({ email });
-  //     if (existingUser) {
-  //       return res.status(400).json({ message: 'Email already registered' });
-  //     }
-
-  //     // Generate hashed password
-  //     const salt = await bcrypt.genSalt(10);
-  //     const hashedPassword = await bcrypt.hash(password, salt);
-
-  //     // Set default permissions based on role
-  //     const permissions = getDefaultPermissions(role);
-
-  //     const user = new User({
-  //       // school: schoolId,
-  //       name,
-  //       email,
-  //       password: hashedPassword,
-  //       role,
-  //       profile,
-  //       permissions
-  //     });
-
-  //     await user.save();
-
-  //     // Generate and send credentials email
-  //     // await sendCredentialsEmail(email, password, role);
-
-  //     res.status(201).json(user);
-  //   } catch (error) {
-  //     res.status(500).json({ error: error.message });
-  //   }
-  // },
-
-
-  // createTeacher: async (req, res) => {
-  //   try {
-  //     const { 
-  //       name, 
-  //       email, 
-  //       password, 
-  //       phone, 
-  //       address, 
-  //       photo,
-  //       isClassTeacher, 
-  //       classId, 
-  //       subjectAssignments 
-  //     } = req.body;
-  //     const { schoolId } = req.params;
   
-  //     const session = await mongoose.startSession();
-  //     session.startTransaction();
-  
-  //     try {
-  //       // Check if email already exists
-  //       const existingUser = await User.findOne({ email });
-  //       if (existingUser) {
-  //         return res.status(400).json({ message: 'Email already registered' });
-  //       }
-  
-  //       // Generate hashed password
-  //       const salt = await bcrypt.genSalt(10);
-  //       const hashedPassword = await bcrypt.hash(password, salt);
-  
-  //       // Set up initial permissions
-  //       let permissions = {
-  //         canTakeAttendance: [],
-  //         canEnterMarks: [],
-  //         canPublishAnnouncements: true,
-  //         canManageInventory: false,
-  //         canManageFees: false,
-  //         canManageLibrary: false
-  //       };
-  
-  //       // If assigned as class teacher, add attendance permission for that class
-  //       if (isClassTeacher && classId) {
-  //         permissions.canTakeAttendance.push(classId);
-  //       }
-  
-  //       // Add permissions for subject marks entry
-  //       if (subjectAssignments && subjectAssignments.length > 0) {
-  //         permissions.canEnterMarks = subjectAssignments.map(assignment => ({
-  //           class: assignment.classId,
-  //           subject: assignment.subjectId
-  //         }));
-  //       }
-  
-  //       // Create the teacher user
-  //       const teacher = new User({
-  //         school: schoolId,
-  //         name,
-  //         email,
-  //         password: hashedPassword,
-  //         role: 'teacher',
-  //         profile: {
-  //           phone,
-  //           address,
-  //           photo
-  //         },
-  //         permissions
-  //       });
-  
-  //       await teacher.save({ session });
-  
-  //       // Create teacher assignment record
-  //       const assignment = new TeacherAssignment({
-  //         school: schoolId,
-  //         teacher: teacher._id,
-  //         class: isClassTeacher ? classId : null,
-  //         subjects: subjectAssignments.map(assignment => ({
-  //           class: assignment.classId,
-  //           subject: assignment.subjectId
-  //         })),
-  //         assignmentType: isClassTeacher ? 'classTeacher' : 'subjectTeacher',
-  //         academicYear: getCurrentAcademicYear() // Implement this helper function
-  //       });
-  
-  //       await assignment.save({ session });
-  
-  //       // If assigned as class teacher, update the class document
-  //       if (isClassTeacher && classId) {
-  //         await Class.findByIdAndUpdate(
-  //           classId,
-  //           { classTeacher: teacher._id },
-  //           { session }
-  //         );
-  //       }
-  
-  //       // Generate and send credentials email
-  //       // await sendCredentialsEmail(email, password, 'teacher');
-  
-  //       await session.commitTransaction();
-  //       res.status(201).json({ 
-  //         teacher,
-  //         assignment,
-  //         message: 'Teacher created successfully with appropriate permissions'
-  //       });
-  //     } catch (error) {
-  //       await session.abortTransaction();
-  //       throw error;
-  //     } finally {
-  //       session.endSession();
-  //     }
-  //   } catch (error) {
-  //     res.status(500).json({ error: error.message });
-  //   }
-  // },
-
   createUser: async (req, res) => {
     try {
       const { name, email, password, role, profile } = req.body;
@@ -238,21 +86,7 @@ const adminController = {
     }
   },
 
-  // getSubjectsByClass: async (req, res) => {
-  //   try {
-  //     const { classId } = req.params;
-  //     const schoolId = req.user.school;
-
-  //     const subjects = await Subject.find({
-  //       school: schoolId,
-  //       class: classId
-  //     }).select('name');
-
-  //     res.json(subjects);
-  //   } catch (error) {
-  //     res.status(500).json({ error: error.message });
-  //   }
-  // },
+  
 
   getSubjectsByClass: async (req, res) => {
     try {
@@ -282,141 +116,6 @@ const adminController = {
 
 
 
-  // createTeacher: async (req, res) => {
-  //   try {
-  //     const { 
-  //       name, 
-  //       email, 
-  //       password, 
-  //       phone, 
-  //       address, 
-  //       photo,
-  //       isClassTeacher, 
-  //       classId, 
-  //       subjectAssignments 
-  //     } = req.body;
-  //     const schoolId = req.user.school;
-
-  //     const session = await mongoose.startSession();
-  //     session.startTransaction();
-
-  //     try {
-  //       // Check if email already exists
-  //       const existingUser = await User.findOne({ email });
-  //       if (existingUser) {
-  //         return res.status(400).json({ message: 'Email already registered' });
-  //       }
-
-  //       // If class teacher, validate class exists and is available
-  //       if (isClassTeacher && classId) {
-  //         const classExists = await Class.findOne({
-  //           _id: classId,
-  //           school: schoolId,
-  //           $or: [
-  //             { classTeacher: null },
-  //             { classTeacher: { $exists: false } }
-  //           ]
-  //         });
-
-  //         if (!classExists) {
-  //           return res.status(400).json({ 
-  //             message: 'Selected class is not available for assignment' 
-  //           });
-  //         }
-  //       }
-
-  //       // Generate hashed password
-  //       const salt = await bcrypt.genSalt(10);
-  //       const hashedPassword = await bcrypt.hash(password, salt);
-
-  //       // Set up initial permissions
-  //       let permissions = {
-  //         canTakeAttendance: [],
-  //         canEnterMarks: [],
-  //         canPublishAnnouncements: true,
-  //         canManageInventory: false,
-  //         canManageFees: false,
-  //         canManageLibrary: false
-  //       };
-
-  //       if (isClassTeacher && classId) {
-  //         permissions.canTakeAttendance.push(classId);
-  //       }
-
-  //       if (subjectAssignments && subjectAssignments.length > 0) {
-  //         permissions.canEnterMarks = subjectAssignments.map(assignment => ({
-  //           class: assignment.classId,
-  //           subject: assignment.subjectId
-  //         }));
-  //       }
-
-  //       const teacher = new User({
-  //         school: schoolId,
-  //         name,
-  //         email,
-  //         password: hashedPassword,
-  //         role: 'teacher',
-  //         profile: {
-  //           phone,
-  //           address,
-  //           photo
-  //         },
-  //         permissions
-  //       });
-
-  //       await teacher.save({ session });
-
-  //       const assignment = new TeacherAssignment({
-  //         school: schoolId,
-  //         teacher: teacher._id,
-  //         class: isClassTeacher ? classId : null,
-  //         subjects: subjectAssignments.map(assignment => ({
-  //           class: assignment.classId,
-  //           subject: assignment.subjectId
-  //         })),
-  //         assignmentType: isClassTeacher ? 'classTeacher' : 'subjectTeacher',
-  //         academicYear: getCurrentAcademicYear()
-  //       });
-
-  //       await assignment.save({ session });
-
-  //       // Update class with new class teacher
-  //       if (isClassTeacher && classId) {
-  //         await Class.findByIdAndUpdate(
-  //           classId,
-  //           { 
-  //             classTeacher: teacher._id,
-  //             lastUpdated: new Date(),
-  //             updatedBy: req.user._id
-  //           },
-  //           { session }
-  //         );
-  //       }
-
-  //       await session.commitTransaction();
-
-  //       // Fetch the complete teacher data with populated references
-  //       const populatedTeacher = await User.findById(teacher._id)
-  //         .populate({
-  //           path: 'permissions.canTakeAttendance',
-  //           select: 'name division'
-  //         });
-
-  //       res.status(201).json({ 
-  //         teacher: populatedTeacher,
-  //         assignment,
-  //         message: 'Teacher created successfully with appropriate permissions'
-  //       });
-  //     } catch (error) {
-  //       await session.abortTransaction();
-  //       throw error;
-  //     } finally {
-  //       session.endSession();
-  //     }
-  //   } catch (error) {
-  //     res.status(500).json({ error: error.message });
-  //   }
-  // },
 
   createTeacher: async (req, res) => {
     try {
@@ -584,36 +283,7 @@ const adminController = {
     }
   },
 
-  // updateUserRole: async (req, res) => {
-  //   try {
-  //     const { userId } = req.params;
-  //     const { role, permissions } = req.body;
-
-  //     const updatedPermissions = {
-  //       ...getDefaultPermissions(role),
-  //       ...permissions
-  //     };
-
-  //     const user = await User.findByIdAndUpdate(
-  //       userId,
-  //       { 
-  //         role,
-  //         permissions: updatedPermissions,
-  //         'profile.lastRoleUpdate': new Date()
-  //       },
-  //       { new: true }
-  //     );
-
-  //     if (!user) {
-  //       return res.status(404).json({ message: 'User not found' });
-  //     }
-
-  //     res.json(user);
-  //   } catch (error) {
-  //     res.status(500).json({ error: error.message });
-  //   }
-  // },
-
+  
   updateUserRole: async (req, res) => {
     try {
       const { userId } = req.params;
@@ -780,122 +450,57 @@ uploadSyllabus: async (req, res) => {
   },
 
   // ============ Subject Management ============
-  // createSubject: async (req, res) => {
-  //   try {
-  //     const { name, classId, teacherIds, syllabus } = req.body;
-  //     const { schoolId } = req.params;
+  
 
-  //     const subject = new Subject({
-  //       school: schoolId,
-  //       name,
-  //       class: classId,
-  //       teachers: teacherIds.map(id => ({
-  //         teacher: id,
-  //         assignedAt: new Date()
-  //       }))
-  //     });
+createSubject: async (req, res) => { 
+  try { 
+    const { classId } = req.body; 
+    const schoolId = req.user.school;  // School ID extracted from authenticated user
+    const adminId = req.user._id;
+    
+    // Validate if class exists and was created by this admin
+    const classExists = await Class.findOne({ 
+      _id: classId, 
+      school: schoolId,
+      
+    }); 
 
-  //     if (syllabus) {
-  //       const syllabusDoc = new Syllabus({
-  //         school: schoolId,
-  //         subject: subject._id,
-  //         class: classId,
-  //         content: syllabus.content,
-  //         documents: syllabus.documents
-  //       });
-  //       await syllabusDoc.save();
-  //       subject.syllabus = syllabusDoc._id;
-  //     }
+    if (!classExists) { 
+      return res.status(400).json({ 
+        message: "Invalid class selected. Please select a class you have created."
+      }); 
+    } 
 
-  //     await subject.save();
+    // Create subject with default values 
+    const subject = new Subject({ 
+      school: schoolId, 
+      class: classId, 
+      name: req.body.name || "Untitled Subject", // Use provided name or default
+      teachers: [], // No teachers initially
+      createdBy: adminId // Track which admin created the subject
+    }); 
 
-  //     // Update teachers' permissions
-  //     await User.updateMany(
-  //       { _id: { $in: teacherIds } },
-  //       {
-  //         $push: {
-  //           'permissions.canEnterMarks': {
-  //             class: classId,
-  //             subject: subject._id
-  //           }
-  //         }
-  //       }
-  //     );
+    await subject.save(); 
 
-  //     res.status(201).json(subject);
-  //   } catch (error) {
-  //     res.status(500).json({ error: error.message });
-  //   }
-  // },
+    // Add subject to class 
+    await Class.findByIdAndUpdate(classId, { 
+      $push: { 
+        subjects: { 
+          name: subject.name, 
+          teacher: null, // No assigned teacher 
+          syllabus: null 
+        } 
+      } 
+    }); 
 
-  createSubject: async (req, res) => {
-    try {
-      const { name, classId, teacherIds, syllabus } = req.body;
-      const schoolId = req.user.school;
-
-      // Validate if class exists
-      const classExists = await Class.findOne({
-        _id: classId,
-        school: schoolId
-      });
-
-      if (!classExists) {
-        return res.status(400).json({ message: 'Invalid class selected' });
-      }
-
-      const subject = new Subject({
-        school: schoolId,
-        name,
-        class: classId,
-        teachers: teacherIds.map(id => ({
-          teacher: id,
-          assignedAt: new Date()
-        }))
-      });
-
-      if (syllabus) {
-        const syllabusDoc = new Syllabus({
-          school: schoolId,
-          subject: subject._id,
-          class: classId,
-          content: syllabus.content,
-          documents: syllabus.documents
-        });
-        await syllabusDoc.save();
-        subject.syllabus = syllabusDoc._id;
-      }
-
-      await subject.save();
-
-      // Update teachers' permissions
-      await User.updateMany(
-        { _id: { $in: teacherIds } },
-        {
-          $push: {
-            'permissions.canEnterMarks': {
-              class: classId,
-              subject: subject._id
-            }
-          }
-        }
-      );
-
-      // Add subject to class
-      await Class.findByIdAndUpdate(classId, {
-        $push: {
-          subjects: {
-            name: subject.name,
-            teacher: teacherIds[0], // Assign first teacher as primary
-            syllabus: syllabus ? syllabus.content : null
-          }
-        }
-      });
-
-      res.status(201).json(subject);
-    } catch (error) {
-      res.status(500).json({ error: error.message });
-    }
-  },
+    res.status(201).json({
+      message: "Subject created successfully",
+      subject: subject
+    }); 
+  } catch (error) { 
+    res.status(500).json({ error: error.message }); 
+  } 
+},
 
 
   // ============ Teacher Assignment ============

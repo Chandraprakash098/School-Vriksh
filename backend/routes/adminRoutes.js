@@ -129,11 +129,18 @@ router.post(
 // );
 
 
-router.post(
-  '/:schoolId/subjects',
-  [auth, roleCheck(['admin'])],
-  adminController.createSubject
+// router.post(
+//   '/:schoolId/subjects',
+//   [auth, roleCheck(['admin'])],
+//   adminController.createSubject
+// );
+
+router.post( 
+  '/subjects', 
+  [auth, roleCheck(['admin'])], 
+  adminController.createSubject 
 );
+
 
 router.get(
   '/classes/:classId/subjects',
