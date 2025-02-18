@@ -205,6 +205,146 @@ const adminController = {
     }
   },
 
+  getAvailableClasses: async (req, res) => {
+    try {
+      const schoolId = req.user.school;
+      
+      // Fetch classes that don't have a class teacher assigned
+      const availableClasses = await Class.find({
+        school: schoolId,
+        $or: [
+          { classTeacher: null },
+          { classTeacher: { $exists: false } }
+        ]
+      })
+      .select('name division academicYear')
+      .sort({ name: 1, division: 1 });
+
+      // Also fetch classes that have a class teacher for reference
+      const assignedClasses = await Class.find({
+        school: schoolId,
+        classTeacher: { $exists: true, $ne: null }
+      })
+      .select('name division academicYear classTeacher')
+      .populate('classTeacher', 'name')
+      .sort({ name: 1, division: 1 });
+
+      res.json({
+        available: availableClasses,
+        assigned: assignedClasses
+      });
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  },
+
+
+  // createTeacher: async (req, res) => {
+  //   try {
+  //     const { 
+  //       name, 
+  //       email, 
+  //       password, 
+  //       phone, 
+  //       address, 
+  //       photo,
+  //       isClassTeacher, 
+  //       classId, 
+  //       subjectAssignments 
+  //     } = req.body;
+  //     const schoolId = req.user.school; // Get school ID from logged-in admin
+
+  //     const session = await mongoose.startSession();
+  //     session.startTransaction();
+
+  //     try {
+  //       // Check if email already exists
+  //       const existingUser = await User.findOne({ email });
+  //       if (existingUser) {
+  //         return res.status(400).json({ message: 'Email already registered' });
+  //       }
+
+  //       // Generate hashed password
+  //       const salt = await bcrypt.genSalt(10);
+  //       const hashedPassword = await bcrypt.hash(password, salt);
+
+  //       // Set up initial permissions
+  //       let permissions = {
+  //         canTakeAttendance: [],
+  //         canEnterMarks: [],
+  //         canPublishAnnouncements: true,
+  //         canManageInventory: false,
+  //         canManageFees: false,
+  //         canManageLibrary: false
+  //       };
+
+  //       if (isClassTeacher && classId) {
+  //         permissions.canTakeAttendance.push(classId);
+  //       }
+
+  //       if (subjectAssignments && subjectAssignments.length > 0) {
+  //         permissions.canEnterMarks = subjectAssignments.map(assignment => ({
+  //           class: assignment.classId,
+  //           subject: assignment.subjectId
+  //         }));
+  //       }
+
+  //       const teacher = new User({
+  //         school: schoolId,
+  //         name,
+  //         email,
+  //         password: hashedPassword,
+  //         role: 'teacher',
+  //         profile: {
+  //           phone,
+  //           address,
+  //           photo
+  //         },
+  //         permissions
+  //       });
+
+  //       await teacher.save({ session });
+
+  //       const assignment = new TeacherAssignment({
+  //         school: schoolId,
+  //         teacher: teacher._id,
+  //         class: isClassTeacher ? classId : null,
+  //         subjects: subjectAssignments.map(assignment => ({
+  //           class: assignment.classId,
+  //           subject: assignment.subjectId
+  //         })),
+  //         assignmentType: isClassTeacher ? 'classTeacher' : 'subjectTeacher',
+  //         academicYear: getCurrentAcademicYear()
+  //       });
+
+  //       await assignment.save({ session });
+
+  //       if (isClassTeacher && classId) {
+  //         await Class.findByIdAndUpdate(
+  //           classId,
+  //           { classTeacher: teacher._id },
+  //           { session }
+  //         );
+  //       }
+
+  //       await session.commitTransaction();
+  //       res.status(201).json({ 
+  //         teacher,
+  //         assignment,
+  //         message: 'Teacher created successfully with appropriate permissions'
+  //       });
+  //     } catch (error) {
+  //       await session.abortTransaction();
+  //       throw error;
+  //     } finally {
+  //       session.endSession();
+  //     }
+  //   } catch (error) {
+  //     res.status(500).json({ error: error.message });
+  //   }
+  // },
+
+
   createTeacher: async (req, res) => {
     try {
       const { 
@@ -218,7 +358,7 @@ const adminController = {
         classId, 
         subjectAssignments 
       } = req.body;
-      const schoolId = req.user.school; // Get school ID from logged-in admin
+      const schoolId = req.user.school;
 
       const session = await mongoose.startSession();
       session.startTransaction();
@@ -228,6 +368,24 @@ const adminController = {
         const existingUser = await User.findOne({ email });
         if (existingUser) {
           return res.status(400).json({ message: 'Email already registered' });
+        }
+
+        // If class teacher, validate class exists and is available
+        if (isClassTeacher && classId) {
+          const classExists = await Class.findOne({
+            _id: classId,
+            school: schoolId,
+            $or: [
+              { classTeacher: null },
+              { classTeacher: { $exists: false } }
+            ]
+          });
+
+          if (!classExists) {
+            return res.status(400).json({ 
+              message: 'Selected class is not available for assignment' 
+            });
+          }
         }
 
         // Generate hashed password
@@ -285,17 +443,30 @@ const adminController = {
 
         await assignment.save({ session });
 
+        // Update class with new class teacher
         if (isClassTeacher && classId) {
           await Class.findByIdAndUpdate(
             classId,
-            { classTeacher: teacher._id },
+            { 
+              classTeacher: teacher._id,
+              lastUpdated: new Date(),
+              updatedBy: req.user._id
+            },
             { session }
           );
         }
 
         await session.commitTransaction();
+
+        // Fetch the complete teacher data with populated references
+        const populatedTeacher = await User.findById(teacher._id)
+          .populate({
+            path: 'permissions.canTakeAttendance',
+            select: 'name division'
+          });
+
         res.status(201).json({ 
-          teacher,
+          teacher: populatedTeacher,
           assignment,
           message: 'Teacher created successfully with appropriate permissions'
         });
