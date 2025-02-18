@@ -1,4 +1,3 @@
-
 const User = require('../models/User');
 const Class = require('../models/Class');
 const Subject = require('../models/Subject');
@@ -21,7 +20,7 @@ const adminController = {
   createUser: async (req, res) => {
     try {
       const { name, email, password, role, profile } = req.body;
-      const schoolId = req.user.school; // Get school ID from logged-in admin
+      const schoolId = req.school; // Get school ID from logged-in admin
 
       // Check if email already exists
       const existingUser = await User.findOne({ email });
@@ -55,7 +54,7 @@ const adminController = {
 
   getAvailableClasses: async (req, res) => {
     try {
-      const schoolId = req.user.school;
+      const schoolId =  req.school;
       
       // Fetch classes that don't have a class teacher assigned
       const availableClasses = await Class.find({
@@ -86,36 +85,30 @@ const adminController = {
     }
   },
 
-  
-
   getSubjectsByClass: async (req, res) => {
     try {
-        const { classId } = req.params;
-        const schoolId = req.user.school;
+      const { classId } = req.params;
+      const schoolId =  req.school;
         
-        if (!classId || !schoolId) {
-            return res.status(400).json({ error: "Invalid classId or schoolId" });
-        }
+      if (!classId || !schoolId) {
+        return res.status(400).json({ error: "Invalid classId or schoolId" });
+      }
 
-        const subjects = await Subject.find({
-            school: schoolId,
-            class: classId
-        }).select('name');
+      const subjects = await Subject.find({
+        school: schoolId,
+        class: classId
+      }).select('name');
 
-        if (!subjects) {
-            return res.status(404).json({ error: "No subjects found" });
-        }
+      if (!subjects) {
+        return res.status(404).json({ error: "No subjects found" });
+      }
 
-        res.json(subjects);
+      res.json(subjects);
     } catch (error) {
-        console.error("Error fetching subjects:", error);
-        res.status(500).json({ error: "Internal Server Error" });
+      console.error("Error fetching subjects:", error);
+      res.status(500).json({ error: "Internal Server Error" });
     }
-},
-
-
-
-
+  },
 
   createTeacher: async (req, res) => {
     try {
@@ -126,11 +119,10 @@ const adminController = {
         phone, 
         address, 
         photo,
-        isClassTeacher, 
-        classId, 
+        classTeacherOf, // The class ID the teacher will be class teacher of
         subjectAssignments // Array of {classId, subjectId}
       } = req.body;
-      const schoolId = req.user.school;
+      const schoolId =  req.school;
 
       const session = await mongoose.startSession();
       session.startTransaction();
@@ -143,9 +135,9 @@ const adminController = {
         }
 
         // If class teacher, validate class exists and is available
-        if (isClassTeacher && classId) {
+        if (classTeacherOf) {
           const classExists = await Class.findOne({
-            _id: classId,
+            _id: classTeacherOf,
             school: schoolId,
             $or: [
               { classTeacher: null },
@@ -155,7 +147,7 @@ const adminController = {
 
           if (!classExists) {
             return res.status(400).json({ 
-              message: 'Selected class is not available for assignment' 
+              message: 'Selected class is not available for assignment as class teacher' 
             });
           }
         }
@@ -181,9 +173,9 @@ const adminController = {
         const salt = await bcrypt.genSalt(10);
         const hashedPassword = await bcrypt.hash(password, salt);
 
-        // Set up permissions
+        // Set up permissions based on role
         const permissions = {
-          canTakeAttendance: isClassTeacher ? [classId] : [], // Only class teacher can take attendance
+          canTakeAttendance: classTeacherOf ? [classTeacherOf] : [], // Only class teacher can take attendance
           canEnterMarks: subjectAssignments.map(assignment => ({
             class: assignment.classId,
             subject: assignment.subjectId
@@ -214,18 +206,18 @@ const adminController = {
         const assignment = new TeacherAssignment({
           school: schoolId,
           teacher: teacher._id,
-          class: isClassTeacher ? classId : null,
+          class: classTeacherOf,
           subjects: subjectAssignments,
-          assignmentType: isClassTeacher ? 'classTeacher' : 'subjectTeacher',
+          assignmentType: classTeacherOf ? 'classTeacher' : 'subjectTeacher',
           academicYear: getCurrentAcademicYear()
         });
 
         await assignment.save({ session });
 
         // Update class if class teacher
-        if (isClassTeacher && classId) {
+        if (classTeacherOf) {
           await Class.findByIdAndUpdate(
-            classId,
+            classTeacherOf,
             { 
               classTeacher: teacher._id,
               lastUpdated: new Date(),
@@ -283,12 +275,11 @@ const adminController = {
     }
   },
 
-  
   updateUserRole: async (req, res) => {
     try {
       const { userId } = req.params;
       const { role, permissions, classId, subjects } = req.body;
-      const { schoolId } = req.params;
+      const schoolId =  req.school;
   
       // If changing to teacher role with class assignments
       if (role === 'teacher' && (classId || subjects)) {
@@ -327,81 +318,98 @@ const adminController = {
 
   //======= Syllabys =======
 
-  
+  uploadSyllabus: async (req, res) => {
+    try {
+      const { classId, subjectId } = req.body;
+      const { content } = req.body;
+      const schoolId =  req.school;
+      const uploadedBy = req.user._id;
 
-uploadSyllabus: async (req, res) => {
-  try {
-    const { subjectId } = req.params;
-    const { content } = req.body;
-    const { schoolId } = req.params;
-    const uploadedBy = req.user._id;
+      // Check if class exists
+      const classExists = await Class.findOne({
+        _id: classId,
+        school: schoolId
+      });
+      
+      if (!classExists) {
+        // Delete uploaded files if class doesn't exist
+        if (req.files && req.files.length > 0) {
+          const { cloudinary } = require('../config/cloudinary');
+          req.files.forEach(file => {
+            cloudinary.uploader.destroy(file.public_id);
+          });
+        }
+        return res.status(404).json({ message: 'Class not found' });
+      }
 
-    // Check if subject exists
-    const subject = await Subject.findById(subjectId);
-    if (!subject) {
-      // Delete uploaded files from Cloudinary if subject doesn't exist
+      // Check if subject exists and belongs to the specified class
+      const subject = await Subject.findOne({
+        _id: subjectId,
+        class: classId,
+        school: schoolId
+      });
+      
+      if (!subject) {
+        // Delete uploaded files if subject doesn't exist
+        if (req.files && req.files.length > 0) {
+          const { cloudinary } = require('../config/cloudinary');
+          req.files.forEach(file => {
+            cloudinary.uploader.destroy(file.public_id);
+          });
+        }
+        return res.status(404).json({ message: 'Subject not found in the specified class' });
+      }
+
+      // Process uploaded files
+      const documents = [];
+      if (req.files && req.files.length > 0) {
+        req.files.forEach(file => {
+          documents.push({
+            title: file.originalname,
+            url: file.path, // Cloudinary URL
+            uploadedBy
+          });
+        });
+      }
+
+      // Create or update syllabus
+      let syllabus = await Syllabus.findOne({ subject: subjectId });
+      if (!syllabus) {
+        syllabus = new Syllabus({
+          school: schoolId,
+          subject: subjectId,
+          class: classId,
+          content,
+          documents
+        });
+      } else {
+        // If updating, we might want to keep old documents and add new ones
+        syllabus.content = content;
+        
+        // Append new documents to existing ones
+        if (documents.length > 0) {
+          syllabus.documents = [...syllabus.documents, ...documents];
+        }
+      }
+
+      await syllabus.save();
+
+      // Link syllabus to subject
+      subject.syllabus = syllabus._id;
+      await subject.save();
+
+      res.status(201).json(syllabus);
+    } catch (error) {
+      // If error occurs, we should clean up uploaded files
       if (req.files && req.files.length > 0) {
         const { cloudinary } = require('../config/cloudinary');
         req.files.forEach(file => {
           cloudinary.uploader.destroy(file.public_id);
         });
       }
-      return res.status(404).json({ message: 'Subject not found' });
+      res.status(500).json({ error: error.message });
     }
-
-    // Process uploaded files
-    const documents = [];
-    if (req.files && req.files.length > 0) {
-      req.files.forEach(file => {
-        documents.push({
-          title: file.originalname,
-          url: file.path, // Cloudinary URL
-          uploadedBy
-        });
-      });
-    }
-
-    
-    
-
-    // Create or update syllabus
-    let syllabus = await Syllabus.findOne({ subject: subjectId });
-    if (!syllabus) {
-      syllabus = new Syllabus({
-        school: schoolId,
-        subject: subjectId,
-        class: subject.class,
-        content,
-        documents
-      });
-    } else {
-      // If updating, we might want to keep old documents and add new ones
-      syllabus.content = content;
-      
-      // Append new documents to existing ones
-      if (documents.length > 0) {
-        syllabus.documents = [...syllabus.documents, ...documents];
-      }
-    }
-
-    await syllabus.save();
-
-    // Link syllabus to subject
-    subject.syllabus = syllabus._id;
-    await subject.save();
-
-    res.status(201).json(syllabus);
-  } catch (error) {
-    // If error occurs, we should clean up uploaded files
-    if (req.files && req.files.length > 0) {
-      const { cloudinary } = require('../config/cloudinary');
-      req.files.forEach(file => {
-        cloudinary.uploader.destroy(file.public_id);
-      });
-    }
-    res.status(500).json({ error: error.message });
-  }
-},
+  },
 
   // ============ Class Management ============
   createClass: async (req, res) => {
@@ -416,12 +424,14 @@ uploadSyllabus: async (req, res) => {
         academicYear,
         schedule
       } = req.body;
-      const { schoolId } = req.params;
+      const schoolId =  req.school;
 
       // Validate class teacher
-      const teacher = await User.findById(classTeacher);
-      if (!teacher || teacher.role !== 'teacher') {
-        return res.status(400).json({ message: 'Invalid class teacher' });
+      if (classTeacher) {
+        const teacher = await User.findById(classTeacher);
+        if (!teacher || teacher.role !== 'teacher') {
+          return res.status(400).json({ message: 'Invalid class teacher' });
+        }
       }
 
       const newClass = new Class({
@@ -438,10 +448,12 @@ uploadSyllabus: async (req, res) => {
 
       await newClass.save();
 
-      // Update teacher's permissions for the new class
-      await User.findByIdAndUpdate(classTeacher, {
-        $push: { 'permissions.canTakeAttendance': newClass._id }
-      });
+      // Update teacher's permissions for the new class if a class teacher is assigned
+      if (classTeacher) {
+        await User.findByIdAndUpdate(classTeacher, {
+          $push: { 'permissions.canTakeAttendance': newClass._id }
+        });
+      }
 
       res.status(201).json(newClass);
     } catch (error) {
@@ -450,114 +462,59 @@ uploadSyllabus: async (req, res) => {
   },
 
   // ============ Subject Management ============
-  
-
-createSubject: async (req, res) => { 
-  try { 
-    const { classId } = req.body; 
-    const schoolId = req.user.school;  // School ID extracted from authenticated user
-    const adminId = req.user._id;
-    
-    // Validate if class exists and was created by this admin
-    const classExists = await Class.findOne({ 
-      _id: classId, 
-      school: schoolId,
+  createSubject: async (req, res) => { 
+    try { 
+      const { classId, name } = req.body; 
+      const schoolId =  req.school;  // School ID extracted from authenticated user
+      const adminId = req.user._id;
       
-    }); 
-
-    if (!classExists) { 
-      return res.status(400).json({ 
-        message: "Invalid class selected. Please select a class you have created."
+      // Validate if class exists and was created by this admin
+      const classExists = await Class.findOne({ 
+        _id: classId, 
+        school: schoolId,
       }); 
-    } 
 
-    // Create subject with default values 
-    const subject = new Subject({ 
-      school: schoolId, 
-      class: classId, 
-      name: req.body.name || "Untitled Subject", // Use provided name or default
-      teachers: [], // No teachers initially
-      createdBy: adminId // Track which admin created the subject
-    }); 
-
-    await subject.save(); 
-
-    // Add subject to class 
-    await Class.findByIdAndUpdate(classId, { 
-      $push: { 
-        subjects: { 
-          name: subject.name, 
-          teacher: null, // No assigned teacher 
-          syllabus: null 
-        } 
+      if (!classExists) { 
+        return res.status(400).json({ 
+          message: "Invalid class selected. Please select a class you have created."
+        }); 
       } 
-    }); 
 
-    res.status(201).json({
-      message: "Subject created successfully",
-      subject: subject
-    }); 
-  } catch (error) { 
-    res.status(500).json({ error: error.message }); 
-  } 
-},
+      // Create subject with default values 
+      const subject = new Subject({ 
+        school: schoolId, 
+        class: classId, 
+        name: name || "Untitled Subject", // Use provided name or default
+        teachers: [], // No teachers initially
+        createdBy: adminId // Track which admin created the subject
+      }); 
 
+      await subject.save(); 
 
-  // ============ Teacher Assignment ============
-  // assignTeacherRole: async (req, res) => {
-  //   try {
-  //     const { teacherId, classId, subjects, assignmentType, academicYear } = req.body;
-  //     const { schoolId } = req.params;
+      // Add subject to class 
+      await Class.findByIdAndUpdate(classId, { 
+        $push: { 
+          subjects: { 
+            name: subject.name, 
+            teacher: null, // No assigned teacher 
+            syllabus: null 
+          } 
+        } 
+      }); 
 
-  //     const session = await mongoose.startSession();
-  //     session.startTransaction();
-
-  //     try {
-  //       // Create teacher assignment
-  //       const assignment = new TeacherAssignment({
-  //         school: schoolId,
-  //         teacher: teacherId,
-  //         class: assignmentType === 'classTeacher' ? classId : null,
-  //         subjects: subjects.map(s => ({ class: s.classId, subject: s.name })),
-  //         assignmentType,
-  //         academicYear
-  //       });
-
-  //       await assignment.save({ session });
-
-  //       // Update teacher permissions
-  //       const permissionUpdate = {
-  //         canTakeAttendance: assignmentType === 'classTeacher' ? [classId] : [],
-  //         canEnterMarks: subjects.map(s => ({
-  //           class: s.classId,
-  //           subject: s.name
-  //         }))
-  //       };
-
-  //       await User.findByIdAndUpdate(
-  //         teacherId,
-  //         { $set: { permissions: permissionUpdate } },
-  //         { session }
-  //       );
-
-  //       await session.commitTransaction();
-  //       res.json(assignment);
-  //     } catch (error) {
-  //       await session.abortTransaction();
-  //       throw error;
-  //     } finally {
-  //       session.endSession();
-  //     }
-  //   } catch (error) {
-  //     res.status(500).json({ error: error.message });
-  //   }
-  // },
-
+      res.status(201).json({
+        message: "Subject created successfully",
+        subject: subject
+      }); 
+    } catch (error) { 
+      res.status(500).json({ error: error.message }); 
+    } 
+  },
 
   assignTeacherRole: async (req, res) => {
     try {
-      const { teacherId, classId, subjects, assignmentType, academicYear } = req.body;
-      const { schoolId } = req.params;
+      const { teacherId, classTeacherOf, subjectAssignments, academicYear } = req.body;
+      const schoolId =  req.school;
   
       const session = await mongoose.startSession();
       session.startTransaction();
@@ -575,18 +532,20 @@ createSubject: async (req, res) => {
           academicYear 
         });
   
+        const assignmentType = classTeacherOf ? 'classTeacher' : 'subjectTeacher';
+        
         if (!assignment) {
           assignment = new TeacherAssignment({
             school: schoolId,
             teacher: teacherId,
-            class: assignmentType === 'classTeacher' ? classId : null,
-            subjects: subjects.map(s => ({ class: s.classId, subject: s.subjectId })),
+            class: assignmentType === 'classTeacher' ? classTeacherOf : null,
+            subjects: subjectAssignments.map(s => ({ class: s.classId, subject: s.subjectId })),
             assignmentType,
             academicYear
           });
         } else {
-          assignment.class = assignmentType === 'classTeacher' ? classId : null;
-          assignment.subjects = subjects.map(s => ({ class: s.classId, subject: s.subjectId }));
+          assignment.class = assignmentType === 'classTeacher' ? classTeacherOf : null;
+          assignment.subjects = subjectAssignments.map(s => ({ class: s.classId, subject: s.subjectId }));
           assignment.assignmentType = assignmentType;
         }
   
@@ -600,20 +559,20 @@ createSubject: async (req, res) => {
         // Handle class teacher attendance permissions
         if (assignmentType === 'classTeacher') {
           // Add the new class to attendance permissions if not already there
-          if (!permissionUpdate.canTakeAttendance.includes(classId)) {
-            permissionUpdate.canTakeAttendance.push(classId);
+          if (!permissionUpdate.canTakeAttendance.includes(classTeacherOf)) {
+            permissionUpdate.canTakeAttendance.push(classTeacherOf);
           }
           
           // Update class document to set this teacher as class teacher
           await Class.findByIdAndUpdate(
-            classId, 
+            classTeacherOf, 
             { classTeacher: teacherId },
             { session }
           );
         }
   
         // Update subject marks entry permissions
-        const markEntryPermissions = subjects.map(s => ({
+        const markEntryPermissions = subjectAssignments.map(s => ({
           class: s.classId,
           subject: s.subjectId
         }));
@@ -733,7 +692,7 @@ createSubject: async (req, res) => {
         totalMarks,
         availableRooms
       } = req.body;
-      const { schoolId } = req.params;
+      const schoolId  =  req.school;
 
       // Get total students in the class
       const classDetails = await Class.findById(classId).populate('students');
@@ -905,7 +864,7 @@ createSubject: async (req, res) => {
   scheduleMeeting: async (req, res) => {
     try {
       const { title, date, type, agenda, attendees } = req.body;
-      const { schoolId } = req.params;
+      const schoolId  =  req.school;
 
       const meeting = new Meeting({
         school: schoolId,
@@ -993,7 +952,7 @@ generateSeatingArrangement: async (req, res) => {
 // Add to adminController
 generateAttendanceReport: async (req, res) => {
   try {
-    const { schoolId } = req.params;
+    const schoolId  =  req.school;
     const { startDate, endDate, type, classId, reportType } = req.query;
 
     const query = {
