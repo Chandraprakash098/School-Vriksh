@@ -52,6 +52,45 @@ const adminController = {
     }
   },
 
+  // Get all users
+  getUsers: async (req, res) => {
+    try {
+      const schoolId = req.school;
+      const users = await User.find({ school: schoolId })
+        .select('-password')
+        .populate('permissions.canTakeAttendance', 'name division')
+        .populate('permissions.canEnterMarks.subject', 'name')
+        .populate('permissions.canEnterMarks.class', 'name division');
+
+      res.json(users);
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  },
+
+  // Get specific user
+  getUser: async (req, res) => {
+    try {
+      const { userId } = req.params;
+      const schoolId = req.school;
+
+      const user = await User.findOne({ _id: userId, school: schoolId })
+        .select('-password')
+        .populate('permissions.canTakeAttendance', 'name division')
+        .populate('permissions.canEnterMarks.subject', 'name')
+        .populate('permissions.canEnterMarks.class', 'name division');
+
+      if (!user) {
+        return res.status(404).json({ message: 'User not found' });
+      }
+
+      res.json(user);
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  },
+
+
   getAvailableClasses: async (req, res) => {
     try {
       const schoolId =  req.school;
@@ -276,6 +315,39 @@ const adminController = {
       } finally {
         session.endSession();
       }
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  },
+
+  getTeachers: async (req, res) => {
+    try {
+      const schoolId = req.school;
+      
+      const teachers = await User.find({ 
+        school: schoolId,
+        role: 'teacher'
+      })
+      .select('-password')
+      .populate('permissions.canTakeAttendance', 'name division')
+      .populate('permissions.canEnterMarks.subject', 'name')
+      .populate('permissions.canEnterMarks.class', 'name division');
+
+      // Get teacher assignments
+      const assignments = await TeacherAssignment.find({
+        teacher: { $in: teachers.map(t => t._id) }
+      })
+      .populate('class', 'name division')
+      .populate('subjects.class', 'name division')
+      .populate('subjects.subject', 'name');
+
+      // Combine teacher data with assignments
+      const teachersWithAssignments = teachers.map(teacher => ({
+        ...teacher.toObject(),
+        assignments: assignments.filter(a => a.teacher.toString() === teacher._id.toString())
+      }));
+
+      res.json(teachersWithAssignments);
     } catch (error) {
       res.status(500).json({ error: error.message });
     }
@@ -529,6 +601,20 @@ const adminController = {
     }
   },
 
+  getClasses: async (req, res) => {
+    try {
+      const schoolId = req.school;
+      
+      const classes = await Class.find({ school: schoolId })
+        .populate('classTeacher', 'name email profile')
+        .populate('subjects', 'name')
+        .sort({ name: 1, division: 1 });
+
+      res.json(classes);
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  },
   // ============ Subject Management ============
   createSubject: async (req, res) => { 
     try { 
@@ -582,6 +668,44 @@ const adminController = {
     } catch (error) { 
       res.status(500).json({ error: error.message }); 
     } 
+  },
+
+  getAllSubjects: async (req, res) => {
+    try {
+      const schoolId = req.school;
+      
+      const subjects = await Subject.find({ school: schoolId })
+        .populate('class', 'name division')
+        .populate('teachers.teacher', 'name email')
+        .populate('syllabus')
+        .sort({ 'class.name': 1, name: 1 });
+
+      res.json(subjects);
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  },
+
+  getSyllabus: async (req, res) => {
+    try {
+      const { subjectId } = req.params;
+      const schoolId = req.school;
+
+      const syllabus = await Syllabus.findOne({
+        subject: subjectId,
+        school: schoolId
+      })
+      .populate('subject', 'name')
+      .populate('class', 'name division');
+
+      if (!syllabus) {
+        return res.status(404).json({ message: 'Syllabus not found' });
+      }
+
+      res.json(syllabus);
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
   },
 
   assignTeacherRole: async (req, res) => {

@@ -158,9 +158,13 @@ router.post('/users', auth, roleCheck(['admin']), adminController.createUser);
 router.get('/available-classes', auth, roleCheck(['admin']), adminController.getAvailableClasses);
 router.post('/teachers', auth, roleCheck(['admin']), adminController.createTeacher);
 router.put('/users/:userId/role', auth, roleCheck(['admin']), adminController.updateUserRole);
+router.get('/users', auth, roleCheck(['admin']), adminController.getUsers);
+router.get('/users/:userId', auth, roleCheck(['admin']), adminController.getUser);
+router.get('/teachers', auth, roleCheck(['admin']), adminController.getTeachers);
 
 // Class Management
 router.post('/classes', auth, roleCheck(['admin']), adminController.createClass);
+router.get('/classes', auth, roleCheck(['admin']), adminController.getClasses);
 
 // Timetable Management
 router.post('/classes/:classId/timetable', auth, roleCheck(['admin']), adminController.generateTimetable);
@@ -180,6 +184,8 @@ router.post('/announcements', auth, roleCheck(['admin']), adminController.create
 router.post('/subjects', auth, roleCheck(['admin']), adminController.createSubject);
 router.get('/classes/:classId/subjects', auth, roleCheck(['admin']), adminController.getSubjectsByClass);
 router.post('/subjects/:subjectId/syllabus', auth, roleCheck(['admin', 'teacher']), upload.array('documents', 5), adminController.uploadSyllabus);
+router.get('/subjects', auth, roleCheck(['admin']), adminController.getAllSubjects);
+router.get('/subjects/:subjectId/syllabus', auth, roleCheck(['admin', 'teacher']), adminController.getSyllabus);
 
 // Meeting Management
 router.post('/meetings', auth, roleCheck(['admin', 'trustee']), adminController.scheduleMeeting);
