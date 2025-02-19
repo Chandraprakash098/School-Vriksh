@@ -1,5 +1,6 @@
 const User = require("../models/User");
 const Fee = require("../models/Fee");
+const Class = require('../models/Class');
 const AdmissionForm = require('../models/AdmissionForm');
 const AdmissionApplication = require('../models/AdmissionApplication');
 // const Document = require('../models/Document');
