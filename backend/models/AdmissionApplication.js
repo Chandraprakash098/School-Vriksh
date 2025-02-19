@@ -1,88 +1,4 @@
 const mongoose = require('mongoose');
-
-// const admissionApplicationSchema = new mongoose.Schema({
-//     school: {
-//       type: mongoose.Schema.Types.ObjectId,
-//       ref: 'School',
-//       required: true
-//     },
-//     student: {
-//       name: String,
-//       email: String,
-//       phone: String,
-//       address: Object
-//     },
-//     class: {
-//       type: mongoose.Schema.Types.ObjectId,
-//       ref: 'Class',
-//     //   required: true
-//     },
-//     formResponses: Object, // Dynamic form responses
-//     isRTE: {
-//       type: Boolean,
-//       required: true
-//     },
-//     rteDocuments: [{
-//     //   type: String,
-//     type: { type: String },
-//       documentUrl: String,
-//       verified: {
-//         type: Boolean,
-//         default: false
-//       }
-//     }],
-//     status: {
-//       type: String,
-//       enum: ['pending', 'fees_pending', 'document_verification', 'approved', 'rejected'],
-//       default: 'pending'
-//     },
-//     paymentStatus: {
-//       type: String,
-//       enum: ['not_applicable', 'pending', 'completed'],
-//       default: 'pending'
-//     },
-//     paymentDetails: {
-//       transactionId: String,
-//       amount: Number,
-//       paidAt: Date
-//     },
-//     trackingId: {
-//       type: String,
-//       unique: true
-//     },
-//     clerkVerification: {
-//       status: {
-//         type: String,
-//         enum: ['pending', 'verified', 'rejected'],
-//         default: 'pending'
-//       },
-//       verifiedBy: {
-//         type: mongoose.Schema.Types.ObjectId,
-//         ref: 'User'
-//       },
-//       verifiedAt: Date,
-//       comments: String
-//     },
-//     feesVerification: {
-//       status: {
-//         type: String,
-//         enum: ['pending', 'verified', 'rejected'],
-//         default: 'pending'
-//       },
-//       verifiedBy: {
-//         type: mongoose.Schema.Types.ObjectId,
-//         ref: 'User'
-//       },
-//       verifiedAt: Date,
-//       receiptNumber: String
-//     },
-//     createdAt: {
-//       type: Date,
-//       default: Date.now
-//     }
-//   });
-
-
 const admissionApplicationSchema = new mongoose.Schema({
     school: {
       type: mongoose.Schema.Types.ObjectId,
@@ -153,9 +69,20 @@ const admissionApplicationSchema = new mongoose.Schema({
         default: false
       }
     }],
+
+    grNumber: {
+      type: String,
+      unique: true,
+      sparse: true // Allows null values while maintaining uniqueness
+    },
+    
+    assignedClass: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Class'
+    },
     status: {
       type: String,
-      enum: ['pending', 'document_verification', 'fees_pending', 'approved', 'rejected'],
+      enum: ['pending', 'document_verification', 'fees_pending', 'approved', 'rejected','confirmed', 'enrolled'],
       default: 'pending'
     },
     paymentStatus: {

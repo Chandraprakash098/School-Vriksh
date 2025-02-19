@@ -1,38 +1,3 @@
-// const mongoose = require('mongoose');
-
-// const formFieldSchema = new mongoose.Schema({
-//   name: String,
-//   type: String, // text, number, date, file, etc.
-//   required: Boolean,
-//   options: [String] // For dropdown/radio fields
-// });
-
-// const admissionFormSchema = new mongoose.Schema({
-//   school: {
-//     type: mongoose.Schema.Types.ObjectId,
-//     ref: 'School',
-//     required: true
-//   },
-//   title: String,
-//   description: String,
-//   formFields: [formFieldSchema],
-//   rteFields: [formFieldSchema], // Additional fields for RTE applications
-//   isActive: {
-//     type: Boolean,
-//     default: true
-//   },
-//   formUrl: {
-//     type: String,
-//     unique: true
-//   },
-//   createdAt: {
-//     type: Date,
-//     default: Date.now
-//   }
-// });
-
-
-
 
 const mongoose = require('mongoose');
 
