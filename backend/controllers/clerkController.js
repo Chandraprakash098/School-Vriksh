@@ -285,13 +285,13 @@ const clerkController = {
 
   enrollStudent: async (req, res) => {
     try {
-      // const { applicationId } = req.params;
+      const { applicationId } = req.params;
       const { classId, grNumber } = req.body;
 
-      // const application = await AdmissionApplication.findById(applicationId);
-      // if (!application) {
-      //   return res.status(404).json({ message: "Application not found" });
-      // }
+      const application = await AdmissionApplication.findById(applicationId);
+      if (!application) {
+        return res.status(404).json({ message: "Application not found" });
+      }
 
       if (application.status !== "approved") {
         return res.status(400).json({
