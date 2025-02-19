@@ -2,7 +2,7 @@
 // module.exports = router;
 const express = require('express');
 const router = express.Router();
-const admissionController = require('../controllers/admissionController');
+const { admissionController, uploadDocuments } = require('../controllers/admissionController');
 const auth = require('../middleware/auth');
 const roleCheck = require('../middleware/roleCheck');
 
@@ -24,6 +24,7 @@ router.get(
 router.post(
   '/apply',
   auth,
+  uploadDocuments,
   admissionController.submitApplication
 );
 

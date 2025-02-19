@@ -218,36 +218,6 @@ const clerkController = {
     }
   },
 
-  //   getAvailableClasses: async (req, res) => {
-  //   try {
-  //     const { schoolId } = req.school;
-  //     const { appliedClass } = req.query;
-      
-  //     const classes = await Class.find({
-  //       school: schoolId,
-  //       name: appliedClass,
-  //       $expr: {
-  //         $lt: [{ $size: "$students" }, "$capacity"] // Check if class has capacity
-  //       }
-  //     })
-  //     .select('name division capacity students')
-  //     .populate('classTeacher', 'name');
-      
-  //     res.json({
-  //       status: 'success',
-  //       classes: classes.map(cls => ({
-  //         id: cls._id,
-  //         name: cls.name,
-  //         division: cls.division,
-  //         availableSeats: cls.capacity - cls.students.length,
-  //         totalSeats: cls.capacity,
-  //         classTeacher: cls.classTeacher?.name
-  //       }))
-  //     });
-  //   } catch (error) {
-  //     res.status(500).json({ error: error.message });
-  //   }
-  // },
 
 
   getAvailableClasses: async (req, res) => {
@@ -322,6 +292,10 @@ const clerkController = {
         });
       }
 
+      const temporaryPassword = Math.random().toString(36).slice(-8);
+
+      const hashedPassword = await bcrypt.hash(temporaryPassword, 10);
+
       // Create student user account
       const student = new User({
         school: application.school,
@@ -370,6 +344,105 @@ const clerkController = {
       res.status(500).json({ error: error.message });
     }
   },
+
+
+  // enrollStudent: async (req, res) => {
+  //   try {
+  //     const { applicationId } = req.params;
+  //     const { classId, grNumber, password } = req.body; // Add password to request body
+
+  //     // Validate if password is provided
+  //     if (!password) {
+  //       return res.status(400).json({
+  //         message: "Password is required"
+  //       });
+  //     }
+
+  //     const application = await AdmissionApplication.findById(applicationId);
+  //     if (!application) {
+  //       return res.status(404).json({ message: "Application not found" });
+  //     }
+
+  //     if (application.status !== "approved") {
+  //       return res.status(400).json({
+  //         message: "Only approved applications can be enrolled",
+  //       });
+  //     }
+
+  //     // Validate if GR number is unique
+  //     const existingGR = await User.findOne({
+  //       "studentDetails.grNumber": grNumber,
+  //     });
+  //     if (existingGR) {
+  //       return res.status(400).json({
+  //         message: "GR number already exists",
+  //       });
+  //     }
+
+  //     // Get selected class
+  //     const selectedClass = await Class.findById(classId);
+  //     if (!selectedClass) {
+  //       return res.status(404).json({ message: "Class not found" });
+  //     }
+
+  //     // Check class capacity
+  //     if (selectedClass.students.length >= selectedClass.capacity) {
+  //       return res.status(400).json({
+  //         message: "Class is at full capacity",
+  //       });
+  //     }
+      
+  //     // Hash the provided password
+  //     const hashedPassword = await bcrypt.hash(password, 10);
+
+  //     // Create student user account
+  //     const student = new User({
+  //       school: application.school,
+  //       name: application.studentDetails.name,
+  //       email: application.studentDetails.email,
+  //       password: hashedPassword, // Store hashed password
+  //       role: "student",
+  //       status: "active", // Explicitly set status
+  //       studentDetails: {
+  //         grNumber,
+  //         class: classId,
+  //         admissionType: application.admissionType,
+  //         parentDetails: application.parentDetails,
+  //         dob: application.studentDetails.dob,
+  //         gender: application.studentDetails.gender,
+  //       },
+  //     });
+
+  //     await student.save();
+
+  //     // Update class with new student
+  //     await Class.findByIdAndUpdate(classId, {
+  //       $push: { students: student._id },
+  //     });
+
+  //     // Update application status
+  //     application.status = "enrolled";
+  //     application.grNumber = grNumber;
+  //     application.assignedClass = classId;
+  //     await application.save();
+
+  //     res.json({
+  //       message: "Student enrolled successfully",
+  //       studentDetails: {
+  //         id: student._id,
+  //         name: student.name,
+  //         email: student.email,
+  //         grNumber,
+  //         class: {
+  //           name: selectedClass.name,
+  //           division: selectedClass.division,
+  //         }
+  //       },
+  //     });
+  //   } catch (error) {
+  //     res.status(500).json({ error: error.message });
+  //   }
+  // },
 
   // Confirm admission
   confirmAdmission: async (req, res) => {

@@ -884,11 +884,20 @@
 
 // module.exports = admissionController;
 
-
+const { upload, cloudinary } = require('../config/cloudinary');
 const User = require('../models/User');
 const AdmissionForm = require('../models/AdmissionForm');
 const AdmissionApplication = require('../models/AdmissionApplication');
 const { generateTrackingId } = require('../utils/helpers');
+
+
+const uploadDocuments = upload.fields([
+  { name: 'studentPhoto', maxCount: 1 },
+  { name: 'aadharCard', maxCount: 1 },
+  { name: 'birthCertificate', maxCount: 1 },
+  { name: 'schoolLeavingCertificate', maxCount: 1 },
+  { name: 'rteCertificate', maxCount: 1 }
+]);
 
 const admissionController = {
   // Form Management
@@ -987,22 +996,96 @@ const admissionController = {
   },
 
   // Application Submission
+  // submitApplication: async (req, res) => {
+  //   try {
+  //     const schoolId = req.user.school;
+  //     // const schoolId = req.user.school._id; // Ensure you're accessing the correct property
+  //     console.log("School ID:", schoolId); // Add this line for debugging
+  //     const {
+  //       studentDetails,
+  //       parentDetails,
+  //       admissionType,
+  //       documents,
+  //       additionalResponses = {}
+  //     } = req.body;
+
+  //     if (!studentDetails || !parentDetails || !admissionType) {
+  //       return res.status(400).json({
+  //         message: 'Missing required fields'
+  //       });
+  //     }
+
+  //     const trackingId = generateTrackingId(schoolId);
+      
+  //     const application = new AdmissionApplication({
+  //       school: schoolId,
+  //       studentDetails,
+  //       parentDetails,
+  //       admissionType,
+  //       documents: documents.map(doc => ({
+  //         type: doc.type,
+  //         documentUrl: doc.url
+  //       })),
+  //       trackingId,
+  //       paymentStatus: admissionType === 'RTE' ? 'not_applicable' : 'pending'
+  //     });
+
+  //     if (!application.validateDocuments()) {
+  //       return res.status(400).json({
+  //         message: 'Missing required documents',
+  //         required: admissionType === 'RTE' ? 
+  //           ['rteCertificate', 'studentPhoto', 'aadharCard'] :
+  //           studentDetails.appliedClass === '1st' ?
+  //             ['studentPhoto', 'aadharCard', 'birthCertificate'] :
+  //             ['studentPhoto', 'aadharCard', 'birthCertificate', 'schoolLeavingCertificate']
+  //       });
+  //     }
+
+  //     await application.save();
+
+  //     res.status(201).json({
+  //       message: 'Application submitted successfully',
+  //       trackingId,
+  //       nextSteps: admissionType === 'RTE' ? 
+  //         'Visit clerk with original documents for verification' : 
+  //         'Complete payment and visit clerk with original documents'
+  //     });
+  //   } catch (error) {
+  //     res.status(500).json({ error: error.message });
+  //   }
+  // },
+
   submitApplication: async (req, res) => {
     try {
       const schoolId = req.user.school;
-      // const schoolId = req.user.school._id; // Ensure you're accessing the correct property
-      console.log("School ID:", schoolId); // Add this line for debugging
       const {
         studentDetails,
         parentDetails,
         admissionType,
-        documents,
         additionalResponses = {}
       } = req.body;
 
       if (!studentDetails || !parentDetails || !admissionType) {
         return res.status(400).json({
           message: 'Missing required fields'
+        });
+      }
+
+      // Process uploaded files
+      const uploadedDocuments = [];
+      for (const fileType in req.files) {
+        const file = req.files[fileType][0];
+        const cloudinaryFolder = `admissions/${schoolId}/${Date.now()}`;
+        
+        const result = await cloudinary.uploader.upload(file.path, {
+          folder: cloudinaryFolder,
+          resource_type: 'auto'
+        });
+
+        uploadedDocuments.push({
+          type: fileType,
+          documentUrl: result.secure_url,
+          public_id: result.public_id
         });
       }
 
@@ -1013,15 +1096,17 @@ const admissionController = {
         studentDetails,
         parentDetails,
         admissionType,
-        documents: documents.map(doc => ({
-          type: doc.type,
-          documentUrl: doc.url
-        })),
+        documents: uploadedDocuments,
         trackingId,
         paymentStatus: admissionType === 'RTE' ? 'not_applicable' : 'pending'
       });
 
       if (!application.validateDocuments()) {
+        // Delete uploaded files if validation fails
+        for (const doc of uploadedDocuments) {
+          await cloudinary.uploader.destroy(doc.public_id);
+        }
+
         return res.status(400).json({
           message: 'Missing required documents',
           required: admissionType === 'RTE' ? 
@@ -1042,7 +1127,31 @@ const admissionController = {
           'Complete payment and visit clerk with original documents'
       });
     } catch (error) {
+      // Delete uploaded files if there's an error
+      if (req.files) {
+        for (const fileType in req.files) {
+          const file = req.files[fileType][0];
+          const public_id = file.filename; // Assuming filename is the public_id
+          await cloudinary.uploader.destroy(public_id);
+        }
+      }
       res.status(500).json({ error: error.message });
+    }
+  },
+
+  deleteApplicationDocuments: async (applicationId) => {
+    try {
+      const application = await AdmissionApplication.findById(applicationId);
+      if (!application) return;
+
+      // Delete all documents from Cloudinary
+      for (const doc of application.documents) {
+        if (doc.public_id) {
+          await cloudinary.uploader.destroy(doc.public_id);
+        }
+      }
+    } catch (error) {
+      console.error('Error deleting documents:', error);
     }
   },
 
@@ -1512,4 +1621,7 @@ function getNextSteps(application) {
   }
 }
 
-module.exports = admissionController;
+module.exports = {
+  admissionController,
+  uploadDocuments
+};
