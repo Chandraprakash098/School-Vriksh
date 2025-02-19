@@ -885,7 +885,7 @@
 // module.exports = admissionController;
 
 
-
+const User = require('../models/User');
 const AdmissionForm = require('../models/AdmissionForm');
 const AdmissionApplication = require('../models/AdmissionApplication');
 const { generateTrackingId } = require('../utils/helpers');
