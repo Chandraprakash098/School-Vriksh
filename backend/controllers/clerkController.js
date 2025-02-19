@@ -218,37 +218,71 @@ const clerkController = {
     }
   },
 
-    getAvailableClasses: async (req, res) => {
-    try {
-      const { schoolId } = req.school;
-      const { appliedClass } = req.query;
+  //   getAvailableClasses: async (req, res) => {
+  //   try {
+  //     const { schoolId } = req.school;
+  //     const { appliedClass } = req.query;
       
-      const classes = await Class.find({
-        school: schoolId,
-        name: appliedClass,
-        $expr: {
-          $lt: [{ $size: "$students" }, "$capacity"] // Check if class has capacity
-        }
-      })
-      .select('name division capacity students')
-      .populate('classTeacher', 'name');
+  //     const classes = await Class.find({
+  //       school: schoolId,
+  //       name: appliedClass,
+  //       $expr: {
+  //         $lt: [{ $size: "$students" }, "$capacity"] // Check if class has capacity
+  //       }
+  //     })
+  //     .select('name division capacity students')
+  //     .populate('classTeacher', 'name');
       
-      res.json({
-        status: 'success',
-        classes: classes.map(cls => ({
-          id: cls._id,
-          name: cls.name,
-          division: cls.division,
-          availableSeats: cls.capacity - cls.students.length,
-          totalSeats: cls.capacity,
-          classTeacher: cls.classTeacher?.name
-        }))
-      });
-    } catch (error) {
-      res.status(500).json({ error: error.message });
-    }
-  },
+  //     res.json({
+  //       status: 'success',
+  //       classes: classes.map(cls => ({
+  //         id: cls._id,
+  //         name: cls.name,
+  //         division: cls.division,
+  //         availableSeats: cls.capacity - cls.students.length,
+  //         totalSeats: cls.capacity,
+  //         classTeacher: cls.classTeacher?.name
+  //       }))
+  //     });
+  //   } catch (error) {
+  //     res.status(500).json({ error: error.message });
+  //   }
+  // },
 
+
+  getAvailableClasses: async (req, res) => {
+      try {
+        const schoolId =  req.school;
+        
+        // Fetch classes that don't have a class teacher assigned
+        const availableClasses = await Class.find({
+          school: schoolId,
+          $or: [
+            { classTeacher: null },
+            { classTeacher: { $exists: false } }
+          ]
+        })
+        .select('name division academicYear')
+        .sort({ name: 1, division: 1 });
+  
+        // Also fetch classes that have a class teacher for reference
+        const assignedClasses = await Class.find({
+          school: schoolId,
+          classTeacher: { $exists: true, $ne: null }
+        })
+        .select('name division academicYear classTeacher')
+        .populate('classTeacher', 'name')
+        .sort({ name: 1, division: 1 });
+  
+        res.json({
+          available: availableClasses,
+          assigned: assignedClasses
+        });
+      } catch (error) {
+        res.status(500).json({ error: error.message });
+      }
+    },
+    
   enrollStudent: async (req, res) => {
     try {
       const { applicationId } = req.params;
