@@ -1,5 +1,7 @@
 const User = require("../models/User");
 const Fee = require("../models/Fee");
+const AdmissionForm = require('../models/AdmissionForm');
+const AdmissionApplication = require('../models/AdmissionApplication');
 // const Document = require('../models/Document');
 const mongoose = require("mongoose");
 // const { generateGRNumber, validateRTEDocuments } = require('../utils/admissionHelpers');
@@ -191,7 +193,7 @@ const clerkController = {
   // Verify physical documents
   verifyDocuments: async (req, res) => {
     try {
-      const { studentId } = req.params;
+      const { studentId } = req.school;
       const { verifiedDocuments } = req.body;
 
       const student = await User.findById(studentId);
