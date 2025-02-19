@@ -36,42 +36,79 @@
 // module.exports = auth;
 
 
+// const jwt = require('jsonwebtoken');
+// const User = require('../models/User');
+
+// const auth = async (req, res, next) => {
+//   try {
+//     if (!req.header('Authorization')) {
+//       throw new Error('No Authorization header');
+//     }
+
+//     const token = req.header('Authorization').replace('Bearer ', '');
+//     const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    
+//     const user = await User.findOne({ 
+//       _id: decoded.userId
+//     });
+
+//     if (!user) {
+//       throw new Error('User not found');
+//     }
+
+//     // Add school ID to the request object
+//     if (!user.school && user.role === 'admin') {
+//       throw new Error('Admin user not associated with any school');
+//     }
+
+//     // Attach both user and school to the request object
+//     req.user = user;
+//     req.school = user.school;
+//     req.token = token;
+    
+//     next();
+//   } catch (error) {
+//     res.status(401).json({ 
+//       error: 'Please authenticate',
+//       details: error.message
+//     });
+//   }
+// };
+
+// module.exports = auth;
+
+
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 
 const auth = async (req, res, next) => {
   try {
-    if (!req.header('Authorization')) {
-      throw new Error('No Authorization header');
+    const authHeader = req.header('Authorization');
+    if (!authHeader) {
+      return res.status(401).json({ error: 'No Authorization header provided' });
     }
 
-    const token = req.header('Authorization').replace('Bearer ', '');
+    const token = authHeader.replace('Bearer ', '');
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     
-    const user = await User.findOne({ 
-      _id: decoded.userId
-    });
+    const user = await User.findOne({ _id: decoded.userId }).populate('school');
 
     if (!user) {
-      throw new Error('User not found');
+      return res.status(404).json({ error: 'User not found' });
     }
 
-    // Add school ID to the request object
-    if (!user.school && user.role === 'admin') {
-      throw new Error('Admin user not associated with any school');
+    if (!user.school) {
+      return res.status(400).json({ error: 'User is not associated with any school' });
     }
 
-    // Attach both user and school to the request object
     req.user = user;
     req.school = user.school;
     req.token = token;
     
     next();
   } catch (error) {
-    res.status(401).json({ 
-      error: 'Please authenticate',
-      details: error.message
-    });
+    console.error('Authentication Error:', error.message);
+    res.status(401).json({ error: 'Please authenticate', details: error.message });
   }
 };
 

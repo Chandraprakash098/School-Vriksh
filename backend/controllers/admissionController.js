@@ -892,9 +892,43 @@ const { generateTrackingId } = require('../utils/helpers');
 
 const admissionController = {
   // Form Management
+  // createAdmissionForm: async (req, res) => {
+  //   try {
+  //     const { schoolId } = req.school;
+  //     if (!schoolId) {
+  //       return res.status(400).json({ error: "School ID is required" });
+  //   }
+  //   console.log("School ID:", req.school);
+  //     const {
+  //       title,
+  //       description,
+  //       additionalFields = []
+  //     } = req.body;
+
+  //     const formUrl = `admission/${schoolId}/${Date.now()}`;
+  //     const admissionForm = new AdmissionForm({
+  //       school: schoolId,
+  //       title,
+  //       description,
+  //       additionalFields,
+  //       formUrl
+  //     });
+
+  //     await admissionForm.save();
+  //     res.status(201).json(admissionForm);
+  //   } catch (error) {
+  //     res.status(500).json({ error: error.message });
+  //   }
+  // },
+
   createAdmissionForm: async (req, res) => {
     try {
-      const { schoolId } = req.school;
+      const schoolId = req.user.school;  // Get from authenticated user
+
+      if (!schoolId) {
+        return res.status(400).json({ error: "School ID is required" });
+      }
+
       const {
         title,
         description,
@@ -915,11 +949,11 @@ const admissionController = {
     } catch (error) {
       res.status(500).json({ error: error.message });
     }
-  },
+},
 
   getAdmissionForm: async (req, res) => {
     try {
-      const { schoolId, timestamp } = req.school;
+      const { schoolId, timestamp } = req.user.school;
       const formUrl = `admission/${schoolId}/${timestamp}`;
 
       const admissionForm = await AdmissionForm.findOne({ 
@@ -955,7 +989,9 @@ const admissionController = {
   // Application Submission
   submitApplication: async (req, res) => {
     try {
-      const schoolId = req.school;
+      const schoolId = req.user.school;
+      // const schoolId = req.user.school._id; // Ensure you're accessing the correct property
+      console.log("School ID:", schoolId); // Add this line for debugging
       const {
         studentDetails,
         parentDetails,

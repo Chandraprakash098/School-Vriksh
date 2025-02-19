@@ -16,12 +16,14 @@ router.post(
 
 router.get(
   '/form/:timestamp',
+  auth,
   admissionController.getAdmissionForm
 );
 
 // Application submission route
 router.post(
   '/apply',
+  auth,
   admissionController.submitApplication
 );
 
