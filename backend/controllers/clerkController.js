@@ -337,7 +337,7 @@ const clerkController = {
   // Confirm admission
   confirmAdmission: async (req, res) => {
     try {
-      const { studentId } = req.params;
+      const { studentId } = req.school;
       const { classSection } = req.body;
 
       const student = await User.findById(studentId);
@@ -384,7 +384,7 @@ const clerkController = {
   // Generate certificates
   generateCertificate: async (req, res) => {
     try {
-      const { studentId } = req.params;
+      const { studentId } = req.school;
       const { certificateType } = req.body;
 
       const student = await User.findById(studentId)
@@ -424,7 +424,7 @@ const clerkController = {
   // Generate RTE compliance report
   generateRTEReport: async (req, res) => {
     try {
-      const { schoolId } = req.params;
+      const { schoolId } = req.school;
       const { startDate, endDate } = req.body;
 
       const rteStudents = await User.find({
