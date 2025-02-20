@@ -913,6 +913,40 @@ const adminController = {
   //   }
   // },
 
+  // getSyllabus: async (req, res) => {
+  //   try {
+  //     const { subjectId } = req.params;
+  //     const schoolId = req.school;
+
+  //     const syllabus = await Syllabus.findOne({
+  //       subject: subjectId,
+  //       school: schoolId
+  //     })
+  //     .populate('subject', 'name')
+  //     .populate('class', 'name division');
+
+  //     if (!syllabus) {
+  //       return res.status(404).json({ message: 'Syllabus not found' });
+  //     }
+
+  //     // Generate signed URLs for each document
+  //     if (syllabus.documents && syllabus.documents.length > 0) {
+  //       const { cloudinary } = require('../config/cloudinary');
+  //       syllabus.documents = syllabus.documents.map(doc => ({
+  //         ...doc.toObject(),
+  //         downloadUrl: cloudinary.utils.private_download_url(doc.url, doc.title, {
+  //           expires_at: Math.floor(Date.now() / 1000) + 3600, // URL expires in 1 hour
+  //           attachment: true
+  //         })
+  //       }));
+  //     }
+
+  //     res.json(syllabus);
+  //   } catch (error) {
+  //     res.status(500).json({ error: error.message });
+  //   }
+  // },
+
   getSyllabus: async (req, res) => {
     try {
       const { subjectId } = req.params;
@@ -929,16 +963,45 @@ const adminController = {
         return res.status(404).json({ message: 'Syllabus not found' });
       }
 
-      // Generate signed URLs for each document
+      // Generate signed URLs for each document with proper content disposition
       if (syllabus.documents && syllabus.documents.length > 0) {
         const { cloudinary } = require('../config/cloudinary');
-        syllabus.documents = syllabus.documents.map(doc => ({
-          ...doc.toObject(),
-          downloadUrl: cloudinary.utils.private_download_url(doc.url, doc.title, {
+        syllabus.documents = syllabus.documents.map(doc => {
+          // Get file extension for proper content type
+          const fileExtension = doc.title.split('.').pop().toLowerCase() || '';
+          let contentType = 'application/octet-stream'; // Default
+          
+          if (fileExtension === 'pdf') {
+            contentType = 'application/pdf';
+          } else if (fileExtension === 'doc') {
+            contentType = 'application/msword';
+          } else if (fileExtension === 'docx') {
+            contentType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+          } else if (['jpg', 'jpeg'].includes(fileExtension)) {
+            contentType = 'image/jpeg';
+          }
+
+          // Create signed URL with proper content disposition and type
+          const downloadUrl = cloudinary.utils.private_download_url(doc.url, doc.title, {
             expires_at: Math.floor(Date.now() / 1000) + 3600, // URL expires in 1 hour
-            attachment: true
-          })
-        }));
+            attachment: true,
+            type: 'authenticated',
+            resource_type: 'auto',
+            format: fileExtension || 'any',
+            flags: 'attachment',
+            content_disposition: `attachment; filename="${doc.title}"`,
+            headers: {
+              'Content-Type': contentType,
+              'Cache-Control': 'no-cache'
+            }
+          });
+
+          return {
+            ...doc.toObject(),
+            downloadUrl,
+            contentType
+          };
+        });
       }
 
       res.json(syllabus);
