@@ -1,42 +1,3 @@
-// const express = require('express');
-// const router = express.Router();
-// const teacherController = require('../controllers/teacherController');
-// const auth = require('../middleware/auth');
-// const roleCheck = require('../middleware/roleCheck');
-// const schoolCheck = require('../middleware/schoolCheck');
-
-// router.get(
-//   '/schedule/:teacherId',
-//   [auth, roleCheck(['teacher']), schoolCheck],
-//   teacherController.getSchedule
-// );
-
-// router.post(
-//   '/:schoolId/:classId/homework',
-//   [auth, roleCheck(['teacher']), schoolCheck],
-//   teacherController.assignHomework
-// );
-
-// router.post(
-//   '/:schoolId/:classId/attendance',
-//   [auth, roleCheck(['teacher']), schoolCheck],
-//   teacherController.markAttendance
-// );
-
-// router.post(
-//   '/:schoolId/communicate/:studentId',
-//   [auth, roleCheck(['teacher']), schoolCheck],
-//   teacherController.communicateWithParent
-// );
-
-// // router.post(
-// //   '/:schoolId/:classId/attendance',
-// //   [auth, roleCheck(['teacher']), checkTeacherPermissions],
-// //   teacherController.markAttendance
-// // );
-
-// module.exports = router;
-
 
 const express = require('express');
 const router = express.Router();
@@ -81,11 +42,11 @@ router.post(
 );
 
 // Exam marks
-router.post(
-  '/exams/:examId/marks',
-  [auth, roleCheck(['teacher']), schoolCheck],
-  teacherController.enterStudentMarks
-);
+// router.post(
+//   '/exams/:examId/marks',
+//   [auth, roleCheck(['teacher']), schoolCheck],
+//   teacherController.enterStudentMarks
+// );
 
 // Progress reports
 router.post(
@@ -119,6 +80,31 @@ router.post(
   '/:schoolId/:classId/attendance',
   [auth, roleCheck(['teacher']), schoolCheck, validateAttendancePermission],
   teacherController.markAttendance
+);
+
+
+router.post(
+  '/exams/:examId/marks',
+  [auth, roleCheck(['teacher'])],
+  teacherController.enterSubjectMarks
+);
+
+router.post(
+  '/exams/:examId/submit-marks',
+  [auth, roleCheck(['teacher'])],
+  teacherController.submitMarksToClassTeacher
+);
+
+router.get(
+  '/exams/:examId/review-marks',
+  [auth, roleCheck(['teacher'])],
+  teacherController.reviewSubjectMarks
+);
+
+router.post(
+  '/exams/:examId/submit-results',
+  [auth, roleCheck(['teacher'])],
+  teacherController.submitResultsToAdmin
 );
 
 module.exports = router;

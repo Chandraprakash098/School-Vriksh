@@ -1,5 +1,3 @@
-
-// module.exports = router;
 const express = require('express');
 const router = express.Router();
 const { admissionController, uploadDocuments } = require('../controllers/admissionController');

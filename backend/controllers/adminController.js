@@ -9,6 +9,8 @@ const Exam = require('../models/Exam');
 const Result = require('../models/Results');
 const Announcement = require('../models/Announcement');
 const Meeting = require('../models/Meeting');
+const SubjectMarks = require('../models/SubjectMarks')
+const classResult = require('../models/ClassResult')
 // const TrusteeActivity = require('../models/TrusteeActivity');
 const bcrypt = require('bcryptjs');
 const mongoose = require('mongoose');
@@ -149,7 +151,181 @@ const adminController = {
     }
   },
 
-  createTeacher: async (req, res) => {
+  // createTeacher: async (req, res) => {
+  //   try {
+  //     const { 
+  //       name, 
+  //       email, 
+  //       password, 
+  //       phone, 
+  //       address, 
+  //       photo,
+  //       classTeacherOf, // The class ID the teacher will be class teacher of
+  //       subjectAssignments // Array of {classId, subjectId}
+  //     } = req.body;
+  //     const schoolId =  req.school;
+
+  //     const session = await mongoose.startSession();
+  //     session.startTransaction();
+
+  //     try {
+  //       // Check if email already exists
+  //       const existingUser = await User.findOne({ email });
+  //       if (existingUser) {
+  //         return res.status(400).json({ message: 'Email already registered' });
+  //       }
+
+  //       // If class teacher, validate class exists and is available
+  //       if (classTeacherOf) {
+  //         const classExists = await Class.findOne({
+  //           _id: classTeacherOf,
+  //           school: schoolId,
+  //           $or: [
+  //             { classTeacher: null },
+  //             { classTeacher: { $exists: false } }
+  //           ]
+  //         });
+
+  //         if (!classExists) {
+  //           return res.status(400).json({ 
+  //             message: 'Selected class is not available for assignment as class teacher' 
+  //           });
+  //         }
+  //       }
+
+  //       // Validate subject assignments
+  //       if (subjectAssignments && subjectAssignments.length > 0) {
+  //         for (const assignment of subjectAssignments) {
+  //           const subject = await Subject.findOne({
+  //             _id: assignment.subjectId,
+  //             class: assignment.classId,
+  //             school: schoolId
+  //           });
+            
+  //           if (!subject) {
+  //             return res.status(400).json({
+  //               message: `Invalid subject assignment for class ${assignment.classId}`
+  //             });
+  //           }
+  //         }
+  //       }
+
+  //       // Generate hashed password
+  //       const salt = await bcrypt.genSalt(10);
+  //       const hashedPassword = await bcrypt.hash(password, salt);
+
+  //       // Set up permissions based on role
+  //       const permissions = {
+  //         canTakeAttendance: classTeacherOf ? [classTeacherOf] : [], // Only class teacher can take attendance
+  //         canEnterMarks: subjectAssignments.map(assignment => ({
+  //           class: assignment.classId,
+  //           subject: assignment.subjectId
+  //         })),
+  //         canPublishAnnouncements: true,
+  //         canManageInventory: false,
+  //         canManageFees: false,
+  //         canManageLibrary: false
+  //       };
+
+  //       const teacher = new User({
+  //         school: schoolId,
+  //         name,
+  //         email,
+  //         password: hashedPassword,
+  //         role: 'teacher',
+  //         profile: {
+  //           phone,
+  //           address,
+  //           photo
+  //         },
+  //         permissions
+  //       });
+
+  //       await teacher.save({ session });
+
+  //       // Create teacher assignment
+  //       const assignment = new TeacherAssignment({
+  //         school: schoolId,
+  //         teacher: teacher._id,
+  //         class: classTeacherOf,
+  //         subjects: subjectAssignments,
+  //         assignmentType: classTeacherOf ? 'classTeacher' : 'subjectTeacher',
+  //         academicYear: getCurrentAcademicYear()
+  //       });
+
+  //       await assignment.save({ session });
+
+  //       // Update class if class teacher
+  //       if (classTeacherOf) {
+  //         await Class.findByIdAndUpdate(
+  //           classTeacherOf,
+  //           { 
+  //             classTeacher: teacher._id,
+  //             lastUpdated: new Date(),
+  //             updatedBy: req.user._id
+  //           },
+  //           { session }
+  //         );
+  //       }
+
+  //       // Update subjects with new teacher
+  //       for (const assignment of subjectAssignments) {
+  //         await Subject.findByIdAndUpdate(
+  //           assignment.subjectId,
+  //           {
+  //             $push: {
+  //               teachers: {
+  //                 teacher: teacher._id,
+  //                 assignedAt: new Date()
+  //               }
+  //             }
+  //           },
+  //           { session }
+  //         );
+  //       }
+
+  //       await session.commitTransaction();
+
+  //       const populatedTeacher = await User.findById(teacher._id)
+  //         .populate({
+  //           path: 'permissions.canTakeAttendance',
+  //           select: 'name division'
+  //         })
+  //         .populate({
+  //           path: 'permissions.canEnterMarks.subject',
+  //           select: 'name'
+  //         })
+  //         .populate({
+  //           path: 'permissions.canEnterMarks.class',
+  //           select: 'name division'
+  //         });
+
+  //         const updatedClass = classTeacherOf ? 
+  //               await Class.findById(classTeacherOf)
+  //                   .populate('classTeacher', 'name email profile')
+  //                   .populate('subjects') : null;
+
+  //       res.status(201).json({ 
+  //         teacher: populatedTeacher,
+  //         assignment,
+  //         updatedClass,
+  //         message: 'Teacher created successfully with appropriate permissions'
+  //       });
+  //     } catch (error) {
+  //       await session.abortTransaction();
+  //       throw error;
+  //     } finally {
+  //       session.endSession();
+  //     }
+  //   } catch (error) {
+  //     res.status(500).json({ error: error.message });
+  //   }
+  // },
+
+  createTeacher : async (req, res) => {
+    const session = await mongoose.startSession();
+    session.startTransaction();
+  
     try {
       const { 
         name, 
@@ -158,118 +334,115 @@ const adminController = {
         phone, 
         address, 
         photo,
-        classTeacherOf, // The class ID the teacher will be class teacher of
+        classTeacherOf, // Class ID for class teacher assignment
         subjectAssignments // Array of {classId, subjectId}
       } = req.body;
-      const schoolId =  req.school;
-
-      const session = await mongoose.startSession();
-      session.startTransaction();
-
-      try {
-        // Check if email already exists
-        const existingUser = await User.findOne({ email });
-        if (existingUser) {
-          return res.status(400).json({ message: 'Email already registered' });
-        }
-
-        // If class teacher, validate class exists and is available
-        if (classTeacherOf) {
-          const classExists = await Class.findOne({
-            _id: classTeacherOf,
-            school: schoolId,
-            $or: [
-              { classTeacher: null },
-              { classTeacher: { $exists: false } }
-            ]
+      const schoolId = req.school;
+  
+      // Check if email already exists
+      const existingUser = await User.findOne({ email });
+      if (existingUser) {
+        return res.status(400).json({ message: 'Email already registered' });
+      }
+  
+      // Validate class teacher assignment
+      if (classTeacherOf) {
+        const classExists = await Class.findOne({
+          _id: classTeacherOf,
+          school: schoolId,
+          classTeacher: { $exists: false }
+        });
+  
+        if (!classExists) {
+          return res.status(400).json({ 
+            message: 'Class is not available for class teacher assignment' 
           });
-
-          if (!classExists) {
-            return res.status(400).json({ 
-              message: 'Selected class is not available for assignment as class teacher' 
-            });
-          }
         }
-
-        // Validate subject assignments
-        if (subjectAssignments && subjectAssignments.length > 0) {
-          for (const assignment of subjectAssignments) {
-            const subject = await Subject.findOne({
-              _id: assignment.subjectId,
-              class: assignment.classId,
-              school: schoolId
-            });
-            
-            if (!subject) {
-              return res.status(400).json({
-                message: `Invalid subject assignment for class ${assignment.classId}`
-              });
-            }
+      }
+  
+      // Validate subject assignments
+      if (subjectAssignments?.length) {
+        const validationPromises = subjectAssignments.map(async ({ classId, subjectId }) => {
+          const subject = await Subject.findOne({
+            _id: subjectId,
+            class: classId,
+            school: schoolId
+          });
+  
+          if (!subject) {
+            throw new Error(`Invalid subject assignment for class ${classId}`);
           }
-        }
-
-        // Generate hashed password
-        const salt = await bcrypt.genSalt(10);
-        const hashedPassword = await bcrypt.hash(password, salt);
-
-        // Set up permissions based on role
-        const permissions = {
-          canTakeAttendance: classTeacherOf ? [classTeacherOf] : [], // Only class teacher can take attendance
-          canEnterMarks: subjectAssignments.map(assignment => ({
-            class: assignment.classId,
-            subject: assignment.subjectId
-          })),
-          canPublishAnnouncements: true,
-          canManageInventory: false,
-          canManageFees: false,
-          canManageLibrary: false
-        };
-
-        const teacher = new User({
-          school: schoolId,
-          name,
-          email,
-          password: hashedPassword,
-          role: 'teacher',
-          profile: {
-            phone,
-            address,
-            photo
-          },
-          permissions
+  
+          return true;
         });
-
-        await teacher.save({ session });
-
-        // Create teacher assignment
-        const assignment = new TeacherAssignment({
-          school: schoolId,
-          teacher: teacher._id,
+  
+        await Promise.all(validationPromises);
+      }
+  
+      // Create user account
+      const salt = await bcrypt.genSalt(10);
+      const hashedPassword = await bcrypt.hash(password, salt);
+  
+      const permissions = {
+        canTakeAttendance: classTeacherOf ? [classTeacherOf] : [],
+        canEnterMarks: subjectAssignments?.map(({ classId, subjectId }) => ({
+          class: classId,
+          subject: subjectId
+        })) || [],
+        canPublishAnnouncements: true,
+        canManageInventory: false,
+        canManageFees: false,
+        canManageLibrary: false
+      };
+  
+      const teacher = new User({
+        school: schoolId,
+        name,
+        email,
+        password: hashedPassword,
+        role: 'teacher',
+        profile: { phone, address, photo },
+        permissions
+      });
+  
+      await teacher.save({ session });
+  
+      // Create teacher assignment record
+      const teacherAssignment = new TeacherAssignment({
+        school: schoolId,
+        teacher: teacher._id,
+        classTeacherAssignment: classTeacherOf ? {
           class: classTeacherOf,
-          subjects: subjectAssignments,
-          assignmentType: classTeacherOf ? 'classTeacher' : 'subjectTeacher',
-          academicYear: getCurrentAcademicYear()
-        });
-
-        await assignment.save({ session });
-
-        // Update class if class teacher
-        if (classTeacherOf) {
-          await Class.findByIdAndUpdate(
-            classTeacherOf,
-            { 
-              classTeacher: teacher._id,
-              lastUpdated: new Date(),
-              updatedBy: req.user._id
-            },
-            { session }
-          );
-        }
-
-        // Update subjects with new teacher
-        for (const assignment of subjectAssignments) {
-          await Subject.findByIdAndUpdate(
-            assignment.subjectId,
+          assignedAt: new Date()
+        } : null,
+        subjectAssignments: subjectAssignments?.map(({ classId, subjectId }) => ({
+          class: classId,
+          subject: subjectId,
+          assignedAt: new Date()
+        })) || [],
+        academicYear: getCurrentAcademicYear()
+      });
+  
+      await teacherAssignment.save({ session });
+  
+      // Update class with class teacher
+      if (classTeacherOf) {
+        await Class.findByIdAndUpdate(
+          classTeacherOf,
+          { 
+            classTeacher: teacher._id,
+            lastUpdated: new Date(),
+            updatedBy: req.user._id
+          },
+          { session }
+        );
+      }
+  
+      // Update subjects with teacher assignments
+      if (subjectAssignments?.length) {
+        const updatePromises = subjectAssignments.map(({ subjectId }) =>
+          Subject.findByIdAndUpdate(
+            subjectId,
             {
               $push: {
                 teachers: {
@@ -279,44 +452,39 @@ const adminController = {
               }
             },
             { session }
-          );
-        }
-
-        await session.commitTransaction();
-
-        const populatedTeacher = await User.findById(teacher._id)
-          .populate({
-            path: 'permissions.canTakeAttendance',
-            select: 'name division'
-          })
-          .populate({
-            path: 'permissions.canEnterMarks.subject',
-            select: 'name'
-          })
-          .populate({
-            path: 'permissions.canEnterMarks.class',
-            select: 'name division'
-          });
-
-          const updatedClass = classTeacherOf ? 
-                await Class.findById(classTeacherOf)
-                    .populate('classTeacher', 'name email profile')
-                    .populate('subjects') : null;
-
-        res.status(201).json({ 
-          teacher: populatedTeacher,
-          assignment,
-          updatedClass,
-          message: 'Teacher created successfully with appropriate permissions'
-        });
-      } catch (error) {
-        await session.abortTransaction();
-        throw error;
-      } finally {
-        session.endSession();
+          )
+        );
+  
+        await Promise.all(updatePromises);
       }
+  
+      await session.commitTransaction();
+  
+      // Fetch populated teacher data
+      const populatedTeacher = await User.findById(teacher._id)
+        .populate('permissions.canTakeAttendance', 'name division')
+        .populate('permissions.canEnterMarks.subject', 'name')
+        .populate('permissions.canEnterMarks.class', 'name division');
+  
+      const populatedAssignment = await TeacherAssignment.findById(teacherAssignment._id)
+        .populate('classTeacherAssignment.class', 'name division')
+        .populate('subjectAssignments.class', 'name division')
+        .populate('subjectAssignments.subject', 'name');
+  
+      res.status(201).json({
+        teacher: populatedTeacher,
+        assignment: populatedAssignment,
+        message: 'Teacher created successfully with assignments'
+      });
+  
     } catch (error) {
-      res.status(500).json({ error: error.message });
+      await session.abortTransaction();
+      res.status(500).json({ 
+        error: error.message,
+        message: 'Failed to create teacher'
+      });
+    } finally {
+      session.endSession();
     }
   },
 
@@ -489,56 +657,7 @@ const adminController = {
     }
   },
 
-  // ============ Class Management ============
-  // createClass: async (req, res) => {
-  //   try {
-  //     const {
-  //       name,
-  //       division,
-  //       capacity,
-  //       // classTeacher,
-  //       subjects,
-  //       rteSeats,
-  //       academicYear,
-  //       schedule
-  //     } = req.body;
-  //     const schoolId =  req.school;
-
-  //     // Validate class teacher
-  //     // if (classTeacher) {
-  //     //   const teacher = await User.findById(classTeacher);
-  //     //   if (!teacher || teacher.role !== 'teacher') {
-  //     //     return res.status(400).json({ message: 'Invalid class teacher' });
-  //     //   }
-  //     // }
-
-  //     const newClass = new Class({
-  //       school: schoolId,
-  //       name,
-  //       division,
-  //       capacity,
-  //       // classTeacher,
-  //       subjects,
-  //       rteSeats,
-  //       academicYear,
-  //       schedule
-  //     });
-
-  //     await newClass.save();
-
-  //     // Update teacher's permissions for the new class if a class teacher is assigned
-  //     // if (classTeacher) {
-  //     //   await User.findByIdAndUpdate(classTeacher, {
-  //     //     $push: { 'permissions.canTakeAttendance': newClass._id }
-  //     //   });
-  //     // }
-
-  //     res.status(201).json(newClass);
-  //   } catch (error) {
-  //     res.status(500).json({ error: error.message });
-  //   }
-  // },
-
+  
   createClass : async (req, res) => {
     try {
       const {
@@ -925,41 +1044,59 @@ const adminController = {
     }
   },
 
+  reviewClassResults: async (req, res) => {
+    try {
+      const { examId } = req.params;
+      
+      const classResults = await ClassResult.find({ 
+        exam: examId,
+        status: 'submitted'
+      })
+      .populate('class')
+      .populate('classTeacher')
+      .populate({
+        path: 'subjectMarks',
+        populate: [
+          { path: 'subject' },
+          { path: 'teacher' },
+          { path: 'students.student' }
+        ]
+      });
+
+      res.json(classResults);
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  },
+
   // ============ Result Management ============
   publishResults: async (req, res) => {
     try {
       const { examId } = req.params;
-      const { results } = req.body;
+      const adminId = req.user._id;
 
       const session = await mongoose.startSession();
       session.startTransaction();
 
       try {
-        // Update exam results
-        const exam = await Exam.findByIdAndUpdate(
-          examId,
-          { results },
-          { new: true, session }
-        );
+        const classResults = await ClassResult.find({
+          exam: examId,
+          status: 'submitted'
+        }).populate('subjectMarks');
 
-        // Generate and save individual result documents
-        const resultPromises = results.map(async (studentResult) => {
-          const result = new Result({
-            school: exam.school,
-            student: studentResult.student,
-            exam: examId,
-            marks: studentResult.marks,
-            grade: calculateGrade(studentResult.marks, exam.totalMarks),
-            remarks: studentResult.remarks,
-            publishedBy: req.user._id
-          });
-          return result.save({ session });
-        });
+        // Generate report cards for each student
+        for (const classResult of classResults) {
+          const reportCards = await generateStudentReportCards(classResult);
+          
+          // Save report cards
+          await Result.insertMany(reportCards, { session });
 
-        await Promise.all(resultPromises);
-
-        // Generate report cards
-        await generateReportCards(examId, session);
+          // Update class result status
+          classResult.status = 'published';
+          classResult.publishedAt = new Date();
+          classResult.publishedBy = adminId;
+          await classResult.save({ session });
+        }
 
         await session.commitTransaction();
         res.json({ message: 'Results published successfully' });
@@ -973,6 +1110,7 @@ const adminController = {
       res.status(500).json({ error: error.message });
     }
   },
+
 
   // ============ Announcement Management ============
   createAnnouncement: async (req, res) => {
@@ -1121,26 +1259,44 @@ recordMeetingMinutes: async (req, res) => {
 
 
 // Add to adminController
-generateSeatingArrangement: async (req, res) => {
-  try {
-    const { examId } = req.params;
-    const { availableRooms } = req.body;
+generateSeatingArrangement: (totalStudents, availableRooms) => {
+  const seatingArrangement = [];
+  const studentsPerRoom = Math.ceil(totalStudents / availableRooms.length);
 
-    const exam = await Exam.findById(examId).populate('class');
-    if (!exam) {
-      return res.status(404).json({ message: 'Exam not found' });
+  availableRooms.forEach((room, index) => {
+    const roomArrangement = {
+      room: room.name,
+      capacity: room.capacity,
+      rows: [],
+    };
+
+    const studentsInThisRoom = index === availableRooms.length - 1 
+      ? totalStudents - (studentsPerRoom * index)
+      : studentsPerRoom;
+
+    // Create row-wise seating with gaps
+    const seatsPerRow = room.seatsPerRow || 5;
+    const totalRows = Math.ceil(studentsInThisRoom / seatsPerRow);
+
+    for (let row = 0; row < totalRows; row++) {
+      const rowSeats = [];
+      for (let seat = 0; seat < seatsPerRow; seat++) {
+        const studentNumber = row * seatsPerRow + seat;
+        if (studentNumber < studentsInThisRoom) {
+          // Alternate seats to maintain gap
+          rowSeats.push({
+            position: seat * 2, // Double the gap between seats
+            occupied: true
+          });
+        }
+      }
+      roomArrangement.rows.push(rowSeats);
     }
 
-    const students = exam.class.students;
-    const seatingArrangement = generateSeatingArrangement(students, availableRooms, students.length);
+    seatingArrangement.push(roomArrangement);
+  });
 
-    exam.seatingArrangement = seatingArrangement;
-    await exam.save();
-
-    res.status(201).json(exam);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
+  return seatingArrangement;
 },
 
 
@@ -1182,30 +1338,97 @@ generateAttendanceReport: async (req, res) => {
 
 createExamSchedule: async (req, res) => {
   try {
-    const { schoolId } = req.params;
-    const examData = req.body;
+    const {
+      name,
+      examType,
+      startDate,
+      endDate,
+      classes,
+      subjects,
+      availableRooms,
+      totalStudents
+    } = req.body;
+    const schoolId = req.school;
 
-    // Validate class exists
-    const classExists = await Class.findById(examData.class);
-    if (!classExists) {
-      return res.status(404).json({ message: 'Class not found' });
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
+    try {
+      // Create master exam schedule
+      const examSchedule = new Exam({
+        school: schoolId,
+        name,
+        examType,
+        startDate,
+        endDate,
+        classes: classes.map(classId => ({
+          class: classId,
+          subjects: subjects.map(subject => ({
+            subject: subject.id,
+            date: subject.date,
+            startTime: subject.startTime,
+            endTime: subject.endTime,
+            totalMarks: subject.totalMarks
+          }))
+        }))
+      });
+
+      await examSchedule.save({ session });
+
+      // Generate seating arrangements for each exam date
+      const seatingArrangements = {};
+      const uniqueDates = [...new Set(subjects.map(s => s.date))];
+
+      for (const date of uniqueDates) {
+        // Get total students appearing on this date
+        const classesOnThisDate = classes.filter(c => 
+          subjects.some(s => s.date === date && s.classes.includes(c))
+        );
+
+        const totalStudentsOnDate = await User.countDocuments({
+          role: 'student',
+          class: { $in: classesOnThisDate }
+        });
+
+        // Generate seating arrangement for this date
+        seatingArrangements[date] = generateSeatingArrangement(
+          totalStudentsOnDate,
+          availableRooms
+        );
+      }
+
+      // Update exam schedule with seating arrangements
+      examSchedule.seatingArrangements = seatingArrangements;
+      await examSchedule.save({ session });
+
+      // Create subject-wise exam entries for mark entry
+      for (const classObj of classes) {
+        for (const subject of subjects) {
+          if (subject.classes.includes(classObj)) {
+            const subjectExam = new SubjectMarks({
+              exam: examSchedule._id,
+              class: classObj,
+              subject: subject.id,
+              totalMarks: subject.totalMarks,
+              status: 'pending'
+            });
+            await subjectExam.save({ session });
+          }
+        }
+      }
+
+      await session.commitTransaction();
+
+      res.status(201).json({
+        examSchedule,
+        seatingArrangements
+      });
+    } catch (error) {
+      await session.abortTransaction();
+      throw error;
+    } finally {
+      session.endSession();
     }
-
-    // Create exam schedule
-    const examSchedule = new ExamSchedule({
-      school: schoolId,
-      ...examData
-    });
-
-    // Generate seating arrangement
-    const seatingArrangement = await generateSeatingArrangement(
-      examSchedule.class,
-      examData.venues
-    );
-    examSchedule.seatingArrangement = seatingArrangement;
-
-    await examSchedule.save();
-    res.status(201).json(examSchedule);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -1290,6 +1513,59 @@ generateReportCards: async (req, res) => {
 
 };
 
+async function verifyAllSubjectsSubmitted(examId, classId) {
+  const subjects = await Subject.find({ class: classId });
+  const submittedMarks = await SubjectMarks.find({
+    exam: examId,
+    class: classId,
+    status: 'submitted'
+  });
+
+  return subjects.length === submittedMarks.length;
+}
+
+async function generateStudentReportCard(studentId, examId, subjectMarks) {
+  const reportCard = {
+    student: studentId,
+    exam: examId,
+    subjects: [],
+    totalMarks: 0,
+    percentage: 0,
+    grade: '',
+    remarks: ''
+  };
+
+  let totalObtained = 0;
+  let totalPossible = 0;
+
+  // Compile marks for each subject
+  for (const subjectMark of subjectMarks) {
+    const studentResult = subjectMark.students.find(
+      s => s.student.toString() === studentId.toString()
+    );
+
+    if (studentResult) {
+      reportCard.subjects.push({
+        subject: subjectMark.subject,
+        marksObtained: studentResult.marks,
+        totalMarks: subjectMark.totalMarks,
+        grade: calculateGrade(studentResult.marks, subjectMark.totalMarks),
+        remarks: studentResult.remarks || ''
+      });
+
+      totalObtained += studentResult.marks;
+      totalPossible += subjectMark.totalMarks;
+    }
+  }
+
+  // Calculate overall results
+  reportCard.totalMarks = totalObtained;
+  reportCard.percentage = (totalObtained / totalPossible) * 100;
+  reportCard.grade = calculateOverallGrade(reportCard.percentage);
+  reportCard.remarks = generateOverallRemarks(reportCard.percentage);
+
+  return reportCard;
+}
 
 // Helper functions for exam controller
 function calculateTotalMarks(subjects) {
@@ -1302,15 +1578,7 @@ function calculatePercentage(subjects) {
   return (totalObtained / totalPossible) * 100;
 }
 
-// function calculateGrade(subjects) {
-//   const percentage = calculatePercentage(subjects);
-//   if (percentage >= 90) return 'A+';
-//   if (percentage >= 80) return 'A';
-//   if (percentage >= 70) return 'B+';
-//   if (percentage >= 60) return 'B';
-//   if (percentage >= 50) return 'C';
-//   return 'F';
-// }
+
 
 function determineStatus(subjects) {
   const failedSubjects = subjects.filter(
@@ -1555,6 +1823,16 @@ const generateDetailedAttendanceReport = (attendanceData, reportType) => {
     dateWise: Array.from(report.byDate.entries())
   };
 };
+
+function generateOverallRemarks(percentage) {
+  if (percentage >= 90) return 'Exceptional performance across all subjects';
+  if (percentage >= 80) return 'Excellent achievement in academics';
+  if (percentage >= 70) return 'Very good performance, keep it up';
+  if (percentage >= 60) return 'Good effort, room for improvement';
+  if (percentage >= 50) return 'Satisfactory performance, need more focus';
+  if (percentage >= 40) return 'Passed, but significant improvement needed';
+  return 'Need to work harder and seek additional support';
+}
 
 const generateAttendanceCharts = (attendanceData) => {
   // Prepare data for various charts
