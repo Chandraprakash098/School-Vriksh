@@ -322,7 +322,176 @@ const adminController = {
   //   }
   // },
 
-  createTeacher : async (req, res) => {
+
+
+
+  // createTeacher : async (req, res) => {
+  //   const session = await mongoose.startSession();
+  //   session.startTransaction();
+  
+  //   try {
+  //     const { 
+  //       name, 
+  //       email, 
+  //       password, 
+  //       phone, 
+  //       address, 
+  //       photo,
+  //       classTeacherOf, // Class ID for class teacher assignment
+  //       subjectAssignments // Array of {classId, subjectId}
+  //     } = req.body;
+  //     const schoolId = req.school;
+  
+  //     // Check if email already exists
+  //     const existingUser = await User.findOne({ email });
+  //     if (existingUser) {
+  //       return res.status(400).json({ message: 'Email already registered' });
+  //     }
+  
+  //     // Validate class teacher assignment
+  //     if (classTeacherOf) {
+  //       const classExists = await Class.findOne({
+  //         _id: classTeacherOf,
+  //         school: schoolId,
+  //         classTeacher: { $exists: false }
+  //       });
+  
+  //       if (!classExists) {
+  //         return res.status(400).json({ 
+  //           message: 'Class is not available for class teacher assignment' 
+  //         });
+  //       }
+  //     }
+  
+  //     // Validate subject assignments
+  //     if (subjectAssignments?.length) {
+  //       const validationPromises = subjectAssignments.map(async ({ classId, subjectId }) => {
+  //         const subject = await Subject.findOne({
+  //           _id: subjectId,
+  //           class: classId,
+  //           school: schoolId
+  //         });
+  
+  //         if (!subject) {
+  //           throw new Error(`Invalid subject assignment for class ${classId}`);
+  //         }
+  
+  //         return true;
+  //       });
+  
+  //       await Promise.all(validationPromises);
+  //     }
+  
+  //     // Create user account
+  //     const salt = await bcrypt.genSalt(10);
+  //     const hashedPassword = await bcrypt.hash(password, salt);
+  
+  //     const permissions = {
+  //       canTakeAttendance: classTeacherOf ? [classTeacherOf] : [],
+  //       canEnterMarks: subjectAssignments?.map(({ classId, subjectId }) => ({
+  //         class: classId,
+  //         subject: subjectId
+  //       })) || [],
+  //       canPublishAnnouncements: true,
+  //       canManageInventory: false,
+  //       canManageFees: false,
+  //       canManageLibrary: false
+  //     };
+  
+  //     const teacher = new User({
+  //       school: schoolId,
+  //       name,
+  //       email,
+  //       password: hashedPassword,
+  //       role: 'teacher',
+  //       profile: { phone, address, photo },
+  //       permissions
+  //     });
+  
+  //     await teacher.save({ session });
+  
+  //     // Create teacher assignment record
+  //     const teacherAssignment = new TeacherAssignment({
+  //       school: schoolId,
+  //       teacher: teacher._id,
+  //       classTeacherAssignment: classTeacherOf ? {
+  //         class: classTeacherOf,
+  //         assignedAt: new Date()
+  //       } : null,
+  //       subjectAssignments: subjectAssignments?.map(({ classId, subjectId }) => ({
+  //         class: classId,
+  //         subject: subjectId,
+  //         assignedAt: new Date()
+  //       })) || [],
+  //       academicYear: getCurrentAcademicYear()
+  //     });
+  
+  //     await teacherAssignment.save({ session });
+  
+  //     // Update class with class teacher
+  //     if (classTeacherOf) {
+  //       await Class.findByIdAndUpdate(
+  //         classTeacherOf,
+  //         { 
+  //           classTeacher: teacher._id,
+  //           lastUpdated: new Date(),
+  //           updatedBy: req.user._id
+  //         },
+  //         { session }
+  //       );
+  //     }
+  
+  //     // Update subjects with teacher assignments
+  //     if (subjectAssignments?.length) {
+  //       const updatePromises = subjectAssignments.map(({ subjectId }) =>
+  //         Subject.findByIdAndUpdate(
+  //           subjectId,
+  //           {
+  //             $push: {
+  //               teachers: {
+  //                 teacher: teacher._id,
+  //                 assignedAt: new Date()
+  //               }
+  //             }
+  //           },
+  //           { session }
+  //         )
+  //       );
+  
+  //       await Promise.all(updatePromises);
+  //     }
+  
+  //     await session.commitTransaction();
+  
+  //     // Fetch populated teacher data
+  //     const populatedTeacher = await User.findById(teacher._id)
+  //       .populate('permissions.canTakeAttendance', 'name division')
+  //       .populate('permissions.canEnterMarks.subject', 'name')
+  //       .populate('permissions.canEnterMarks.class', 'name division');
+  
+  //     const populatedAssignment = await TeacherAssignment.findById(teacherAssignment._id)
+  //       .populate('classTeacherAssignment.class', 'name division')
+  //       .populate('subjectAssignments.class', 'name division')
+  //       .populate('subjectAssignments.subject', 'name');
+  
+  //     res.status(201).json({
+  //       teacher: populatedTeacher,
+  //       assignment: populatedAssignment,
+  //       message: 'Teacher created successfully with assignments'
+  //     });
+  
+  //   } catch (error) {
+  //     await session.abortTransaction();
+  //     res.status(500).json({ 
+  //       error: error.message,
+  //       message: 'Failed to create teacher'
+  //     });
+  //   } finally {
+  //     session.endSession();
+  //   }
+  // },
+
+  createTeacher: async (req, res) => {
     const session = await mongoose.startSession();
     session.startTransaction();
   
@@ -349,13 +518,19 @@ const adminController = {
       if (classTeacherOf) {
         const classExists = await Class.findOne({
           _id: classTeacherOf,
-          school: schoolId,
-          classTeacher: { $exists: false }
+          school: schoolId
         });
   
         if (!classExists) {
           return res.status(400).json({ 
-            message: 'Class is not available for class teacher assignment' 
+            message: 'Class not found or does not belong to your school' 
+          });
+        }
+        
+        // Check if class already has a teacher assigned
+        if (classExists.classTeacher) {
+          return res.status(400).json({ 
+            message: 'Class already has a class teacher assigned. Please update the class teacher assignment instead.' 
           });
         }
       }
@@ -485,6 +660,370 @@ const adminController = {
       });
     } finally {
       session.endSession();
+    }
+  },
+
+
+  updateTeacherAssignments: async (req, res) => {
+    const session = await mongoose.startSession();
+    session.startTransaction();
+  
+    try {
+      const { teacherId } = req.params;
+      const { 
+        classTeacherOf,           // New class ID for class teacher role
+        removeClassTeacherRole,   // Boolean to remove class teacher role
+        addSubjectAssignments,    // Array of {classId, subjectId} to add
+        removeSubjectAssignments  // Array of {classId, subjectId} to remove
+      } = req.body;
+      const schoolId = req.school;
+      const adminId = req.user._id;
+  
+      // Verify teacher exists
+      const teacher = await User.findOne({ 
+        _id: teacherId,
+        school: schoolId,
+        role: 'teacher'
+      });
+  
+      if (!teacher) {
+        return res.status(404).json({ message: 'Teacher not found' });
+      }
+  
+      // Get current teacher assignment
+      let teacherAssignment = await TeacherAssignment.findOne({
+        teacher: teacherId,
+        school: schoolId
+      });
+  
+      if (!teacherAssignment) {
+        // Create new assignment record if it doesn't exist
+        teacherAssignment = new TeacherAssignment({
+          school: schoolId,
+          teacher: teacherId,
+          classTeacherAssignment: null,
+          subjectAssignments: [],
+          academicYear: getCurrentAcademicYear()
+        });
+      }
+  
+      // HANDLE CLASS TEACHER ASSIGNMENT
+      if (classTeacherOf) {
+        // Validate the new class
+        const newClass = await Class.findOne({
+          _id: classTeacherOf,
+          school: schoolId
+        });
+  
+        if (!newClass) {
+          return res.status(400).json({ message: 'Class not found' });
+        }
+  
+        // Check if the class already has a teacher assigned (that's not this teacher)
+        if (newClass.classTeacher && newClass.classTeacher.toString() !== teacherId) {
+          return res.status(400).json({ 
+            message: 'This class already has a different class teacher assigned' 
+          });
+        }
+  
+        // If teacher is already class teacher of a different class, remove that assignment
+        if (teacherAssignment.classTeacherAssignment && 
+            teacherAssignment.classTeacherAssignment.class &&
+            teacherAssignment.classTeacherAssignment.class.toString() !== classTeacherOf) {
+          
+          // Remove teacher from old class
+          await Class.findByIdAndUpdate(
+            teacherAssignment.classTeacherAssignment.class,
+            { 
+              $unset: { classTeacher: "" },
+              lastUpdated: new Date(),
+              updatedBy: adminId
+            },
+            { session }
+          );
+  
+          // Update teacher's attendance permissions
+          await User.findByIdAndUpdate(
+            teacherId,
+            {
+              $pull: { 'permissions.canTakeAttendance': teacherAssignment.classTeacherAssignment.class }
+            },
+            { session }
+          );
+        }
+  
+        // Assign teacher to new class
+        await Class.findByIdAndUpdate(
+          classTeacherOf,
+          { 
+            classTeacher: teacherId,
+            lastUpdated: new Date(),
+            updatedBy: adminId
+          },
+          { session }
+        );
+  
+        // Update teacher assignment record
+        teacherAssignment.classTeacherAssignment = {
+          class: classTeacherOf,
+          assignedAt: new Date()
+        };
+  
+        // Update teacher's attendance permissions
+        await User.findByIdAndUpdate(
+          teacherId,
+          {
+            $addToSet: { 'permissions.canTakeAttendance': classTeacherOf }
+          },
+          { session }
+        );
+      } 
+      // Handle class teacher removal
+      else if (removeClassTeacherRole && teacherAssignment.classTeacherAssignment) {
+        // Remove teacher from class
+        await Class.findByIdAndUpdate(
+          teacherAssignment.classTeacherAssignment.class,
+          { 
+            $unset: { classTeacher: "" },
+            lastUpdated: new Date(),
+            updatedBy: adminId
+          },
+          { session }
+        );
+  
+        // Update teacher's attendance permissions
+        await User.findByIdAndUpdate(
+          teacherId,
+          {
+            $pull: { 'permissions.canTakeAttendance': teacherAssignment.classTeacherAssignment.class }
+          },
+          { session }
+        );
+  
+        // Remove from assignment record
+        teacherAssignment.classTeacherAssignment = null;
+      }
+  
+      // HANDLE SUBJECT TEACHER ASSIGNMENTS - ADDITIONS
+      if (addSubjectAssignments?.length) {
+        // Validate all new subject assignments
+        const validationPromises = addSubjectAssignments.map(async ({ classId, subjectId }) => {
+          const subject = await Subject.findOne({
+            _id: subjectId,
+            class: classId,
+            school: schoolId
+          });
+  
+          if (!subject) {
+            throw new Error(`Invalid subject assignment: Subject ${subjectId} for class ${classId}`);
+          }
+  
+          return { classId, subjectId };
+        });
+  
+        const validAssignments = await Promise.all(validationPromises);
+  
+        // Add new subject assignments
+        for (const { classId, subjectId } of validAssignments) {
+          // Check if assignment already exists
+          const existingAssignment = teacherAssignment.subjectAssignments.find(
+            a => a.class.toString() === classId && a.subject.toString() === subjectId
+          );
+  
+          if (!existingAssignment) {
+            // Add to teacher assignment record
+            teacherAssignment.subjectAssignments.push({
+              class: classId,
+              subject: subjectId,
+              assignedAt: new Date()
+            });
+  
+            // Add to subject's teachers
+            await Subject.findByIdAndUpdate(
+              subjectId,
+              {
+                $addToSet: {
+                  teachers: {
+                    teacher: teacherId,
+                    assignedAt: new Date()
+                  }
+                }
+              },
+              { session }
+            );
+  
+            // Update teacher's mark-entry permissions
+            await User.findByIdAndUpdate(
+              teacherId,
+              {
+                $addToSet: { 
+                  'permissions.canEnterMarks': {
+                    class: classId,
+                    subject: subjectId
+                  }
+                }
+              },
+              { session }
+            );
+          }
+        }
+      }
+  
+      // HANDLE SUBJECT TEACHER ASSIGNMENTS - REMOVALS
+      if (removeSubjectAssignments?.length) {
+        for (const { classId, subjectId } of removeSubjectAssignments) {
+          // Remove from teacher assignment record
+          teacherAssignment.subjectAssignments = teacherAssignment.subjectAssignments.filter(
+            a => !(a.class.toString() === classId && a.subject.toString() === subjectId)
+          );
+  
+          // Remove from subject's teachers
+          await Subject.findByIdAndUpdate(
+            subjectId,
+            {
+              $pull: {
+                teachers: {
+                  teacher: teacherId
+                }
+              }
+            },
+            { session }
+          );
+  
+          // Update teacher's mark-entry permissions
+          await User.findByIdAndUpdate(
+            teacherId,
+            {
+              $pull: { 
+                'permissions.canEnterMarks': {
+                  class: classId,
+                  subject: subjectId
+                }
+              }
+            },
+            { session }
+          );
+        }
+      }
+  
+      // Save all changes
+      await teacherAssignment.save({ session });
+      await session.commitTransaction();
+  
+      // Fetch fully populated data for response
+      const updatedTeacher = await User.findById(teacherId)
+        .populate('permissions.canTakeAttendance', 'name division')
+        .populate('permissions.canEnterMarks.subject', 'name')
+        .populate('permissions.canEnterMarks.class', 'name division');
+  
+      const updatedAssignment = await TeacherAssignment.findById(teacherAssignment._id)
+        .populate('classTeacherAssignment.class', 'name division')
+        .populate('subjectAssignments.class', 'name division')
+        .populate('subjectAssignments.subject', 'name');
+  
+      res.json({
+        teacher: updatedTeacher,
+        assignment: updatedAssignment,
+        message: 'Teacher assignments updated successfully'
+      });
+  
+    } catch (error) {
+      await session.abortTransaction();
+      res.status(500).json({ 
+        error: error.message,
+        message: 'Failed to update teacher assignments'
+      });
+    } finally {
+      session.endSession();
+    }
+  },
+
+
+  getAssignableSubjectsByClass: async (req, res) => {
+    try {
+      const { classId } = req.params;
+      const schoolId = req.school;
+        
+      if (!classId || !schoolId) {
+        return res.status(400).json({ error: "Invalid classId or schoolId" });
+      }
+  
+      // Get all subjects for this class
+      const subjects = await Subject.find({
+        school: schoolId,
+        class: classId
+      })
+      .select('name teachers')
+      .populate('teachers.teacher', 'name email');
+  
+      if (!subjects || subjects.length === 0) {
+        return res.status(404).json({ error: "No subjects found for this class" });
+      }
+  
+      res.json(subjects);
+    } catch (error) {
+      console.error("Error fetching assignable subjects:", error);
+      res.status(500).json({ error: "Internal Server Error" });
+    }
+  },
+  
+  // Get all teacher assignments - useful for admin dashboard
+  getAllTeacherAssignments: async (req, res) => {
+    try {
+      const schoolId = req.school;
+      
+      const assignments = await TeacherAssignment.find({ school: schoolId })
+        .populate('teacher', 'name email profile')
+        .populate('classTeacherAssignment.class', 'name division')
+        .populate('subjectAssignments.class', 'name division')
+        .populate('subjectAssignments.subject', 'name');
+      
+      const classAssignmentMap = {};
+      const subjectAssignmentMap = {};
+      
+      // Organize data for easy reference
+      assignments.forEach(assignment => {
+        // Map class teachers
+        if (assignment.classTeacherAssignment && assignment.classTeacherAssignment.class) {
+          const classId = assignment.classTeacherAssignment.class._id.toString();
+          classAssignmentMap[classId] = {
+            teacher: {
+              id: assignment.teacher._id,
+              name: assignment.teacher.name,
+              email: assignment.teacher.email
+            },
+            assignedAt: assignment.classTeacherAssignment.assignedAt
+          };
+        }
+        
+        // Map subject teachers
+        assignment.subjectAssignments.forEach(subAssignment => {
+          const classId = subAssignment.class._id.toString();
+          const subjectId = subAssignment.subject._id.toString();
+          const key = `${classId}:${subjectId}`;
+          
+          if (!subjectAssignmentMap[key]) {
+            subjectAssignmentMap[key] = [];
+          }
+          
+          subjectAssignmentMap[key].push({
+            teacher: {
+              id: assignment.teacher._id,
+              name: assignment.teacher.name,
+              email: assignment.teacher.email
+            },
+            assignedAt: subAssignment.assignedAt
+          });
+        });
+      });
+      
+      res.json({
+        raw: assignments,
+        classTeachers: classAssignmentMap,
+        subjectTeachers: subjectAssignmentMap
+      });
+    } catch (error) {
+      res.status(500).json({ error: error.message });
     }
   },
 

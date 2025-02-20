@@ -15,6 +15,11 @@ router.get('/users', auth, roleCheck(['admin']), adminController.getUsers);
 router.get('/users/:userId', auth, roleCheck(['admin']), adminController.getUser);
 router.get('/teachers', auth, roleCheck(['admin']), adminController.getTeachers);
 
+
+router.put('/teachers/:teacherId/assignments', auth, roleCheck(['admin']), adminController.updateTeacherAssignments);
+router.get('/classes/:classId/assignable-subjects', auth, roleCheck(['admin']), adminController.getAssignableSubjectsByClass);
+router.get('/teacher-assignments', auth, roleCheck(['admin']), adminController.getAllTeacherAssignments);
+
 // Class Management
 router.post('/classes', auth, roleCheck(['admin']), adminController.createClass);
 router.get('/classes', auth, roleCheck(['admin']), adminController.getClasses);
