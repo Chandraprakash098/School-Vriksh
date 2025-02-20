@@ -564,11 +564,104 @@ const adminController = {
 
   //======= Syllabys =======
 
+  // uploadSyllabus: async (req, res) => {
+  //   try {
+  //     const { classId, subjectId } = req.body;
+  //     const { content } = req.body;
+  //     const schoolId =  req.school;
+  //     const uploadedBy = req.user._id;
+
+  //     // Check if class exists
+  //     const classExists = await Class.findOne({
+  //       _id: classId,
+  //       school: schoolId
+  //     });
+      
+  //     if (!classExists) {
+  //       // Delete uploaded files if class doesn't exist
+  //       if (req.files && req.files.length > 0) {
+  //         const { cloudinary } = require('../config/cloudinary');
+  //         req.files.forEach(file => {
+  //           cloudinary.uploader.destroy(file.public_id);
+  //         });
+  //       }
+  //       return res.status(404).json({ message: 'Class not found' });
+  //     }
+
+  //     // Check if subject exists and belongs to the specified class
+  //     const subject = await Subject.findOne({
+  //       _id: subjectId,
+  //       class: classId,
+  //       school: schoolId
+  //     });
+      
+  //     if (!subject) {
+  //       // Delete uploaded files if subject doesn't exist
+  //       if (req.files && req.files.length > 0) {
+  //         const { cloudinary } = require('../config/cloudinary');
+  //         req.files.forEach(file => {
+  //           cloudinary.uploader.destroy(file.public_id);
+  //         });
+  //       }
+  //       return res.status(404).json({ message: 'Subject not found in the specified class' });
+  //     }
+
+  //     // Process uploaded files
+  //     const documents = [];
+  //     if (req.files && req.files.length > 0) {
+  //       req.files.forEach(file => {
+  //         documents.push({
+  //           title: file.originalname,
+  //           url: file.path, // Cloudinary URL
+  //           uploadedBy
+  //         });
+  //       });
+  //     }
+
+  //     // Create or update syllabus
+  //     let syllabus = await Syllabus.findOne({ subject: subjectId });
+  //     if (!syllabus) {
+  //       syllabus = new Syllabus({
+  //         school: schoolId,
+  //         subject: subjectId,
+  //         class: classId,
+  //         content,
+  //         documents
+  //       });
+  //     } else {
+  //       // If updating, we might want to keep old documents and add new ones
+  //       syllabus.content = content;
+        
+  //       // Append new documents to existing ones
+  //       if (documents.length > 0) {
+  //         syllabus.documents = [...syllabus.documents, ...documents];
+  //       }
+  //     }
+
+  //     await syllabus.save();
+
+  //     // Link syllabus to subject
+  //     subject.syllabus = syllabus._id;
+  //     await subject.save();
+
+  //     res.status(201).json(syllabus);
+  //   } catch (error) {
+  //     // If error occurs, we should clean up uploaded files
+  //     if (req.files && req.files.length > 0) {
+  //       const { cloudinary } = require('../config/cloudinary');
+  //       req.files.forEach(file => {
+  //         cloudinary.uploader.destroy(file.public_id);
+  //       });
+  //     }
+  //     res.status(500).json({ error: error.message });
+  //   }
+  // },
+
   uploadSyllabus: async (req, res) => {
     try {
       const { classId, subjectId } = req.body;
       const { content } = req.body;
-      const schoolId =  req.school;
+      const schoolId = req.school;
       const uploadedBy = req.user._id;
 
       // Check if class exists
@@ -578,7 +671,6 @@ const adminController = {
       });
       
       if (!classExists) {
-        // Delete uploaded files if class doesn't exist
         if (req.files && req.files.length > 0) {
           const { cloudinary } = require('../config/cloudinary');
           req.files.forEach(file => {
@@ -596,7 +688,6 @@ const adminController = {
       });
       
       if (!subject) {
-        // Delete uploaded files if subject doesn't exist
         if (req.files && req.files.length > 0) {
           const { cloudinary } = require('../config/cloudinary');
           req.files.forEach(file => {
@@ -612,7 +703,8 @@ const adminController = {
         req.files.forEach(file => {
           documents.push({
             title: file.originalname,
-            url: file.path, // Cloudinary URL
+            url: file.path,
+            public_id: file.public_id, // Store Cloudinary public_id
             uploadedBy
           });
         });
@@ -629,24 +721,18 @@ const adminController = {
           documents
         });
       } else {
-        // If updating, we might want to keep old documents and add new ones
         syllabus.content = content;
-        
-        // Append new documents to existing ones
         if (documents.length > 0) {
           syllabus.documents = [...syllabus.documents, ...documents];
         }
       }
 
       await syllabus.save();
-
-      // Link syllabus to subject
       subject.syllabus = syllabus._id;
       await subject.save();
 
       res.status(201).json(syllabus);
     } catch (error) {
-      // If error occurs, we should clean up uploaded files
       if (req.files && req.files.length > 0) {
         const { cloudinary } = require('../config/cloudinary');
         req.files.forEach(file => {
@@ -805,6 +891,28 @@ const adminController = {
     }
   },
 
+  // getSyllabus: async (req, res) => {
+  //   try {
+  //     const { subjectId } = req.params;
+  //     const schoolId = req.school;
+
+  //     const syllabus = await Syllabus.findOne({
+  //       subject: subjectId,
+  //       school: schoolId
+  //     })
+  //     .populate('subject', 'name')
+  //     .populate('class', 'name division');
+
+  //     if (!syllabus) {
+  //       return res.status(404).json({ message: 'Syllabus not found' });
+  //     }
+
+  //     res.json(syllabus);
+  //   } catch (error) {
+  //     res.status(500).json({ error: error.message });
+  //   }
+  // },
+
   getSyllabus: async (req, res) => {
     try {
       const { subjectId } = req.params;
@@ -819,6 +927,18 @@ const adminController = {
 
       if (!syllabus) {
         return res.status(404).json({ message: 'Syllabus not found' });
+      }
+
+      // Generate signed URLs for each document
+      if (syllabus.documents && syllabus.documents.length > 0) {
+        const { cloudinary } = require('../config/cloudinary');
+        syllabus.documents = syllabus.documents.map(doc => ({
+          ...doc.toObject(),
+          downloadUrl: cloudinary.utils.private_download_url(doc.url, doc.title, {
+            expires_at: Math.floor(Date.now() / 1000) + 3600, // URL expires in 1 hour
+            attachment: true
+          })
+        }));
       }
 
       res.json(syllabus);
