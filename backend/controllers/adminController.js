@@ -1515,53 +1515,111 @@ getClasses: async (req, res) => {
   //   }
   // },
 
-  getSyllabus : async (req, res) => {
-    try {
-        const { subjectId } = req.params;
-        const schoolId = req.school;
+//   getSyllabus : async (req, res) => {
+//     try {
+//         const { subjectId } = req.params;
+//         const schoolId = req.school;
 
-        const syllabus = await Syllabus.findOne({
-            subject: subjectId,
-            school: schoolId
-        })
-            .populate('subject', 'name')
-            .populate('class', 'name division');
+//         const syllabus = await Syllabus.findOne({
+//             subject: subjectId,
+//             school: schoolId
+//         })
+//             .populate('subject', 'name')
+//             .populate('class', 'name division');
 
-        if (!syllabus) {
-            return res.status(404).json({ message: 'Syllabus not found' });
-        }
+//         if (!syllabus) {
+//             return res.status(404).json({ message: 'Syllabus not found' });
+//         }
 
-        if (syllabus.documents?.length > 0) {
-            syllabus.documents = syllabus.documents.map(doc => {
-                const fileExtension = doc.title.split('.').pop().toLowerCase();
-                const contentType = fileExtension === 'pdf' ? 'application/pdf' : 'application/octet-stream';
+//         if (syllabus.documents?.length > 0) {
+//             syllabus.documents = syllabus.documents.map(doc => {
+//                 const fileExtension = doc.title.split('.').pop().toLowerCase();
+//                 const contentType = fileExtension === 'pdf' ? 'application/pdf' : 'application/octet-stream';
 
-                // Generate a signed URL
-                const downloadUrl = cloudinary.url(doc.public_id, {
-                    resource_type: 'raw', // Correct for PDFs
-                    secure: true, // HTTPS
-                    sign_url: true, // Generate a signed URL
-                    type: 'upload', // Ensure it’s an uploaded file
-                    attachment: true, // Trigger download
-                    format: fileExtension, // Use the actual file extension
-                    expires_at: Math.floor(Date.now() / 1000) + 3600 // 1-hour expiry
-                });
+//                 // Generate a signed URL
+//                 const downloadUrl = cloudinary.url(doc.public_id, {
+//                     resource_type: 'raw', // Correct for PDFs
+//                     secure: true, // HTTPS
+//                     sign_url: true, // Generate a signed URL
+//                     type: 'upload', // Ensure it’s an uploaded file
+//                     attachment: true, // Trigger download
+//                     format: fileExtension, // Use the actual file extension
+//                     expires_at: Math.floor(Date.now() / 1000) + 3600 // 1-hour expiry
+//                 });
 
-                console.log(`Generated download URL for ${doc.title}: ${downloadUrl}`);
+//                 console.log(`Generated download URL for ${doc.title}: ${downloadUrl}`);
 
-                return {
-                    ...doc.toObject(),
-                    downloadUrl: downloadUrl || null,
-                    contentType
-                };
-            });
-        }
+//                 return {
+//                     ...doc.toObject(),
+//                     downloadUrl: downloadUrl || null,
+//                     contentType
+//                 };
+//             });
+//         }
 
-        res.json(syllabus);
-    } catch (error) {
-        console.error('Error in getSyllabus:', error);
-        res.status(500).json({ error: error.message });
-    }
+//         res.json(syllabus);
+//     } catch (error) {
+//         console.error('Error in getSyllabus:', error);
+//         res.status(500).json({ error: error.message });
+//     }
+// },
+
+getSyllabus : async (req, res) => {
+  try {
+      const { subjectId } = req.params;
+      const schoolId = req.school;
+
+      const syllabus = await Syllabus.findOne({
+          subject: subjectId,
+          school: schoolId
+      })
+          .populate('subject', 'name')
+          .populate('class', 'name division');
+
+      if (!syllabus) {
+          return res.status(404).json({ message: 'Syllabus not found' });
+      }
+
+      if (syllabus.documents?.length > 0) {
+          syllabus.documents = await Promise.all(syllabus.documents.map(async (doc) => {
+              const fileExtension = doc.title.split('.').pop().toLowerCase();
+              const contentType = fileExtension === 'pdf' ? 'application/pdf' : 'application/octet-stream';
+
+              // Generate a signed URL with the correct resource type and format
+              try {
+                  const downloadUrl = cloudinary.url(doc.public_id, {
+                      resource_type: 'raw',
+                      secure: true,
+                      sign_url: true,
+                      type: 'upload',
+                      attachment: true,
+                      flags: 'attachment',
+                      format: fileExtension
+                  });
+
+                  console.log(`Generated download URL for ${doc.title}: ${downloadUrl}`);
+
+                  return {
+                      ...doc.toObject(),
+                      downloadUrl,
+                      contentType
+                  };
+              } catch (error) {
+                  console.error(`Error generating URL for ${doc.title}:`, error);
+                  return {
+                      ...doc.toObject(),
+                      downloadUrl: null,
+                      contentType
+                  };
+              }
+          }));
+      }
+
+      res.json(syllabus);
+  } catch (error) {
+      console.error('Error in getSyllabus:', error);
+      res.status(500).json({ error: error.message });
+  }
 },
 
   assignTeacherRole: async (req, res) => {
