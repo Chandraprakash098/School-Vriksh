@@ -1044,9 +1044,13 @@ const adminController = {
       const assignments = await TeacherAssignment.find({
         teacher: { $in: teachers.map(t => t._id) }
       })
-      .populate('class', 'name division')
-      .populate('subjects.class', 'name division')
-      .populate('subjects.subject', 'name');
+      // .populate('class', 'name division')
+      // .populate('subjects.class', 'name division')
+      // .populate('subjects.subject', 'name');
+
+      .populate('classTeacherAssignment.class', 'name division')  // Changed from 'class' to 'classTeacherAssignment.class'
+      .populate('subjectAssignments.class', 'name division')      // Changed from 'subjects.class' to 'subjectAssignments.class'
+      .populate('subjectAssignments.subject', 'name'); 
 
       // Combine teacher data with assignments
       const teachersWithAssignments = teachers.map(teacher => ({
