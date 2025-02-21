@@ -491,6 +491,178 @@ const adminController = {
   //   }
   // },
 
+  // createTeacher: async (req, res) => {
+  //   const session = await mongoose.startSession();
+  //   session.startTransaction();
+  
+  //   try {
+  //     const { 
+  //       name, 
+  //       email, 
+  //       password, 
+  //       phone, 
+  //       address, 
+  //       photo,
+  //       classTeacherOf, // Class ID for class teacher assignment
+  //       subjectAssignments // Array of {classId, subjectId}
+  //     } = req.body;
+  //     const schoolId = req.school;
+  
+  //     // Check if email already exists
+  //     const existingUser = await User.findOne({ email });
+  //     if (existingUser) {
+  //       return res.status(400).json({ message: 'Email already registered' });
+  //     }
+  
+  //     // Validate class teacher assignment
+  //     if (classTeacherOf) {
+  //       const classExists = await Class.findOne({
+  //         _id: classTeacherOf,
+  //         school: schoolId
+  //       });
+  
+  //       if (!classExists) {
+  //         return res.status(400).json({ 
+  //           message: 'Class not found or does not belong to your school' 
+  //         });
+  //       }
+        
+  //       // Check if class already has a teacher assigned
+  //       if (classExists.classTeacher) {
+  //         return res.status(400).json({ 
+  //           message: 'Class already has a class teacher assigned. Please update the class teacher assignment instead.' 
+  //         });
+  //       }
+  //     }
+  
+  //     // Validate subject assignments
+  //     if (subjectAssignments?.length) {
+  //       const validationPromises = subjectAssignments.map(async ({ classId, subjectId }) => {
+  //         const subject = await Subject.findOne({
+  //           _id: subjectId,
+  //           class: classId,
+  //           school: schoolId
+  //         });
+  
+  //         if (!subject) {
+  //           throw new Error(`Invalid subject assignment for class ${classId}`);
+  //         }
+  
+  //         return true;
+  //       });
+  
+  //       await Promise.all(validationPromises);
+  //     }
+  
+  //     // Create user account
+  //     const salt = await bcrypt.genSalt(10);
+  //     const hashedPassword = await bcrypt.hash(password, salt);
+  
+  //     const permissions = {
+  //       canTakeAttendance: classTeacherOf ? [classTeacherOf] : [],
+  //       canEnterMarks: subjectAssignments?.map(({ classId, subjectId }) => ({
+  //         class: classId,
+  //         subject: subjectId
+  //       })) || [],
+  //       canPublishAnnouncements: true,
+  //       canManageInventory: false,
+  //       canManageFees: false,
+  //       canManageLibrary: false
+  //     };
+  
+  //     const teacher = new User({
+  //       school: schoolId,
+  //       name,
+  //       email,
+  //       password: hashedPassword,
+  //       role: 'teacher',
+  //       profile: { phone, address, photo },
+  //       permissions
+  //     });
+  
+  //     await teacher.save({ session });
+  
+  //     // Create teacher assignment record
+  //     const teacherAssignment = new TeacherAssignment({
+  //       school: schoolId,
+  //       teacher: teacher._id,
+  //       classTeacherAssignment: classTeacherOf ? {
+  //         class: classTeacherOf,
+  //         assignedAt: new Date()
+  //       } : null,
+  //       subjectAssignments: subjectAssignments?.map(({ classId, subjectId }) => ({
+  //         class: classId,
+  //         subject: subjectId,
+  //         assignedAt: new Date()
+  //       })) || [],
+  //       academicYear: getCurrentAcademicYear()
+  //     });
+  
+  //     await teacherAssignment.save({ session });
+  
+  //     // Update class with class teacher
+  //     if (classTeacherOf) {
+  //       await Class.findByIdAndUpdate(
+  //         classTeacherOf,
+  //         { 
+  //           classTeacher: teacher._id,
+  //           lastUpdated: new Date(),
+  //           updatedBy: req.user._id
+  //         },
+  //         { session }
+  //       );
+  //     }
+  
+  //     // Update subjects with teacher assignments
+  //     if (subjectAssignments?.length) {
+  //       const updatePromises = subjectAssignments.map(({ subjectId }) =>
+  //         Subject.findByIdAndUpdate(
+  //           subjectId,
+  //           {
+  //             $push: {
+  //               teachers: {
+  //                 teacher: teacher._id,
+  //                 assignedAt: new Date()
+  //               }
+  //             }
+  //           },
+  //           { session }
+  //         )
+  //       );
+  
+  //       await Promise.all(updatePromises);
+  //     }
+  
+  //     await session.commitTransaction();
+  
+  //     // Fetch populated teacher data
+  //     const populatedTeacher = await User.findById(teacher._id)
+  //       .populate('permissions.canTakeAttendance', 'name division')
+  //       .populate('permissions.canEnterMarks.subject', 'name')
+  //       .populate('permissions.canEnterMarks.class', 'name division');
+  
+  //     const populatedAssignment = await TeacherAssignment.findById(teacherAssignment._id)
+  //       .populate('classTeacherAssignment.class', 'name division')
+  //       .populate('subjectAssignments.class', 'name division')
+  //       .populate('subjectAssignments.subject', 'name');
+  
+  //     res.status(201).json({
+  //       teacher: populatedTeacher,
+  //       assignment: populatedAssignment,
+  //       message: 'Teacher created successfully with assignments'
+  //     });
+  
+  //   } catch (error) {
+  //     await session.abortTransaction();
+  //     res.status(500).json({ 
+  //       error: error.message,
+  //       message: 'Failed to create teacher'
+  //     });
+  //   } finally {
+  //     session.endSession();
+  //   }
+  // },
+
   createTeacher: async (req, res) => {
     const session = await mongoose.startSession();
     session.startTransaction();
@@ -503,10 +675,17 @@ const adminController = {
         phone, 
         address, 
         photo,
-        classTeacherOf, // Class ID for class teacher assignment
-        subjectAssignments // Array of {classId, subjectId}
+        classTeacherOf, // Optional: Class ID for class teacher assignment
+        subjectAssignments // Required: Array of {classId, subjectId}
       } = req.body;
       const schoolId = req.school;
+  
+      // Validate required fields
+      if (!subjectAssignments || !Array.isArray(subjectAssignments) || subjectAssignments.length === 0) {
+        return res.status(400).json({ 
+          message: 'At least one subject assignment is required for a teacher' 
+        });
+      }
   
       // Check if email already exists
       const existingUser = await User.findOne({ email });
@@ -514,7 +693,7 @@ const adminController = {
         return res.status(400).json({ message: 'Email already registered' });
       }
   
-      // Validate class teacher assignment
+      // Validate class teacher assignment if provided
       if (classTeacherOf) {
         const classExists = await Class.findOne({
           _id: classTeacherOf,
@@ -527,7 +706,6 @@ const adminController = {
           });
         }
         
-        // Check if class already has a teacher assigned
         if (classExists.classTeacher) {
           return res.status(400).json({ 
             message: 'Class already has a class teacher assigned. Please update the class teacher assignment instead.' 
@@ -535,24 +713,22 @@ const adminController = {
         }
       }
   
-      // Validate subject assignments
-      if (subjectAssignments?.length) {
-        const validationPromises = subjectAssignments.map(async ({ classId, subjectId }) => {
-          const subject = await Subject.findOne({
-            _id: subjectId,
-            class: classId,
-            school: schoolId
-          });
-  
-          if (!subject) {
-            throw new Error(`Invalid subject assignment for class ${classId}`);
-          }
-  
-          return true;
+      // Validate subject assignments (now required)
+      const validationPromises = subjectAssignments.map(async ({ classId, subjectId }) => {
+        const subject = await Subject.findOne({
+          _id: subjectId,
+          class: classId,
+          school: schoolId
         });
   
-        await Promise.all(validationPromises);
-      }
+        if (!subject) {
+          throw new Error(`Invalid subject assignment for class ${classId}`);
+        }
+  
+        return true;
+      });
+  
+      await Promise.all(validationPromises);
   
       // Create user account
       const salt = await bcrypt.genSalt(10);
@@ -560,10 +736,10 @@ const adminController = {
   
       const permissions = {
         canTakeAttendance: classTeacherOf ? [classTeacherOf] : [],
-        canEnterMarks: subjectAssignments?.map(({ classId, subjectId }) => ({
+        canEnterMarks: subjectAssignments.map(({ classId, subjectId }) => ({
           class: classId,
           subject: subjectId
-        })) || [],
+        })),
         canPublishAnnouncements: true,
         canManageInventory: false,
         canManageFees: false,
@@ -590,17 +766,17 @@ const adminController = {
           class: classTeacherOf,
           assignedAt: new Date()
         } : null,
-        subjectAssignments: subjectAssignments?.map(({ classId, subjectId }) => ({
+        subjectAssignments: subjectAssignments.map(({ classId, subjectId }) => ({
           class: classId,
           subject: subjectId,
           assignedAt: new Date()
-        })) || [],
+        })),
         academicYear: getCurrentAcademicYear()
       });
   
       await teacherAssignment.save({ session });
   
-      // Update class with class teacher
+      // Update class with class teacher if assigned
       if (classTeacherOf) {
         await Class.findByIdAndUpdate(
           classTeacherOf,
@@ -613,26 +789,23 @@ const adminController = {
         );
       }
   
-      // Update subjects with teacher assignments
-      if (subjectAssignments?.length) {
-        const updatePromises = subjectAssignments.map(({ subjectId }) =>
-          Subject.findByIdAndUpdate(
-            subjectId,
-            {
-              $push: {
-                teachers: {
-                  teacher: teacher._id,
-                  assignedAt: new Date()
-                }
+      // Update subjects with teacher assignments (required)
+      const updatePromises = subjectAssignments.map(({ subjectId }) =>
+        Subject.findByIdAndUpdate(
+          subjectId,
+          {
+            $push: {
+              teachers: {
+                teacher: teacher._id,
+                assignedAt: new Date()
               }
-            },
-            { session }
-          )
-        );
+            }
+          },
+          { session }
+        )
+      );
   
-        await Promise.all(updatePromises);
-      }
-  
+      await Promise.all(updatePromises);
       await session.commitTransaction();
   
       // Fetch populated teacher data
@@ -647,6 +820,7 @@ const adminController = {
         .populate('subjectAssignments.subject', 'name');
   
       res.status(201).json({
+        success: true,
         teacher: populatedTeacher,
         assignment: populatedAssignment,
         message: 'Teacher created successfully with assignments'
@@ -655,6 +829,7 @@ const adminController = {
     } catch (error) {
       await session.abortTransaction();
       res.status(500).json({ 
+        success: false,
         error: error.message,
         message: 'Failed to create teacher'
       });
