@@ -1027,43 +1027,144 @@ const adminController = {
     }
   },
 
+  // getTeachers: async (req, res) => {
+  //   try {
+  //     const schoolId = req.school;
+      
+  //     const teachers = await User.find({ 
+  //       school: schoolId,
+  //       role: 'teacher'
+  //     })
+  //     .select('-password')
+  //     .populate('permissions.canTakeAttendance', 'name division')
+  //     .populate('permissions.canEnterMarks.subject', 'name')
+  //     .populate('permissions.canEnterMarks.class', 'name division');
+
+  //     // Get teacher assignments
+  //     const assignments = await TeacherAssignment.find({
+  //       teacher: { $in: teachers.map(t => t._id) }
+  //     })
+  //     // .populate('class', 'name division')
+  //     // .populate('subjects.class', 'name division')
+  //     // .populate('subjects.subject', 'name');
+
+  //     .populate('classTeacherAssignment.class', 'name division')  // Changed from 'class' to 'classTeacherAssignment.class'
+  //     .populate('subjectAssignments.class', 'name division')      // Changed from 'subjects.class' to 'subjectAssignments.class'
+  //     .populate('subjectAssignments.subject', 'name'); 
+
+  //     // Combine teacher data with assignments
+  //     const teachersWithAssignments = teachers.map(teacher => ({
+  //       ...teacher.toObject(),
+  //       assignments: assignments.filter(a => a.teacher.toString() === teacher._id.toString())
+  //     }));
+
+  //     res.json(teachersWithAssignments);
+  //   } catch (error) {
+  //     res.status(500).json({ error: error.message });
+  //   }
+  // },
+
   getTeachers: async (req, res) => {
     try {
       const schoolId = req.school;
       
+      // Get all teachers
       const teachers = await User.find({ 
         school: schoolId,
         role: 'teacher'
       })
       .select('-password')
-      .populate('permissions.canTakeAttendance', 'name division')
-      .populate('permissions.canEnterMarks.subject', 'name')
-      .populate('permissions.canEnterMarks.class', 'name division');
-
-      // Get teacher assignments
+      .lean(); // Using lean() for better performance with plain objects
+  
+      // Get all teacher assignments in one query
       const assignments = await TeacherAssignment.find({
+        school: schoolId,
         teacher: { $in: teachers.map(t => t._id) }
       })
-      // .populate('class', 'name division')
-      // .populate('subjects.class', 'name division')
-      // .populate('subjects.subject', 'name');
-
-      .populate('classTeacherAssignment.class', 'name division')  // Changed from 'class' to 'classTeacherAssignment.class'
-      .populate('subjectAssignments.class', 'name division')      // Changed from 'subjects.class' to 'subjectAssignments.class'
-      .populate('subjectAssignments.subject', 'name'); 
-
-      // Combine teacher data with assignments
-      const teachersWithAssignments = teachers.map(teacher => ({
-        ...teacher.toObject(),
-        assignments: assignments.filter(a => a.teacher.toString() === teacher._id.toString())
-      }));
-
-      res.json(teachersWithAssignments);
+      .populate({
+        path: 'classTeacherAssignment.class',
+        select: 'name division'
+      })
+      .populate({
+        path: 'subjectAssignments.class',
+        select: 'name division'
+      })
+      .populate({
+        path: 'subjectAssignments.subject',
+        select: 'name'
+      })
+      .lean();
+  
+      // Get current classes where teachers are assigned
+      const currentClasses = await Class.find({
+        school: schoolId,
+        classTeacher: { $in: teachers.map(t => t._id) }
+      })
+      .select('name division classTeacher')
+      .lean();
+  
+      // Get current subjects where teachers are assigned
+      const currentSubjects = await Subject.find({
+        school: schoolId,
+        'teachers.teacher': { $in: teachers.map(t => t._id) }
+      })
+      .select('name class teachers')
+      .populate('class', 'name division')
+      .lean();
+  
+      // Create maps for quick lookups
+      const classTeacherMap = new Map(
+        currentClasses.map(c => [c.classTeacher.toString(), c])
+      );
+  
+      const subjectTeacherMap = new Map();
+      currentSubjects.forEach(subject => {
+        subject.teachers.forEach(t => {
+          const key = t.teacher.toString();
+          if (!subjectTeacherMap.has(key)) {
+            subjectTeacherMap.set(key, []);
+          }
+          subjectTeacherMap.get(key).push({
+            subject: subject.name,
+            class: subject.class
+          });
+        });
+      });
+  
+      // Combine all data
+      const teachersWithAssignments = teachers.map(teacher => {
+        const teacherId = teacher._id.toString();
+        const teacherAssignments = assignments.find(a => a.teacher.toString() === teacherId);
+        
+        return {
+          ...teacher,
+          assignments: {
+            classTeacher: teacherAssignments?.classTeacherAssignment || null,
+            subjectTeacher: teacherAssignments?.subjectAssignments || [],
+          },
+          currentAssignments: {
+            classTeacher: classTeacherMap.get(teacherId) || null,
+            subjectTeacher: subjectTeacherMap.get(teacherId) || []
+          }
+        };
+      });
+  
+      res.json({
+        success: true,
+        data: teachersWithAssignments
+      });
+  
     } catch (error) {
-      res.status(500).json({ error: error.message });
+      console.error('Error in getTeachers:', error);
+      res.status(500).json({ 
+        success: false, 
+        error: error.message,
+        message: 'Failed to fetch teachers data'
+      });
     }
   },
 
+ 
   updateUserRole: async (req, res) => {
     try {
       const { userId } = req.params;
@@ -2643,5 +2744,6 @@ const getCurrentAcademicYear = () => {
     return `${year}-${year+1}`;
   }
 };
+
 
 module.exports = adminController;
