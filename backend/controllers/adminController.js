@@ -1551,7 +1551,7 @@ getClasses: async (req, res) => {
 
                 return {
                     ...doc.toObject(),
-                    downloadUrl,
+                    downloadUrl: downloadUrl || null,
                     contentType
                 };
             });

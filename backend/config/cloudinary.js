@@ -99,7 +99,9 @@ const storage = new CloudinaryStorage({
         folder: 'syllabuses',
         allowed_formats: ['pdf', 'doc', 'docx', 'jpg', 'jpeg'],
         resource_type: 'raw', // Changed to raw for proper document handling
-        public_id: (req, file) => `${Date.now()}-${file.originalname}`
+        // public_id: (req, file) => `${Date.now()}-${file.originalname}`
+        public_id: (req, file) => `${Date.now()}-${file.originalname.replace(/\.[^/.]+$/, '')}`
+    
     }
 });
 
