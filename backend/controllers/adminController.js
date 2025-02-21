@@ -1504,34 +1504,6 @@ const adminController = {
   },
 
 
-  getAssignableSubjectsByClass: async (req, res) => {
-    try {
-      const { classId } = req.params;
-      const schoolId = req.school;
-        
-      if (!classId || !schoolId) {
-        return res.status(400).json({ error: "Invalid classId or schoolId" });
-      }
-  
-      // Get all subjects for this class
-      const subjects = await Subject.find({
-        school: schoolId,
-        class: classId
-      })
-      .select('name teachers')
-      .populate('teachers.teacher', 'name email');
-  
-      if (!subjects || subjects.length === 0) {
-        return res.status(404).json({ error: "No subjects found for this class" });
-      }
-  
-      res.json(subjects);
-    } catch (error) {
-      console.error("Error fetching assignable subjects:", error);
-      res.status(500).json({ error: "Internal Server Error" });
-    }
-  },
-
   // getAssignableSubjectsByClass: async (req, res) => {
   //   try {
   //     const { classId } = req.params;
@@ -1553,27 +1525,58 @@ const adminController = {
   //       return res.status(404).json({ error: "No subjects found for this class" });
   //     }
   
-  //     // Transform the subjects array to include availability status
-  //     const subjectsWithStatus = subjects.map(subject => ({
-  //       _id: subject._id,
-  //       name: subject.name,
-  //       isAssigned: subject.teachers && subject.teachers.length > 0,
-  //       assignedTo: subject.teachers.length > 0 ? {
-  //         name: subject.teachers[0].teacher.name,
-  //         email: subject.teachers[0].teacher.email
-  //       } : null
-  //     }));
-  
-  //     res.json({
-  //       subjects: subjectsWithStatus,
-  //       message: "Subjects retrieved successfully"
-  //     });
+  //     res.json(subjects);
   //   } catch (error) {
   //     console.error("Error fetching assignable subjects:", error);
   //     res.status(500).json({ error: "Internal Server Error" });
   //   }
   // },
-  
+
+  // adminController.js (Backend)
+getAssignableSubjectsByClass: async (req, res) => {
+  try {
+    const { classId } = req.params;
+    const schoolId = req.school;
+
+    if (!classId || !schoolId) {
+      return res.status(400).json({ error: "Invalid classId or schoolId" });
+    }
+
+    // Fetch subjects for the given class and school
+    const subjects = await Subject.find({
+      school: schoolId,
+      class: classId,
+    })
+      .select("name teachers")
+      .populate("teachers.teacher", "name email");
+
+    if (!subjects || subjects.length === 0) {
+      return res.status(404).json({ error: "No subjects found for this class" });
+    }
+
+    // Transform subjects into the expected format
+    const subjectsWithStatus = subjects.map((subject) => ({
+      _id: subject._id.toString(), // Ensure _id is a string for frontend compatibility
+      name: subject.name,
+      isAssigned: subject.teachers && subject.teachers.length > 0,
+      assignedTo:
+        subject.teachers.length > 0
+          ? {
+              name: subject.teachers[0].teacher.name,
+              email: subject.teachers[0].teacher.email,
+            }
+          : null,
+    }));
+
+    res.json({
+      subjects: subjectsWithStatus,
+      message: "Subjects retrieved successfully",
+    });
+  } catch (error) {
+    console.error("Error fetching assignable subjects:", error);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+},
   // Get all teacher assignments - useful for admin dashboard
   getAllTeacherAssignments: async (req, res) => {
     try {
