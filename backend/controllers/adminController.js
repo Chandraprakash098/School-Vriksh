@@ -1564,6 +1564,64 @@ getClasses: async (req, res) => {
 //     }
 // },
 
+// getSyllabus : async (req, res) => {
+//   try {
+//       const { subjectId } = req.params;
+//       const schoolId = req.school;
+
+//       const syllabus = await Syllabus.findOne({
+//           subject: subjectId,
+//           school: schoolId
+//       })
+//           .populate('subject', 'name')
+//           .populate('class', 'name division');
+
+//       if (!syllabus) {
+//           return res.status(404).json({ message: 'Syllabus not found' });
+//       }
+
+//       if (syllabus.documents?.length > 0) {
+//           syllabus.documents = await Promise.all(syllabus.documents.map(async (doc) => {
+//               const fileExtension = doc.title.split('.').pop().toLowerCase();
+//               const contentType = fileExtension === 'pdf' ? 'application/pdf' : 'application/octet-stream';
+
+//               // Generate a signed URL with the correct resource type and format
+//               try {
+//                   const downloadUrl = cloudinary.url(doc.public_id, {
+//                       resource_type: 'raw',
+//                       secure: true,
+//                       sign_url: true,
+//                       type: 'upload',
+//                       attachment: true,
+//                       flags: 'attachment',
+//                       format: fileExtension
+//                   });
+
+//                   console.log(`Generated download URL for ${doc.title}: ${downloadUrl}`);
+
+//                   return {
+//                       ...doc.toObject(),
+//                       downloadUrl,
+//                       contentType
+//                   };
+//               } catch (error) {
+//                   console.error(`Error generating URL for ${doc.title}:`, error);
+//                   return {
+//                       ...doc.toObject(),
+//                       downloadUrl: null,
+//                       contentType
+//                   };
+//               }
+//           }));
+//       }
+
+//       res.json(syllabus);
+//   } catch (error) {
+//       console.error('Error in getSyllabus:', error);
+//       res.status(500).json({ error: error.message });
+//   }
+// },
+
 getSyllabus : async (req, res) => {
   try {
       const { subjectId } = req.params;
@@ -1581,20 +1639,31 @@ getSyllabus : async (req, res) => {
       }
 
       if (syllabus.documents?.length > 0) {
-          syllabus.documents = await Promise.all(syllabus.documents.map(async (doc) => {
-              const fileExtension = doc.title.split('.').pop().toLowerCase();
-              const contentType = fileExtension === 'pdf' ? 'application/pdf' : 'application/octet-stream';
-
-              // Generate a signed URL with the correct resource type and format
+          syllabus.documents = syllabus.documents.map(doc => {
               try {
+                  // Extract file extension
+                  const fileExtension = doc.title.split('.').pop().toLowerCase();
+                  
+                  // Set proper content type
+                  const contentType = {
+                      'pdf': 'application/pdf',
+                      'doc': 'application/msword',
+                      'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                      'jpg': 'image/jpeg',
+                      'jpeg': 'image/jpeg'
+                  }[fileExtension] || 'application/octet-stream';
+
+                  // Generate a signed URL with correct parameters
                   const downloadUrl = cloudinary.url(doc.public_id, {
                       resource_type: 'raw',
+                      format: fileExtension, // Explicitly set format
                       secure: true,
                       sign_url: true,
                       type: 'upload',
                       attachment: true,
                       flags: 'attachment',
-                      format: fileExtension
+                      // Add timestamp and signature to URL
+                      timestamp: Math.round(new Date().getTime() / 1000),
                   });
 
                   console.log(`Generated download URL for ${doc.title}: ${downloadUrl}`);
@@ -1609,10 +1678,10 @@ getSyllabus : async (req, res) => {
                   return {
                       ...doc.toObject(),
                       downloadUrl: null,
-                      contentType
+                      contentType: 'application/octet-stream'
                   };
               }
-          }));
+          });
       }
 
       res.json(syllabus);

@@ -147,9 +147,9 @@ const storage = new CloudinaryStorage({
         public_id: (req, file) => {
             // Ensure we keep the file extension in the public_id
             const originalName = file.originalname;
-            const extension = originalName.split('.').pop();
+            const extension = originalName.split('.').pop().toLowerCase();
             const nameWithoutExtension = originalName.replace(/\.[^/.]+$/, '');
-            return `${Date.now()}-${nameWithoutExtension}.${extension}`;
+            return `syllabuses/${Date.now()}-${nameWithoutExtension}.${extension}`;
         }
     }
 });
