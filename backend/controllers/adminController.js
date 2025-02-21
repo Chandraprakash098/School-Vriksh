@@ -1622,7 +1622,7 @@ getClasses: async (req, res) => {
 //   }
 // },
 
-getSyllabus : async (req, res) => {
+getSyllabus: async (req, res) => {
   try {
       const { subjectId } = req.params;
       const schoolId = req.school;
@@ -1641,9 +1641,13 @@ getSyllabus : async (req, res) => {
       if (syllabus.documents?.length > 0) {
           syllabus.documents = syllabus.documents.map(doc => {
               try {
+                  if (!doc.public_id) {
+                      throw new Error(`Missing public_id for document: ${doc.title}`);
+                  }
+
                   // Extract file extension
                   const fileExtension = doc.title.split('.').pop().toLowerCase();
-                  
+
                   // Set proper content type
                   const contentType = {
                       'pdf': 'application/pdf',
@@ -1653,14 +1657,8 @@ getSyllabus : async (req, res) => {
                       'jpeg': 'image/jpeg'
                   }[fileExtension] || 'application/octet-stream';
 
-                  // Clean up the public_id by removing the file extension if it exists
-                  let cleanPublicId = doc.public_id;
-                  if (cleanPublicId.endsWith(`.${fileExtension}`)) {
-                      cleanPublicId = cleanPublicId.slice(0, -(fileExtension.length + 1));
-                  }
-
-                  // Generate signed URL with explicit file extension
-                  const downloadUrl = cloudinary.url(cleanPublicId, {
+                  // Generate signed URL
+                  const downloadUrl = cloudinary.url(doc.public_id, {
                       resource_type: 'raw',
                       format: fileExtension,
                       secure: true,
@@ -1671,8 +1669,6 @@ getSyllabus : async (req, res) => {
                       timestamp: Math.round(new Date().getTime() / 1000),
                   });
 
-                  console.log(`Original public_id: ${doc.public_id}`);
-                  console.log(`Clean public_id: ${cleanPublicId}`);
                   console.log(`Generated download URL for ${doc.title}: ${downloadUrl}`);
 
                   return {
@@ -1682,7 +1678,6 @@ getSyllabus : async (req, res) => {
                   };
               } catch (error) {
                   console.error(`Error generating URL for ${doc.title}:`, error);
-                  console.error('Error details:', error.stack);
                   return {
                       ...doc.toObject(),
                       downloadUrl: null,
