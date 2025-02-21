@@ -14,6 +14,7 @@ const classResult = require('../models/ClassResult')
 // const TrusteeActivity = require('../models/TrusteeActivity');
 const bcrypt = require('bcryptjs');
 const mongoose = require('mongoose');
+const cloudinary = require('../config/cloudinary')
 
 
 const adminController = {
