@@ -838,6 +838,199 @@ const adminController = {
   //   }
   // },
 
+  // createTeacher: async (req, res) => {
+  //   const session = await mongoose.startSession();
+  //   session.startTransaction();
+  
+  //   try {
+  //     const { 
+  //       name, 
+  //       email, 
+  //       password, 
+  //       phone, 
+  //       address, 
+  //       photo,
+  //       teachingClass, // Required: Class ID where teacher will teach subjects
+  //       selectedSubjects, // Required: Array of subject IDs from the teaching class
+  //       classTeacherOf // Optional: Class ID for class teacher role
+  //     } = req.body;
+  //     const schoolId = req.school;
+  
+  //     // Basic validation
+  //     if (!teachingClass || !selectedSubjects || !Array.isArray(selectedSubjects) || selectedSubjects.length === 0) {
+  //       return res.status(400).json({ 
+  //         success: false,
+  //         message: 'Please select a class and at least one subject for teaching' 
+  //       });
+  //     }
+  
+  //     // Check if email exists
+  //     const existingUser = await User.findOne({ email });
+  //     if (existingUser) {
+  //       return res.status(400).json({ 
+  //         success: false,
+  //         message: 'Email already registered' 
+  //       });
+  //     }
+  
+  //     // Validate teaching class and subjects
+  //     const teachingClassData = await Class.findOne({
+  //       _id: teachingClass,
+  //       school: schoolId
+  //     });
+  
+  //     if (!teachingClassData) {
+  //       return res.status(400).json({ 
+  //         success: false,
+  //         message: 'Selected teaching class not found' 
+  //       });
+  //     }
+  
+  //     // Verify all subjects belong to the selected class
+  //     const subjects = await Subject.find({
+  //       _id: { $in: selectedSubjects },
+  //       class: teachingClass,
+  //       school: schoolId
+  //     });
+  
+  //     if (subjects.length !== selectedSubjects.length) {
+  //       return res.status(400).json({ 
+  //         success: false,
+  //         message: 'One or more selected subjects are invalid for the chosen class' 
+  //       });
+  //     }
+  
+  //     // Validate class teacher assignment if provided
+  //     if (classTeacherOf) {
+  //       const classTeacherData = await Class.findOne({
+  //         _id: classTeacherOf,
+  //         school: schoolId
+  //       });
+  
+  //       if (!classTeacherData) {
+  //         return res.status(400).json({ 
+  //           success: false,
+  //           message: 'Selected class for class teacher role not found' 
+  //         });
+  //       }
+  
+  //       if (classTeacherData.classTeacher) {
+  //         return res.status(400).json({ 
+  //           success: false,
+  //           message: 'Selected class already has a class teacher assigned' 
+  //         });
+  //       }
+  //     }
+  
+  //     // Create user account
+  //     const salt = await bcrypt.genSalt(10);
+  //     const hashedPassword = await bcrypt.hash(password, salt);
+  
+  //     // Prepare permissions
+  //     const permissions = {
+  //       canTakeAttendance: classTeacherOf ? [classTeacherOf] : [],
+  //       canEnterMarks: selectedSubjects.map(subjectId => ({
+  //         class: teachingClass,
+  //         subject: subjectId
+  //       })),
+  //       canPublishAnnouncements: true,
+  //       canManageInventory: false,
+  //       canManageFees: false,
+  //       canManageLibrary: false
+  //     };
+  
+  //     // Create teacher user
+  //     const teacher = new User({
+  //       school: schoolId,
+  //       name,
+  //       email,
+  //       password: hashedPassword,
+  //       role: 'teacher',
+  //       profile: { phone, address, photo },
+  //       permissions
+  //     });
+  
+  //     await teacher.save({ session });
+  
+  //     // Create teacher assignment record
+  //     const teacherAssignment = new TeacherAssignment({
+  //       school: schoolId,
+  //       teacher: teacher._id,
+  //       classTeacherAssignment: classTeacherOf ? {
+  //         class: classTeacherOf,
+  //         assignedAt: new Date()
+  //       } : null,
+  //       subjectAssignments: selectedSubjects.map(subjectId => ({
+  //         class: teachingClass,
+  //         subject: subjectId,
+  //         assignedAt: new Date()
+  //       })),
+  //       academicYear: getCurrentAcademicYear()
+  //     });
+  
+  //     await teacherAssignment.save({ session });
+  
+  //     // Update class if assigned as class teacher
+  //     if (classTeacherOf) {
+  //       await Class.findByIdAndUpdate(
+  //         classTeacherOf,
+  //         { 
+  //           classTeacher: teacher._id,
+  //           lastUpdated: new Date(),
+  //           updatedBy: req.user._id
+  //         },
+  //         { session }
+  //       );
+  //     }
+  
+  //     // Update all selected subjects
+  //     await Promise.all(selectedSubjects.map(subjectId =>
+  //       Subject.findByIdAndUpdate(
+  //         subjectId,
+  //         {
+  //           $push: {
+  //             teachers: {
+  //               teacher: teacher._id,
+  //               assignedAt: new Date()
+  //             }
+  //           }
+  //         },
+  //         { session }
+  //       )
+  //     ));
+  
+  //     await session.commitTransaction();
+  
+  //     // Fetch populated data for response
+  //     const populatedTeacher = await User.findById(teacher._id)
+  //       .populate('permissions.canTakeAttendance', 'name division')
+  //       .populate('permissions.canEnterMarks.subject', 'name')
+  //       .populate('permissions.canEnterMarks.class', 'name division');
+  
+  //     const populatedAssignment = await TeacherAssignment.findById(teacherAssignment._id)
+  //       .populate('classTeacherAssignment.class', 'name division')
+  //       .populate('subjectAssignments.class', 'name division')
+  //       .populate('subjectAssignments.subject', 'name');
+  
+  //     res.status(201).json({
+  //       success: true,
+  //       teacher: populatedTeacher,
+  //       assignment: populatedAssignment,
+  //       message: 'Teacher created successfully'
+  //     });
+  
+  //   } catch (error) {
+  //     await session.abortTransaction();
+  //     res.status(500).json({ 
+  //       success: false,
+  //       message: 'Failed to create teacher',
+  //       error: error.message 
+  //     });
+  //   } finally {
+  //     session.endSession();
+  //   }
+  // },
+
   createTeacher: async (req, res) => {
     const session = await mongoose.startSession();
     session.startTransaction();
@@ -850,9 +1043,9 @@ const adminController = {
         phone, 
         address, 
         photo,
-        teachingClass, // Required: Class ID where teacher will teach subjects
-        selectedSubjects, // Required: Array of subject IDs from the teaching class
-        classTeacherOf // Optional: Class ID for class teacher role
+        teachingClass,
+        selectedSubjects,
+        classTeacherOf
       } = req.body;
       const schoolId = req.school;
   
@@ -873,30 +1066,34 @@ const adminController = {
         });
       }
   
-      // Validate teaching class and subjects
-      const teachingClassData = await Class.findOne({
-        _id: teachingClass,
-        school: schoolId
-      });
-  
-      if (!teachingClassData) {
-        return res.status(400).json({ 
-          success: false,
-          message: 'Selected teaching class not found' 
-        });
-      }
-  
-      // Verify all subjects belong to the selected class
+      // Validate subjects and check availability
       const subjects = await Subject.find({
         _id: { $in: selectedSubjects },
         class: teachingClass,
         school: schoolId
       });
   
+      // Check if all selected subjects exist
       if (subjects.length !== selectedSubjects.length) {
         return res.status(400).json({ 
           success: false,
           message: 'One or more selected subjects are invalid for the chosen class' 
+        });
+      }
+  
+      // Check if any selected subjects are already assigned
+      const assignedSubjects = subjects.filter(subject => 
+        subject.teachers && subject.teachers.length > 0
+      );
+  
+      if (assignedSubjects.length > 0) {
+        return res.status(400).json({
+          success: false,
+          message: `Cannot assign already assigned subjects: ${assignedSubjects.map(s => s.name).join(', ')}`,
+          assignedSubjects: assignedSubjects.map(s => ({
+            name: s.name,
+            assignedTo: s.teachers[0].teacher
+          }))
         });
       }
   
@@ -1334,6 +1531,48 @@ const adminController = {
       res.status(500).json({ error: "Internal Server Error" });
     }
   },
+
+  // getAssignableSubjectsByClass: async (req, res) => {
+  //   try {
+  //     const { classId } = req.params;
+  //     const schoolId = req.school;
+        
+  //     if (!classId || !schoolId) {
+  //       return res.status(400).json({ error: "Invalid classId or schoolId" });
+  //     }
+  
+  //     // Get all subjects for this class
+  //     const subjects = await Subject.find({
+  //       school: schoolId,
+  //       class: classId
+  //     })
+  //     .select('name teachers')
+  //     .populate('teachers.teacher', 'name email');
+  
+  //     if (!subjects || subjects.length === 0) {
+  //       return res.status(404).json({ error: "No subjects found for this class" });
+  //     }
+  
+  //     // Transform the subjects array to include availability status
+  //     const subjectsWithStatus = subjects.map(subject => ({
+  //       _id: subject._id,
+  //       name: subject.name,
+  //       isAssigned: subject.teachers && subject.teachers.length > 0,
+  //       assignedTo: subject.teachers.length > 0 ? {
+  //         name: subject.teachers[0].teacher.name,
+  //         email: subject.teachers[0].teacher.email
+  //       } : null
+  //     }));
+  
+  //     res.json({
+  //       subjects: subjectsWithStatus,
+  //       message: "Subjects retrieved successfully"
+  //     });
+  //   } catch (error) {
+  //     console.error("Error fetching assignable subjects:", error);
+  //     res.status(500).json({ error: "Internal Server Error" });
+  //   }
+  // },
   
   // Get all teacher assignments - useful for admin dashboard
   getAllTeacherAssignments: async (req, res) => {
