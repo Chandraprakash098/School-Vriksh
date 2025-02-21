@@ -1653,19 +1653,26 @@ getSyllabus : async (req, res) => {
                       'jpeg': 'image/jpeg'
                   }[fileExtension] || 'application/octet-stream';
 
-                  // Generate a signed URL with correct parameters
-                  const downloadUrl = cloudinary.url(doc.public_id, {
+                  // Clean up the public_id by removing the file extension if it exists
+                  let cleanPublicId = doc.public_id;
+                  if (cleanPublicId.endsWith(`.${fileExtension}`)) {
+                      cleanPublicId = cleanPublicId.slice(0, -(fileExtension.length + 1));
+                  }
+
+                  // Generate signed URL with explicit file extension
+                  const downloadUrl = cloudinary.url(cleanPublicId, {
                       resource_type: 'raw',
-                      format: fileExtension, // Explicitly set format
+                      format: fileExtension,
                       secure: true,
                       sign_url: true,
                       type: 'upload',
                       attachment: true,
                       flags: 'attachment',
-                      // Add timestamp and signature to URL
                       timestamp: Math.round(new Date().getTime() / 1000),
                   });
 
+                  console.log(`Original public_id: ${doc.public_id}`);
+                  console.log(`Clean public_id: ${cleanPublicId}`);
                   console.log(`Generated download URL for ${doc.title}: ${downloadUrl}`);
 
                   return {
@@ -1675,6 +1682,7 @@ getSyllabus : async (req, res) => {
                   };
               } catch (error) {
                   console.error(`Error generating URL for ${doc.title}:`, error);
+                  console.error('Error details:', error.stack);
                   return {
                       ...doc.toObject(),
                       downloadUrl: null,

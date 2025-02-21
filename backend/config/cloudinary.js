@@ -144,13 +144,31 @@ const storage = new CloudinaryStorage({
         folder: 'syllabuses',
         allowed_formats: ['pdf', 'doc', 'docx', 'jpg', 'jpeg'],
         resource_type: 'raw',
+        // public_id: (req, file) => {
+        //     // Ensure we keep the file extension in the public_id
+        //     const originalName = file.originalname;
+        //     const extension = originalName.split('.').pop().toLowerCase();
+        //     const nameWithoutExtension = originalName.replace(/\.[^/.]+$/, '');
+        //     return `syllabuses/${Date.now()}-${nameWithoutExtension}.${extension}`;
+        // }
+
         public_id: (req, file) => {
-            // Ensure we keep the file extension in the public_id
-            const originalName = file.originalname;
-            const extension = originalName.split('.').pop().toLowerCase();
-            const nameWithoutExtension = originalName.replace(/\.[^/.]+$/, '');
-            return `syllabuses/${Date.now()}-${nameWithoutExtension}.${extension}`;
-        }
+          // Sanitize the filename
+          const originalName = file.originalname;
+          const extension = originalName.split('.').pop().toLowerCase();
+          
+          // Remove the extension and special characters, replace spaces with underscores
+          const sanitizedName = originalName
+              .replace(/\.[^/.]+$/, '') // Remove extension
+              .replace(/[^a-zA-Z0-9]/g, '_') // Replace special chars with underscore
+              .replace(/_+/g, '_') // Replace multiple underscores with single
+              .toLowerCase();
+          
+          // Create a unique filename
+          const uniqueName = `${Date.now()}_${sanitizedName}`;
+          
+          return `syllabuses/${uniqueName}`;
+      }
     }
 });
 
