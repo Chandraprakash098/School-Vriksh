@@ -946,7 +946,7 @@ getAssignableSubjectsByClass: async (req, res) => {
   //   try {
   //     const { classId, subjectId } = req.body;
   //     const { content } = req.body;
-  //     const schoolId =  req.school;
+  //     const schoolId = req.school;
   //     const uploadedBy = req.user._id;
 
   //     // Check if class exists
@@ -956,7 +956,6 @@ getAssignableSubjectsByClass: async (req, res) => {
   //     });
       
   //     if (!classExists) {
-  //       // Delete uploaded files if class doesn't exist
   //       if (req.files && req.files.length > 0) {
   //         const { cloudinary } = require('../config/cloudinary');
   //         req.files.forEach(file => {
@@ -974,7 +973,6 @@ getAssignableSubjectsByClass: async (req, res) => {
   //     });
       
   //     if (!subject) {
-  //       // Delete uploaded files if subject doesn't exist
   //       if (req.files && req.files.length > 0) {
   //         const { cloudinary } = require('../config/cloudinary');
   //         req.files.forEach(file => {
@@ -990,7 +988,8 @@ getAssignableSubjectsByClass: async (req, res) => {
   //       req.files.forEach(file => {
   //         documents.push({
   //           title: file.originalname,
-  //           url: file.path, // Cloudinary URL
+  //           url: file.path,
+  //           public_id: file.public_id, // Store Cloudinary public_id
   //           uploadedBy
   //         });
   //       });
@@ -1007,24 +1006,18 @@ getAssignableSubjectsByClass: async (req, res) => {
   //         documents
   //       });
   //     } else {
-  //       // If updating, we might want to keep old documents and add new ones
   //       syllabus.content = content;
-        
-  //       // Append new documents to existing ones
   //       if (documents.length > 0) {
   //         syllabus.documents = [...syllabus.documents, ...documents];
   //       }
   //     }
 
   //     await syllabus.save();
-
-  //     // Link syllabus to subject
   //     subject.syllabus = syllabus._id;
   //     await subject.save();
 
   //     res.status(201).json(syllabus);
   //   } catch (error) {
-  //     // If error occurs, we should clean up uploaded files
   //     if (req.files && req.files.length > 0) {
   //       const { cloudinary } = require('../config/cloudinary');
   //       req.files.forEach(file => {
@@ -1035,91 +1028,82 @@ getAssignableSubjectsByClass: async (req, res) => {
   //   }
   // },
 
-  uploadSyllabus: async (req, res) => {
+  uploadSyllabus : async (req, res) => {
     try {
-      const { classId, subjectId } = req.body;
-      const { content } = req.body;
-      const schoolId = req.school;
-      const uploadedBy = req.user._id;
+        const { classId, subjectId, content } = req.body;
+        const schoolId = req.school;
+        const uploadedBy = req.user._id;
 
-      // Check if class exists
-      const classExists = await Class.findOne({
-        _id: classId,
-        school: schoolId
-      });
-      
-      if (!classExists) {
-        if (req.files && req.files.length > 0) {
-          const { cloudinary } = require('../config/cloudinary');
-          req.files.forEach(file => {
-            cloudinary.uploader.destroy(file.public_id);
-          });
+        // Check if class exists
+        const classExists = await Class.findOne({
+            _id: classId,
+            school: schoolId
+        });
+
+        if (!classExists) {
+            if (req.files && req.files.length > 0) {
+                req.files.forEach(file => {
+                    cloudinary.uploader.destroy(file.public_id);
+                });
+            }
+            return res.status(404).json({ message: 'Class not found' });
         }
-        return res.status(404).json({ message: 'Class not found' });
-      }
 
-      // Check if subject exists and belongs to the specified class
-      const subject = await Subject.findOne({
-        _id: subjectId,
-        class: classId,
-        school: schoolId
-      });
-      
-      if (!subject) {
-        if (req.files && req.files.length > 0) {
-          const { cloudinary } = require('../config/cloudinary');
-          req.files.forEach(file => {
-            cloudinary.uploader.destroy(file.public_id);
-          });
+        // Check if subject exists
+        const subject = await Subject.findOne({
+            _id: subjectId,
+            class: classId,
+            school: schoolId
+        });
+
+        if (!subject) {
+            if (req.files && req.files.length > 0) {
+                req.files.forEach(file => {
+                    cloudinary.uploader.destroy(file.public_id);
+                });
+            }
+            return res.status(404).json({ message: 'Subject not found in the specified class' });
         }
-        return res.status(404).json({ message: 'Subject not found in the specified class' });
-      }
 
-      // Process uploaded files
-      const documents = [];
-      if (req.files && req.files.length > 0) {
-        req.files.forEach(file => {
-          documents.push({
+        // Process uploaded files
+        const documents = req.files?.map(file => ({
             title: file.originalname,
             url: file.path,
-            public_id: file.public_id, // Store Cloudinary public_id
+            public_id: file.public_id,
             uploadedBy
-          });
-        });
-      }
+        })) || [];
 
-      // Create or update syllabus
-      let syllabus = await Syllabus.findOne({ subject: subjectId });
-      if (!syllabus) {
-        syllabus = new Syllabus({
-          school: schoolId,
-          subject: subjectId,
-          class: classId,
-          content,
-          documents
-        });
-      } else {
-        syllabus.content = content;
-        if (documents.length > 0) {
-          syllabus.documents = [...syllabus.documents, ...documents];
+        // Create or update syllabus
+        let syllabus = await Syllabus.findOne({ subject: subjectId });
+        if (!syllabus) {
+            syllabus = new Syllabus({
+                school: schoolId,
+                subject: subjectId,
+                class: classId,
+                content,
+                documents
+            });
+        } else {
+            syllabus.content = content;
+            if (documents.length > 0) {
+                syllabus.documents = [...syllabus.documents, ...documents];
+            }
         }
-      }
 
-      await syllabus.save();
-      subject.syllabus = syllabus._id;
-      await subject.save();
+        await syllabus.save();
+        subject.syllabus = syllabus._id;
+        await subject.save();
 
-      res.status(201).json(syllabus);
+        res.status(201).json(syllabus);
     } catch (error) {
-      if (req.files && req.files.length > 0) {
-        const { cloudinary } = require('../config/cloudinary');
-        req.files.forEach(file => {
-          cloudinary.uploader.destroy(file.public_id);
-        });
-      }
-      res.status(500).json({ error: error.message });
+        if (req.files && req.files.length > 0) {
+            req.files.forEach(file => {
+                cloudinary.uploader.destroy(file.public_id);
+            });
+        }
+        res.status(500).json({ error: error.message });
     }
-  },
+},
 
   
   // createClass : async (req, res) => {
@@ -1379,38 +1363,45 @@ getClasses: async (req, res) => {
   //       return res.status(404).json({ message: 'Syllabus not found' });
   //     }
 
-  //     res.json(syllabus);
-  //   } catch (error) {
-  //     res.status(500).json({ error: error.message });
-  //   }
-  // },
-
-  // getSyllabus: async (req, res) => {
-  //   try {
-  //     const { subjectId } = req.params;
-  //     const schoolId = req.school;
-
-  //     const syllabus = await Syllabus.findOne({
-  //       subject: subjectId,
-  //       school: schoolId
-  //     })
-  //     .populate('subject', 'name')
-  //     .populate('class', 'name division');
-
-  //     if (!syllabus) {
-  //       return res.status(404).json({ message: 'Syllabus not found' });
-  //     }
-
-  //     // Generate signed URLs for each document
+  //     // Generate signed URLs for each document with proper content disposition
   //     if (syllabus.documents && syllabus.documents.length > 0) {
   //       const { cloudinary } = require('../config/cloudinary');
-  //       syllabus.documents = syllabus.documents.map(doc => ({
-  //         ...doc.toObject(),
-  //         downloadUrl: cloudinary.utils.private_download_url(doc.url, doc.title, {
+  //       syllabus.documents = syllabus.documents.map(doc => {
+  //         // Get file extension for proper content type
+  //         const fileExtension = doc.title.split('.').pop().toLowerCase() || '';
+  //         let contentType = 'application/octet-stream'; // Default
+          
+  //         if (fileExtension === 'pdf') {
+  //           contentType = 'application/pdf';
+  //         } else if (fileExtension === 'doc') {
+  //           contentType = 'application/msword';
+  //         } else if (fileExtension === 'docx') {
+  //           contentType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+  //         } else if (['jpg', 'jpeg'].includes(fileExtension)) {
+  //           contentType = 'image/jpeg';
+  //         }
+
+  //         // Create signed URL with proper content disposition and type
+  //         const downloadUrl = cloudinary.utils.private_download_url(doc.url, doc.title, {
   //           expires_at: Math.floor(Date.now() / 1000) + 3600, // URL expires in 1 hour
-  //           attachment: true
-  //         })
-  //       }));
+  //           attachment: true,
+  //           type: 'authenticated',
+  //           resource_type: 'auto',
+  //           format: fileExtension || 'any',
+  //           flags: 'attachment',
+  //           content_disposition: `attachment; filename="${doc.title}"`,
+  //           headers: {
+  //             'Content-Type': contentType,
+  //             'Cache-Control': 'no-cache'
+  //           }
+  //         });
+
+  //         return {
+  //           ...doc.toObject(),
+  //           downloadUrl,
+  //           contentType
+  //         };
+  //       });
   //     }
 
   //     res.json(syllabus);
@@ -1419,66 +1410,49 @@ getClasses: async (req, res) => {
   //   }
   // },
 
-  getSyllabus: async (req, res) => {
+  getSyllabus : async (req, res) => {
     try {
-      const { subjectId } = req.params;
-      const schoolId = req.school;
+        const { subjectId } = req.params;
+        const schoolId = req.school;
 
-      const syllabus = await Syllabus.findOne({
-        subject: subjectId,
-        school: schoolId
-      })
-      .populate('subject', 'name')
-      .populate('class', 'name division');
+        const syllabus = await Syllabus.findOne({
+            subject: subjectId,
+            school: schoolId
+        })
+            .populate('subject', 'name')
+            .populate('class', 'name division');
 
-      if (!syllabus) {
-        return res.status(404).json({ message: 'Syllabus not found' });
-      }
+        if (!syllabus) {
+            return res.status(404).json({ message: 'Syllabus not found' });
+        }
 
-      // Generate signed URLs for each document with proper content disposition
-      if (syllabus.documents && syllabus.documents.length > 0) {
-        const { cloudinary } = require('../config/cloudinary');
-        syllabus.documents = syllabus.documents.map(doc => {
-          // Get file extension for proper content type
-          const fileExtension = doc.title.split('.').pop().toLowerCase() || '';
-          let contentType = 'application/octet-stream'; // Default
-          
-          if (fileExtension === 'pdf') {
-            contentType = 'application/pdf';
-          } else if (fileExtension === 'doc') {
-            contentType = 'application/msword';
-          } else if (fileExtension === 'docx') {
-            contentType = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
-          } else if (['jpg', 'jpeg'].includes(fileExtension)) {
-            contentType = 'image/jpeg';
-          }
+        // Generate signed URLs for documents
+        if (syllabus.documents?.length > 0) {
+            syllabus.documents = syllabus.documents.map(doc => {
+                const fileExtension = doc.title.split('.').pop().toLowerCase();
+                const contentType = fileExtension === 'pdf' ? 'application/pdf' : 'application/octet-stream';
 
-          // Create signed URL with proper content disposition and type
-          const downloadUrl = cloudinary.utils.private_download_url(doc.url, doc.title, {
-            expires_at: Math.floor(Date.now() / 1000) + 3600, // URL expires in 1 hour
-            attachment: true,
-            type: 'authenticated',
-            resource_type: 'auto',
-            format: fileExtension || 'any',
-            flags: 'attachment',
-            content_disposition: `attachment; filename="${doc.title}"`,
-            headers: {
-              'Content-Type': contentType,
-              'Cache-Control': 'no-cache'
-            }
-          });
+                const downloadUrl = cloudinary.url(doc.public_id, {
+                    resource_type: 'raw',
+                    secure: true,
+                    sign_url: true,
+                    expires_at: Math.floor(Date.now() / 1000) + 3600,
+                    attachment: true,
+                    content_disposition: `attachment; filename="${doc.title}"`,
+                    flags: 'attachment'
+                });
 
-          return {
-            ...doc.toObject(),
-            downloadUrl,
-            contentType
-          };
-        });
-      }
+                return {
+                    ...doc.toObject(),
+                    downloadUrl,
+                    contentType
+                };
+            });
+        }
 
-      res.json(syllabus);
+        res.json(syllabus);
     } catch (error) {
-      res.status(500).json({ error: error.message });
+        res.status(500).json({ error: error.message });
     }
   },
 
