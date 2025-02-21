@@ -1293,7 +1293,7 @@ const adminController = {
         name,
         division,
         capacity,
-        subjects,
+        // subjects,
         rteSeats,
         academicYear,
         schedule
@@ -1314,7 +1314,7 @@ const adminController = {
         division,
         capacity,
         classTeacher: existingTeacherAssignment ? existingTeacherAssignment.teacher : null,
-        subjects,
+        // subjects,
         rteSeats,
         academicYear,
         schedule
@@ -1341,7 +1341,7 @@ const adminController = {
       // Populate the class teacher details before sending response
       const populatedClass = await Class.findById(newClass._id)
         .populate('classTeacher', 'name email profile')
-        .populate('subjects');
+        // .populate('subjects');
   
       res.status(201).json(populatedClass);
     } catch (error) {
