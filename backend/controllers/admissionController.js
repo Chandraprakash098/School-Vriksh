@@ -917,6 +917,7 @@ const admissionController = {
       } = req.body;
 
       // const formUrl = `admission/${schoolId}/${Date.now()}`;
+      const timestamp = Date.now();
       const formUrl = `admission/${schoolId}/${timestamp}`;
       const admissionForm = new AdmissionForm({
         school: schoolId,
