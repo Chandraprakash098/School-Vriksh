@@ -902,38 +902,6 @@ const uploadDocuments = upload.fields([
 const admissionController = {
  
 
-//   createAdmissionForm: async (req, res) => {
-//     try {
-//       const schoolId = req.user.school;  // Get from authenticated user
-
-//       if (!schoolId) {
-//         return res.status(400).json({ error: "School ID is required" });
-//       }
-
-//       const {
-//         title,
-//         description,
-//         additionalFields = []
-//       } = req.body;
-
-//       // const formUrl = `admission/${schoolId}/${Date.now()}`;
-//       const timestamp = Date.now();
-//       const formUrl = `admission/${schoolId}/${timestamp}`;
-//       const admissionForm = new AdmissionForm({
-//         school: schoolId,
-//         title,
-//         description,
-//         additionalFields,
-//         formUrl
-//       });
-
-//       await admissionForm.save();
-//       res.status(201).json(admissionForm);
-//     } catch (error) {
-//       res.status(500).json({ error: error.message });
-//     }
-// },
-
 createAdmissionForm: async (req, res) => {
   try {
     // Ensure schoolId is a string (extract _id if it's an object)
@@ -969,78 +937,6 @@ createAdmissionForm: async (req, res) => {
   }
 },
 
-  // getAdmissionForm: async (req, res) => {
-  //   try {
-  //     // const { schoolId, timestamp } = req.user.school;
-  //     const schoolId = req.user.school; // From authenticated user
-  //     const { timestamp } = req.params;
-
-  //     const formUrl = `admission/${schoolId}/${timestamp}`;
-
-  //     const admissionForm = await AdmissionForm.findOne({ 
-  //       formUrl,
-  //       isActive: true,
-  //       school: schoolId
-  //     });
-
-  //     if (!admissionForm) {
-  //       return res.status(404).json({ 
-  //         message: 'Admission form not found or no longer active'
-  //       });
-  //     }
-
-  //     res.json({
-  //       status: 'success',
-  //       form: {
-  //         title: admissionForm.title,
-  //         description: admissionForm.description,
-  //         standardFields: admissionForm.standardFields,
-  //         regularDocuments: admissionForm.regularDocuments,
-  //         rteDocuments: admissionForm.rteDocuments,
-  //         additionalFields: admissionForm.additionalFields,
-  //         schoolId: admissionForm.school,
-  //         formUrl: admissionForm.formUrl
-  //       }
-  //     });
-  //   } catch (error) {
-  //     res.status(500).json({ error: error.message });
-  //   }
-  // },
-
-  // getAdmissionForm: async (req, res) => {
-  //   try {
-  //     const schoolId = req.user.school;
-  //     const { formUrl } = req.params; // Use full formUrl
-  
-  //     const admissionForm = await AdmissionForm.findOne({ 
-  //       formUrl,
-  //       isActive: true,
-  //       school: schoolId
-  //     });
-  
-  //     if (!admissionForm) {
-  //       return res.status(404).json({ 
-  //         message: 'Admission form not found or no longer active'
-  //       });
-  //     }
-  
-  //     res.json({
-  //       status: 'success',
-  //       form: {
-  //         title: admissionForm.title,
-  //         description: admissionForm.description,
-  //         standardFields: admissionForm.standardFields,
-  //         regularDocuments: admissionForm.regularDocuments,
-  //         rteDocuments: admissionForm.rteDocuments,
-  //         additionalFields: admissionForm.additionalFields,
-  //         schoolId: admissionForm.school,
-  //         formUrl: admissionForm.formUrl
-  //       }
-  //     });
-  //   } catch (error) {
-  //     res.status(500).json({ error: error.message });
-  //   }
-  // },
 
   getAdmissionForm: async (req, res) => {
     try {
@@ -1173,7 +1069,113 @@ createAdmissionForm: async (req, res) => {
   //   }
   // },
 
-  submitApplication: async (req, res) => {
+  // submitApplication: async (req, res) => {
+  //   try {
+  //     const {
+  //       formUrl,
+  //       studentDetails,
+  //       parentDetails,
+  //       admissionType,
+  //       additionalResponses = {},
+  //     } = req.body;
+
+  //     if (!formUrl) return res.status(400).json({ error: "Form URL is missing" });
+  //   if (typeof studentDetails !== "string" || typeof parentDetails !== "string") {
+  //     return res.status(400).json({ error: "studentDetails and parentDetails must be JSON strings" });
+  //   }
+
+  //   const parsedStudentDetails = JSON.parse(studentDetails);
+  //   const parsedParentDetails = JSON.parse(parentDetails);
+
+  //     // Find the form by formUrl
+  //     const form = await AdmissionForm.findOne({ formUrl, isActive: true });
+  //     if (!form) {
+  //       return res.status(404).json({ message: "Form not found or inactive" });
+  //     }
+
+  //     const schoolId = form.school;
+
+  //     if (!studentDetails || !parentDetails || !admissionType) {
+  //       return res.status(400).json({
+  //         message: "Missing required fields",
+  //       });
+  //     }
+
+  //     // Process uploaded files
+  //     const uploadedDocuments = [];
+  //     for (const fileType in req.files) {
+  //       const file = req.files[fileType][0];
+  //       const cloudinaryFolder = `admissions/${schoolId}/${Date.now()}`;
+
+  //       const result = await cloudinary.uploader.upload(file.path, {
+  //         folder: cloudinaryFolder,
+  //         resource_type: "auto",
+  //       });
+
+  //       uploadedDocuments.push({
+  //         type: fileType,
+  //         documentUrl: result.secure_url,
+  //         public_id: result.public_id,
+  //       });
+  //     }
+
+  //     const trackingId = generateTrackingId(schoolId);
+
+  //     const application = new AdmissionApplication({
+  //       school: schoolId,
+  //       studentDetails,
+  //       parentDetails,
+  //       admissionType,
+  //       documents: uploadedDocuments,
+  //       trackingId,
+  //       paymentStatus: admissionType === "RTE" ? "not_applicable" : "pending",
+  //     });
+
+  //     if (!application.validateDocuments()) {
+  //       for (const doc of uploadedDocuments) {
+  //         await cloudinary.uploader.destroy(doc.public_id);
+  //       }
+
+  //       return res.status(400).json({
+  //         message: "Missing required documents",
+  //         required:
+  //           admissionType === "RTE"
+  //             ? ["rteCertificate", "studentPhoto", "aadharCard"]
+  //             : studentDetails.appliedClass === "1st"
+  //             ? ["studentPhoto", "aadharCard", "birthCertificate"]
+  //             : [
+  //                 "studentPhoto",
+  //                 "aadharCard",
+  //                 "birthCertificate",
+  //                 "schoolLeavingCertificate",
+  //               ],
+  //       });
+  //     }
+
+  //     await application.save();
+
+  //     res.status(201).json({
+  //       message: "Application submitted successfully",
+  //       trackingId,
+  //       nextSteps:
+  //         admissionType === "RTE"
+  //           ? "Visit clerk with original documents for verification"
+  //           : "Complete payment and visit clerk with original documents",
+  //     });
+  //   } catch (error) {
+  //     if (req.files) {
+  //       for (const fileType in req.files) {
+  //         const file = req.files[fileType][0];
+  //         const public_id = file.filename;
+  //         await cloudinary.uploader.destroy(public_id);
+  //       }
+  //     }
+  //     res.status(500).json({ error: error.message });
+  //   }
+  // },
+
+
+  submitApplication : async (req, res) => {
     try {
       const {
         formUrl,
@@ -1182,88 +1184,132 @@ createAdmissionForm: async (req, res) => {
         admissionType,
         additionalResponses = {},
       } = req.body;
-
-      // Find the form by formUrl
+  
+      // Basic validation
+      if (!formUrl) {
+        return res.status(400).json({ error: "Form URL is missing" });
+      }
+      if (typeof studentDetails !== "string" || typeof parentDetails !== "string") {
+        return res.status(400).json({ error: "studentDetails and parentDetails must be JSON strings" });
+      }
+  
+      // Parse JSON data
+      let parsedStudentDetails;
+      let parsedParentDetails;
+      try {
+        parsedStudentDetails = JSON.parse(studentDetails);
+        parsedParentDetails = JSON.parse(parentDetails);
+      } catch (error) {
+        return res.status(400).json({ error: "Invalid JSON format in student or parent details" });
+      }
+  
+      // Find and validate form
       const form = await AdmissionForm.findOne({ formUrl, isActive: true });
       if (!form) {
         return res.status(404).json({ message: "Form not found or inactive" });
       }
-
+  
       const schoolId = form.school;
-
-      if (!studentDetails || !parentDetails || !admissionType) {
-        return res.status(400).json({
-          message: "Missing required fields",
-        });
+  
+      // Validate admission type
+      if (!['Regular', 'RTE'].includes(admissionType)) {
+        return res.status(400).json({ error: "Invalid admission type" });
       }
-
+  
+      // Validate additional fields if present
+      if (form.additionalFields?.length > 0) {
+        for (const field of form.additionalFields) {
+          if (field.required && !additionalResponses[field.name]) {
+            return res.status(400).json({
+              message: `Missing required additional field: ${field.label}`
+            });
+          }
+        }
+      }
+  
       // Process uploaded files
       const uploadedDocuments = [];
-      for (const fileType in req.files) {
-        const file = req.files[fileType][0];
-        const cloudinaryFolder = `admissions/${schoolId}/${Date.now()}`;
-
-        const result = await cloudinary.uploader.upload(file.path, {
-          folder: cloudinaryFolder,
-          resource_type: "auto",
-        });
-
-        uploadedDocuments.push({
-          type: fileType,
-          documentUrl: result.secure_url,
-          public_id: result.public_id,
-        });
-      }
-
-      const trackingId = generateTrackingId(schoolId);
-
-      const application = new AdmissionApplication({
-        school: schoolId,
-        studentDetails,
-        parentDetails,
-        admissionType,
-        documents: uploadedDocuments,
-        trackingId,
-        paymentStatus: admissionType === "RTE" ? "not_applicable" : "pending",
-      });
-
-      if (!application.validateDocuments()) {
+      try {
+        for (const fileType in req.files) {
+          const file = req.files[fileType][0];
+          const cloudinaryFolder = `admissions/${schoolId}/${Date.now()}`;
+  
+          const result = await cloudinary.uploader.upload(file.path, {
+            folder: cloudinaryFolder,
+            resource_type: "auto",
+          });
+  
+          uploadedDocuments.push({
+            type: fileType,
+            documentUrl: result.secure_url,
+            public_id: result.public_id,
+          });
+        }
+      } catch (error) {
+        // Cleanup any uploaded files if there's an error
         for (const doc of uploadedDocuments) {
           await cloudinary.uploader.destroy(doc.public_id);
         }
-
+        throw new Error("File upload failed: " + error.message);
+      }
+  
+      const trackingId = generateTrackingId(schoolId);
+  
+      // Create application instance
+      const application = new AdmissionApplication({
+        school: schoolId,
+        studentDetails: parsedStudentDetails,
+        parentDetails: parsedParentDetails,
+        admissionType,
+        documents: uploadedDocuments,
+        trackingId,
+        status: 'pending',
+        paymentStatus: admissionType === "RTE" ? "not_applicable" : "pending",
+        additionalResponses,
+        clerkVerification: { status: 'pending' },
+        feesVerification: { status: 'pending' }
+      });
+  
+      // Validate application data against mongoose schema
+      const validationError = application.validateSync();
+      if (validationError) {
+        // Cleanup uploaded files if validation fails
+        for (const doc of uploadedDocuments) {
+          await cloudinary.uploader.destroy(doc.public_id);
+        }
+        return res.status(400).json({ error: validationError.message });
+      }
+  
+      // Validate required documents
+      if (!application.validateDocuments()) {
+        // Cleanup uploaded files if document validation fails
+        for (const doc of uploadedDocuments) {
+          await cloudinary.uploader.destroy(doc.public_id);
+        }
+  
         return res.status(400).json({
           message: "Missing required documents",
-          required:
-            admissionType === "RTE"
-              ? ["rteCertificate", "studentPhoto", "aadharCard"]
-              : studentDetails.appliedClass === "1st"
-              ? ["studentPhoto", "aadharCard", "birthCertificate"]
-              : [
-                  "studentPhoto",
-                  "aadharCard",
-                  "birthCertificate",
-                  "schoolLeavingCertificate",
-                ],
+          required: getRequiredDocuments(admissionType, parsedStudentDetails.appliedClass)
         });
       }
-
+  
       await application.save();
-
+  
       res.status(201).json({
         message: "Application submitted successfully",
         trackingId,
-        nextSteps:
-          admissionType === "RTE"
-            ? "Visit clerk with original documents for verification"
-            : "Complete payment and visit clerk with original documents",
+        nextSteps: getNextSteps(admissionType),
+        status: application.status
       });
+  
     } catch (error) {
+      // Cleanup files in case of any error
       if (req.files) {
         for (const fileType in req.files) {
           const file = req.files[fileType][0];
-          const public_id = file.filename;
-          await cloudinary.uploader.destroy(public_id);
+          if (file.public_id) {
+            await cloudinary.uploader.destroy(file.public_id);
+          }
         }
       }
       res.status(500).json({ error: error.message });
@@ -1383,7 +1429,8 @@ createAdmissionForm: async (req, res) => {
   // Form Management - Admin Only
   getAllFormsBySchool: async (req, res) => {
     try {
-      const schoolId = req.school;
+      // const schoolId = req.school;
+      const schoolId = req.user.school;
       
       const forms = await AdmissionForm.find({ 
         school: schoolId 
@@ -1431,32 +1478,6 @@ createAdmissionForm: async (req, res) => {
       res.status(500).json({ error: error.message });
     }
   },
-
-  // validateFormUrl: async (req, res) => {
-  //   try {
-  //     const { formUrl } = req.params;
-      
-  //     const form = await AdmissionForm.findOne({ 
-  //       formUrl,
-  //       isActive: true
-  //     });
-      
-  //     if (!form) {
-  //       return res.status(404).json({ 
-  //         valid: false,
-  //         message: 'Form not found or no longer active'
-  //       });
-  //     }
-      
-  //     res.json({
-  //       valid: true,
-  //       formId: form._id,
-  //       schoolId: form.school
-  //     });
-  //   } catch (error) {
-  //     res.status(500).json({ error: error.message });
-  //   }
-  // },
 
   validateFormUrl: async (req, res) => {
     try {

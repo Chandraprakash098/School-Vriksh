@@ -17,22 +17,11 @@ router.get(
   roleCheck(['admin']),
   admissionController.getAllForms
 );
-// router.get(
-//   '/form/:timestamp',
-//   auth,
-//   admissionController.getAdmissionForm
-// );
-
-// router.get("/form/:formUrl", auth, admissionController.getAdmissionForm);
-router.get("/form/:timestamp", auth, admissionController.getAdmissionForm);
-
-// Application submission route
-// router.post(
-//   '/apply',
-//   auth,
-//   uploadDocuments,
-//   admissionController.submitApplication
-// );
+router.get(
+  '/form/:timestamp',
+  auth,
+  admissionController.getAdmissionForm
+);
 
 router.post("/apply", uploadDocuments, admissionController.submitApplication);
 
