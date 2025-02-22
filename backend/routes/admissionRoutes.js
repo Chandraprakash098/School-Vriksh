@@ -16,7 +16,7 @@ router.get(
   auth,
   roleCheck(['admin']),
   admissionController.getAllForms
-)
+);
 router.get(
   '/form/:timestamp',
   auth,

@@ -962,7 +962,10 @@ const admissionController = {
 
   getAdmissionForm: async (req, res) => {
     try {
-      const { schoolId, timestamp } = req.user.school;
+      // const { schoolId, timestamp } = req.user.school;
+      const schoolId = req.user.school; // From authenticated user
+      const { timestamp } = req.params;
+      
       const formUrl = `admission/${schoolId}/${timestamp}`;
 
       const admissionForm = await AdmissionForm.findOne({ 
