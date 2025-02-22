@@ -1007,10 +1007,47 @@ createAdmissionForm: async (req, res) => {
   //   }
   // },
 
+  // getAdmissionForm: async (req, res) => {
+  //   try {
+  //     const schoolId = req.user.school;
+  //     const { formUrl } = req.params; // Use full formUrl
+  
+  //     const admissionForm = await AdmissionForm.findOne({ 
+  //       formUrl,
+  //       isActive: true,
+  //       school: schoolId
+  //     });
+  
+  //     if (!admissionForm) {
+  //       return res.status(404).json({ 
+  //         message: 'Admission form not found or no longer active'
+  //       });
+  //     }
+  
+  //     res.json({
+  //       status: 'success',
+  //       form: {
+  //         title: admissionForm.title,
+  //         description: admissionForm.description,
+  //         standardFields: admissionForm.standardFields,
+  //         regularDocuments: admissionForm.regularDocuments,
+  //         rteDocuments: admissionForm.rteDocuments,
+  //         additionalFields: admissionForm.additionalFields,
+  //         schoolId: admissionForm.school,
+  //         formUrl: admissionForm.formUrl
+  //       }
+  //     });
+  //   } catch (error) {
+  //     res.status(500).json({ error: error.message });
+  //   }
+  // },
+
   getAdmissionForm: async (req, res) => {
     try {
       const schoolId = req.user.school;
-      const { formUrl } = req.params; // Use full formUrl
+      const { timestamp } = req.params;
+  
+      const formUrl = `admission/${schoolId}/${timestamp}`;
   
       const admissionForm = await AdmissionForm.findOne({ 
         formUrl,

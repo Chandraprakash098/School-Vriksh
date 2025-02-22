@@ -23,7 +23,8 @@ router.get(
 //   admissionController.getAdmissionForm
 // );
 
-router.get("/form/:formUrl", auth, admissionController.getAdmissionForm);
+// router.get("/form/:formUrl", auth, admissionController.getAdmissionForm);
+router.get("/form/:timestamp", auth, admissionController.getAdmissionForm);
 
 // Application submission route
 // router.post(
