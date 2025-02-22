@@ -902,36 +902,71 @@ const uploadDocuments = upload.fields([
 const admissionController = {
  
 
-  createAdmissionForm: async (req, res) => {
-    try {
-      const schoolId = req.user.school;  // Get from authenticated user
+//   createAdmissionForm: async (req, res) => {
+//     try {
+//       const schoolId = req.user.school;  // Get from authenticated user
 
-      if (!schoolId) {
-        return res.status(400).json({ error: "School ID is required" });
-      }
+//       if (!schoolId) {
+//         return res.status(400).json({ error: "School ID is required" });
+//       }
 
-      const {
-        title,
-        description,
-        additionalFields = []
-      } = req.body;
+//       const {
+//         title,
+//         description,
+//         additionalFields = []
+//       } = req.body;
 
-      // const formUrl = `admission/${schoolId}/${Date.now()}`;
-      const timestamp = Date.now();
-      const formUrl = `admission/${schoolId}/${timestamp}`;
-      const admissionForm = new AdmissionForm({
-        school: schoolId,
-        title,
-        description,
-        additionalFields,
-        formUrl
-      });
+//       // const formUrl = `admission/${schoolId}/${Date.now()}`;
+//       const timestamp = Date.now();
+//       const formUrl = `admission/${schoolId}/${timestamp}`;
+//       const admissionForm = new AdmissionForm({
+//         school: schoolId,
+//         title,
+//         description,
+//         additionalFields,
+//         formUrl
+//       });
 
-      await admissionForm.save();
-      res.status(201).json(admissionForm);
-    } catch (error) {
-      res.status(500).json({ error: error.message });
+//       await admissionForm.save();
+//       res.status(201).json(admissionForm);
+//     } catch (error) {
+//       res.status(500).json({ error: error.message });
+//     }
+// },
+
+createAdmissionForm: async (req, res) => {
+  try {
+    // Ensure schoolId is a string (extract _id if it's an object)
+    const schoolId = req.user.school?._id?.toString() || req.user.school; // Handle both object and string cases
+
+    if (!schoolId) {
+      return res.status(400).json({ error: "School ID is required" });
     }
+
+    const { title, description, additionalFields = [] } = req.body;
+
+    const timestamp = Date.now();
+    const formUrl = `admission/${schoolId}/${timestamp}`; // Ensure formUrl is a clean string
+    const admissionForm = new AdmissionForm({
+      school: schoolId,
+      title,
+      description,
+      additionalFields,
+      formUrl,
+    });
+
+    await admissionForm.save();
+    res.status(201).json({
+      id: admissionForm._id,
+      schoolId: admissionForm.school,
+      title: admissionForm.title,
+      description: admissionForm.description,
+      formUrl: admissionForm.formUrl, // Return the clean formUrl string
+      createdAt: admissionForm.createdAt,
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
 },
 
   getAdmissionForm: async (req, res) => {
