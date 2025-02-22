@@ -11,7 +11,12 @@ router.post(
   roleCheck(['admin']),
   admissionController.createAdmissionForm
 );
-
+router.get(
+  '/all/forms',
+  auth,
+  roleCheck(['admin']),
+  admissionController.getAllForms
+)
 router.get(
   '/form/:timestamp',
   auth,

@@ -995,65 +995,15 @@ const admissionController = {
     }
   },
 
-  // Application Submission
-  // submitApplication: async (req, res) => {
-  //   try {
-  //     const schoolId = req.user.school;
-  //     // const schoolId = req.user.school._id; // Ensure you're accessing the correct property
-  //     console.log("School ID:", schoolId); // Add this line for debugging
-  //     const {
-  //       studentDetails,
-  //       parentDetails,
-  //       admissionType,
-  //       documents,
-  //       additionalResponses = {}
-  //     } = req.body;
-
-  //     if (!studentDetails || !parentDetails || !admissionType) {
-  //       return res.status(400).json({
-  //         message: 'Missing required fields'
-  //       });
-  //     }
-
-  //     const trackingId = generateTrackingId(schoolId);
-      
-  //     const application = new AdmissionApplication({
-  //       school: schoolId,
-  //       studentDetails,
-  //       parentDetails,
-  //       admissionType,
-  //       documents: documents.map(doc => ({
-  //         type: doc.type,
-  //         documentUrl: doc.url
-  //       })),
-  //       trackingId,
-  //       paymentStatus: admissionType === 'RTE' ? 'not_applicable' : 'pending'
-  //     });
-
-  //     if (!application.validateDocuments()) {
-  //       return res.status(400).json({
-  //         message: 'Missing required documents',
-  //         required: admissionType === 'RTE' ? 
-  //           ['rteCertificate', 'studentPhoto', 'aadharCard'] :
-  //           studentDetails.appliedClass === '1st' ?
-  //             ['studentPhoto', 'aadharCard', 'birthCertificate'] :
-  //             ['studentPhoto', 'aadharCard', 'birthCertificate', 'schoolLeavingCertificate']
-  //       });
-  //     }
-
-  //     await application.save();
-
-  //     res.status(201).json({
-  //       message: 'Application submitted successfully',
-  //       trackingId,
-  //       nextSteps: admissionType === 'RTE' ? 
-  //         'Visit clerk with original documents for verification' : 
-  //         'Complete payment and visit clerk with original documents'
-  //     });
-  //   } catch (error) {
-  //     res.status(500).json({ error: error.message });
-  //   }
-  // },
+  getAllForms : async (req, res) => {
+    try {
+      const schoolId = req.user.school;
+      const forms = await AdmissionForm.find({ school: schoolId });
+      res.status(200).json(forms);
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  },
 
   submitApplication: async (req, res) => {
     try {
