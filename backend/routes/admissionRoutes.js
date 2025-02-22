@@ -24,12 +24,14 @@ router.get(
 );
 
 // Application submission route
-router.post(
-  '/apply',
-  auth,
-  uploadDocuments,
-  admissionController.submitApplication
-);
+// router.post(
+//   '/apply',
+//   auth,
+//   uploadDocuments,
+//   admissionController.submitApplication
+// );
+
+router.post("/apply", uploadDocuments, admissionController.submitApplication);
 
 // Payment processing
 router.post(
