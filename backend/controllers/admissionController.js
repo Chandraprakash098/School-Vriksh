@@ -902,10 +902,44 @@ const uploadDocuments = upload.fields([
 const admissionController = {
  
 
+// createAdmissionForm: async (req, res) => {
+//   try {
+//     // Ensure schoolId is a string (extract _id if it's an object)
+//     const schoolId = req.user.school?._id?.toString() || req.user.school; // Handle both object and string cases
+
+//     if (!schoolId) {
+//       return res.status(400).json({ error: "School ID is required" });
+//     }
+
+//     const { title, description, additionalFields = [] } = req.body;
+
+//     const timestamp = Date.now();
+//     const formUrl = `admission/${schoolId}/${timestamp}`; // Ensure formUrl is a clean string
+//     const admissionForm = new AdmissionForm({
+//       school: schoolId,
+//       title,
+//       description,
+//       additionalFields,
+//       formUrl,
+//     });
+
+//     await admissionForm.save();
+//     res.status(201).json({
+//       id: admissionForm._id,
+//       schoolId: admissionForm.school,
+//       title: admissionForm.title,
+//       description: admissionForm.description,
+//       formUrl: admissionForm.formUrl, // Return the clean formUrl string
+//       createdAt: admissionForm.createdAt,
+//     });
+//   } catch (error) {
+//     res.status(500).json({ error: error.message });
+//   }
+// },
+
 createAdmissionForm: async (req, res) => {
   try {
-    // Ensure schoolId is a string (extract _id if it's an object)
-    const schoolId = req.user.school?._id?.toString() || req.user.school; // Handle both object and string cases
+    const schoolId = req.user.school?._id?.toString() || req.user.school;
 
     if (!schoolId) {
       return res.status(400).json({ error: "School ID is required" });
@@ -913,14 +947,23 @@ createAdmissionForm: async (req, res) => {
 
     const { title, description, additionalFields = [] } = req.body;
 
+    // Get current academic year (e.g., "2024-2025")
+    const currentDate = new Date();
+    const currentYear = currentDate.getFullYear();
+    const academicYear = currentDate.getMonth() >= 3 ? 
+      `${currentYear}-${currentYear + 1}` : 
+      `${currentYear - 1}-${currentYear}`;
+
     const timestamp = Date.now();
-    const formUrl = `admission/${schoolId}/${timestamp}`; // Ensure formUrl is a clean string
+    const formUrl = `admission/${schoolId}/${timestamp}`;
+    
     const admissionForm = new AdmissionForm({
       school: schoolId,
       title,
       description,
       additionalFields,
       formUrl,
+      academicYear, // Add the academic year
     });
 
     await admissionForm.save();
@@ -929,7 +972,8 @@ createAdmissionForm: async (req, res) => {
       schoolId: admissionForm.school,
       title: admissionForm.title,
       description: admissionForm.description,
-      formUrl: admissionForm.formUrl, // Return the clean formUrl string
+      formUrl: admissionForm.formUrl,
+      academicYear: admissionForm.academicYear,
       createdAt: admissionForm.createdAt,
     });
   } catch (error) {

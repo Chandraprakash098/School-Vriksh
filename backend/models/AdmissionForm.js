@@ -227,8 +227,11 @@ const standardFormFields = [
     label: 'Date of Birth',
     type: 'date',
     required: true,
+    // validation: {
+    //   max: new Date().toISOString() // Cannot be future date
+    // }
     validation: {
-      max: new Date().toISOString() // Cannot be future date
+      max: Date.now() // Use timestamp instead of ISO string
     }
   },
   {
