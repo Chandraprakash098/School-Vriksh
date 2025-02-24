@@ -29,10 +29,10 @@ router.get(
   admissionController.getPaymentDetails
 );
 
-router.get(
-  '/payment-qr/:applicationId',
-  admissionController.generatePaymentQR
-);
+// router.get(
+//   '/payment-qr/:applicationId',
+//   admissionController.generatePaymentQR
+// );
 
 router.post(
   '/verify-payment/:applicationId',

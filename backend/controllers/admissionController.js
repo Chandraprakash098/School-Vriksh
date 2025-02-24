@@ -5,7 +5,14 @@ const AdmissionForm = require('../models/AdmissionForm');
 const AdmissionApplication = require('../models/AdmissionApplication');
 const { generateTrackingId } = require('../utils/helpers');
 // const { generatePaymentQR } = require('../utils/qrGenerator');
-const razorpayService = require('../utils/razorpayService');
+// const razorpayService = require('../utils/razorpayService');
+const Razorpay = require('razorpay');
+
+
+const razorpay = new Razorpay({
+  key_id: process.env.RAZORPAY_KEY_ID,
+  key_secret: process.env.RAZORPAY_KEY_SECRET
+});
 
 
 const uploadDocuments = upload.fields([
@@ -129,10 +136,26 @@ createAdmissionForm: async (req, res) => {
         return res.status(404).json({ message: 'Form not found' });
       }
 
+      // Create Razorpay order
+      const options = {
+        amount: form.admissionFee * 100, // Razorpay expects amount in paise
+        currency: "INR",
+        receipt: `adm_${Date.now()}`,
+        notes: {
+          formUrl: form.formUrl,
+          schoolId: form.school.toString()
+        }
+      };
+
+      const order = await razorpay.orders.create(options);
+
       const paymentDetails = {
-        admissionFee: form.admissionFee,
+        orderId: order.id,
+        amount: form.admissionFee,
+        currency: order.currency,
         schoolId: form.school,
-        formUrl: form.formUrl
+        formUrl: form.formUrl,
+        key: process.env.RAZORPAY_KEY_ID // Frontend needs this
       };
 
       res.json({
@@ -144,45 +167,7 @@ createAdmissionForm: async (req, res) => {
     }
   },
 
-  generatePaymentQR: async (req, res) => {
-    try {
-      const { applicationId } = req.params;
-      
-      const application = await AdmissionApplication.findById(applicationId)
-        .populate({
-          path: 'school',
-          select: 'name'
-        });
   
-      if (!application) {
-        return res.status(404).json({ message: 'Application not found' });
-      }
-  
-      if (application.admissionType === 'RTE') {
-        return res.status(400).json({ message: 'Payment not required for RTE applications' });
-      }
-  
-      const form = await AdmissionForm.findOne({ school: application.school });
-      
-      const paymentData = await razorpayService.generatePaymentQR(
-        form.admissionFee,
-        applicationId,
-        application.school._id
-      );
-  
-      res.json({
-        status: 'success',
-        data: {
-          qrCode: paymentData.qrCode,
-          orderId: paymentData.orderId,
-          amount: paymentData.amount,
-          applicationId: application._id
-        }
-      });
-    } catch (error) {
-      res.status(500).json({ error: error.message });
-    }
-  },
 
   // submitApplication : async (req, res) => {
   //   try {
@@ -328,51 +313,33 @@ createAdmissionForm: async (req, res) => {
 
   verifyPayment: async (req, res) => {
     try {
-      const { applicationId } = req.params;
       const { 
-        razorpayOrderId,
-        razorpayPaymentId,
-        razorpaySignature 
+        razorpay_order_id,
+        razorpay_payment_id,
+        razorpay_signature 
       } = req.body;
-  
-      const application = await AdmissionApplication.findById(applicationId);
-      if (!application) {
-        return res.status(404).json({ message: 'Application not found' });
-      }
-  
-      if (application.admissionType === 'RTE') {
-        return res.status(400).json({ message: 'Payment verification not required for RTE applications' });
-      }
-  
-      // Verify payment signature
-      const isValid = razorpayService.verifyPayment(
-        razorpayOrderId,
-        razorpayPaymentId,
-        razorpaySignature
-      );
-  
-      if (!isValid) {
+
+      // Verify signature
+      const body = razorpay_order_id + "|" + razorpay_payment_id;
+      const expectedSignature = crypto
+        .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
+        .update(body.toString())
+        .digest("hex");
+
+      const isAuthentic = expectedSignature === razorpay_signature;
+
+      if (!isAuthentic) {
         return res.status(400).json({ message: 'Invalid payment signature' });
       }
-  
+
       // Get payment details from Razorpay
-      const paymentDetails = await razorpayService.getPaymentDetails(razorpayPaymentId);
-  
-      // Update application with payment details
-      application.paymentStatus = 'completed';
-      application.paymentDetails = {
-        transactionId: razorpayPaymentId,
-        orderId: razorpayOrderId,
-        amount: paymentDetails.amount / 100, // Convert from paise to rupees
-        paidAt: new Date()
-      };
-  
-      await application.save();
-  
+      const payment = await razorpay.payments.fetch(razorpay_payment_id);
+
       res.json({
         status: 'success',
         message: 'Payment verified successfully',
-        nextStep: 'Submit your application form'
+        paymentId: razorpay_payment_id,
+        orderId: razorpay_order_id
       });
     } catch (error) {
       res.status(500).json({ error: error.message });
@@ -389,7 +356,9 @@ createAdmissionForm: async (req, res) => {
         parentDetails,
         admissionType,
         additionalResponses = {},
-        paymentTransactionId // Add this
+        razorpay_payment_id,
+        razorpay_order_id,
+        razorpay_signature
       } = req.body;
 
       if (!formUrl) {
@@ -402,16 +371,39 @@ createAdmissionForm: async (req, res) => {
         return res.status(404).json({ message: "Form not found or inactive" });
       }
 
-      // Check payment for regular admission
+      // Verify payment for regular admission
       if (admissionType === 'Regular') {
-        if (!paymentTransactionId) {
+        if (!razorpay_payment_id || !razorpay_order_id || !razorpay_signature) {
           return res.status(400).json({ 
-            error: "Payment is required for regular admission" 
+            error: "Payment verification failed. Required payment details missing." 
+          });
+        }
+
+        // Verify payment signature
+        const body = razorpay_order_id + "|" + razorpay_payment_id;
+        const expectedSignature = crypto
+          .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
+          .update(body.toString())
+          .digest("hex");
+
+        if (expectedSignature !== razorpay_signature) {
+          return res.status(400).json({ 
+            error: "Payment verification failed. Invalid signature." 
+          });
+        }
+
+        // Fetch payment details from Razorpay
+        const payment = await razorpay.payments.fetch(razorpay_payment_id);
+        
+        // Verify payment amount
+        if (payment.amount !== form.admissionFee * 100) {
+          return res.status(400).json({ 
+            error: "Payment amount mismatch" 
           });
         }
       }
 
-      // Rest of your existing submitApplication code...
+      // Parse JSON data
       let parsedStudentDetails;
       let parsedParentDetails;
       try {
@@ -458,11 +450,10 @@ createAdmissionForm: async (req, res) => {
         documents: uploadedDocuments,
         trackingId,
         status: 'pending',
-        paymentStatus: admissionType === 'Regular' ? 
-          (paymentTransactionId ? 'completed' : 'pending') : 
-          'not_applicable',
+        paymentStatus: admissionType === 'Regular' ? 'completed' : 'not_applicable',
         paymentDetails: admissionType === 'Regular' ? {
-          transactionId: paymentTransactionId,
+          transactionId: razorpay_payment_id,
+          orderId: razorpay_order_id,
           amount: form.admissionFee,
           paidAt: new Date()
         } : undefined,
