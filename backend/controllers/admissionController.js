@@ -4,7 +4,8 @@ const User = require('../models/User');
 const AdmissionForm = require('../models/AdmissionForm');
 const AdmissionApplication = require('../models/AdmissionApplication');
 const { generateTrackingId } = require('../utils/helpers');
-const { generatePaymentQR } = require('../utils/qrGenerator');
+// const { generatePaymentQR } = require('../utils/qrGenerator');
+const razorpayService = require('../utils/razorpayService');
 
 
 const uploadDocuments = upload.fields([
@@ -152,28 +153,29 @@ createAdmissionForm: async (req, res) => {
           path: 'school',
           select: 'name'
         });
-
+  
       if (!application) {
         return res.status(404).json({ message: 'Application not found' });
       }
-
+  
       if (application.admissionType === 'RTE') {
         return res.status(400).json({ message: 'Payment not required for RTE applications' });
       }
-
+  
       const form = await AdmissionForm.findOne({ school: application.school });
       
-      const qrCode = await generatePaymentQR(
+      const paymentData = await razorpayService.generatePaymentQR(
         form.admissionFee,
         applicationId,
         application.school._id
       );
-
+  
       res.json({
         status: 'success',
         data: {
-          qrCode,
-          amount: form.admissionFee,
+          qrCode: paymentData.qrCode,
+          orderId: paymentData.orderId,
+          amount: paymentData.amount,
           applicationId: application._id
         }
       });
@@ -327,27 +329,46 @@ createAdmissionForm: async (req, res) => {
   verifyPayment: async (req, res) => {
     try {
       const { applicationId } = req.params;
-      const { transactionId, paymentScreenshot } = req.body;
-
+      const { 
+        razorpayOrderId,
+        razorpayPaymentId,
+        razorpaySignature 
+      } = req.body;
+  
       const application = await AdmissionApplication.findById(applicationId);
       if (!application) {
         return res.status(404).json({ message: 'Application not found' });
       }
-
+  
       if (application.admissionType === 'RTE') {
         return res.status(400).json({ message: 'Payment verification not required for RTE applications' });
       }
-
+  
+      // Verify payment signature
+      const isValid = razorpayService.verifyPayment(
+        razorpayOrderId,
+        razorpayPaymentId,
+        razorpaySignature
+      );
+  
+      if (!isValid) {
+        return res.status(400).json({ message: 'Invalid payment signature' });
+      }
+  
+      // Get payment details from Razorpay
+      const paymentDetails = await razorpayService.getPaymentDetails(razorpayPaymentId);
+  
       // Update application with payment details
       application.paymentStatus = 'completed';
       application.paymentDetails = {
-        transactionId,
-        paidAt: new Date(),
-        paymentScreenshot
+        transactionId: razorpayPaymentId,
+        orderId: razorpayOrderId,
+        amount: paymentDetails.amount / 100, // Convert from paise to rupees
+        paidAt: new Date()
       };
-
+  
       await application.save();
-
+  
       res.json({
         status: 'success',
         message: 'Payment verified successfully',
