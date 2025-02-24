@@ -35,7 +35,7 @@ router.get(
 // );
 
 router.post(
-  '/verify-payment/:applicationId',
+  '/verify-payment',
   admissionController.verifyPayment
 );
 
