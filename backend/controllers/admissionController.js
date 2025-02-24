@@ -1,894 +1,10 @@
 
-// const AdmissionForm = require('../models/AdmissionForm');
-// const AdmissionApplication = require('../models/AdmissionApplication');
-// const { generateTrackingId } = require('../utils/helpers');
-
-// const admissionController = {
-//   // Create custom admission form for school
-//   createAdmissionForm: async (req, res) => {
-//     try {
-//       const { schoolId } = req.school;
-//       const {
-//         title,
-//         description,
-//         additionalFields = [] // Optional school-specific fields
-//       } = req.body;
-
-//       const formUrl = `admission/${schoolId}/${Date.now()}`;
-
-//       // Create new admission form with standard fields
-//       const admissionForm = new AdmissionForm({
-//         school: schoolId,
-//         title,
-//         description,
-//         additionalFields,
-//         formUrl
-//       });
-
-//       await admissionForm.save();
-//       res.status(201).json(admissionForm);
-//     } catch (error) {
-//       res.status(500).json({ error: error.message });
-//     }
-//   },
-
-//   getAdmissionForm: async (req, res) => {
-//     try {
-//       const { schoolId, timestamp } = req.school;
-//       const formUrl = `admission/${schoolId}/${timestamp}`;
-
-//       const admissionForm = await AdmissionForm.findOne({ 
-//         formUrl,
-//         isActive: true,
-//         school: schoolId
-//       });
-
-//       if (!admissionForm) {
-//         return res.status(404).json({ 
-//           message: 'Admission form not found or no longer active'
-//         });
-//       }
-
-//       res.json({
-//         status: 'success',
-//         form: {
-//           title: admissionForm.title,
-//           description: admissionForm.description,
-//           standardFields: admissionForm.standardFields,
-//           regularDocuments: admissionForm.regularDocuments,
-//           rteDocuments: admissionForm.rteDocuments,
-//           additionalFields: admissionForm.additionalFields,
-//           schoolId: admissionForm.school,
-//           formUrl: admissionForm.formUrl
-//         }
-//       });
-//     } catch (error) {
-//       res.status(500).json({ error: error.message });
-//     }
-//   },
-
-//   submitApplication: async (req, res) => {
-//     try {
-//       const schoolId  = req.school;
-//       const {
-//         studentDetails,
-//         parentDetails,
-//         admissionType,
-//         documents,
-//         additionalResponses = {}
-//       } = req.body;
-
-//       // Validate required fields
-//       if (!studentDetails || !parentDetails || !admissionType) {
-//         return res.status(400).json({
-//           message: 'Missing required fields'
-//         });
-//       }
-
-//       // Create application instance
-//       const trackingId = generateTrackingId(schoolId);
-      
-//       const application = new AdmissionApplication({
-//         school: schoolId,
-//         studentDetails,
-//         parentDetails,
-//         admissionType,
-//         documents: documents.map(doc => ({
-//           type: doc.type,
-//           documentUrl: doc.url
-//         })),
-//         trackingId,
-//         paymentStatus: admissionType === 'RTE' ? 'not_applicable' : 'pending'
-//       });
-
-//       // Validate documents based on admission type and class
-//       if (!application.validateDocuments()) {
-//         return res.status(400).json({
-//           message: 'Missing required documents',
-//           required: admissionType === 'RTE' ? 
-//             ['rteCertificate', 'studentPhoto', 'aadharCard'] :
-//             studentDetails.appliedClass === '1st' ?
-//               ['studentPhoto', 'aadharCard', 'birthCertificate'] :
-//               ['studentPhoto', 'aadharCard', 'birthCertificate', 'schoolLeavingCertificate']
-//         });
-//       }
-
-//       await application.save();
-
-//       res.status(201).json({
-//         message: 'Application submitted successfully',
-//         trackingId,
-//         nextSteps: admissionType === 'RTE' ? 
-//           'Visit clerk with original documents for verification' : 
-//           'Complete payment and visit clerk with original documents'
-//       });
-//     } catch (error) {
-//       res.status(500).json({ error: error.message });
-//     }
-//   },
-
-//   processPayment: async (req, res) => {
-//     try {
-//       const { applicationId } = req.params;
-//       const { paymentDetails } = req.body;
-
-//       const application = await AdmissionApplication.findById(applicationId);
-//       if (!application) {
-//         return res.status(404).json({ message: 'Application not found' });
-//       }
-
-//       if (application.admissionType === 'RTE') {
-//         return res.status(400).json({ 
-//           message: 'Payment not required for RTE applications' 
-//         });
-//       }
-
-//       application.paymentStatus = 'completed';
-//       application.paymentDetails = {
-//         ...paymentDetails,
-//         paidAt: new Date()
-//       };
-//       application.status = 'document_verification';
-
-//       await application.save();
-
-//       res.json({
-//         message: 'Payment processed successfully',
-//         nextStep: 'Visit clerk with original documents for verification'
-//       });
-//     } catch (error) {
-//       res.status(500).json({ error: error.message });
-//     }
-//   },
-
-//   // New method for clerk and fee manager to get specific application by ID
-//   getApplicationById: async (req, res) => {
-//     try {
-//       const { applicationId } = req.params;
-//       const application = await AdmissionApplication.findById(applicationId);
-      
-//       if (!application) {
-//         return res.status(404).json({ message: 'Application not found' });
-//       }
-      
-//       res.json({
-//         status: 'success',
-//         application
-//       });
-//     } catch (error) {
-//       res.status(500).json({ error: error.message });
-//     }
-//   },
-
-  
-
-//   // Get pending fees applications for fees department
-//   getPendingFeesApplications: async (req, res) => {
-//     try {
-//       const applications = await AdmissionApplication.find({
-//         status: 'fees_pending',
-//         admissionType: 'Regular',
-//         paymentStatus: 'completed',
-//         'feesVerification.status': 'pending'
-//       }).sort({ createdAt: -1 });
-      
-//       res.json({
-//         status: 'success',
-//         count: applications.length,
-//         applications: applications.map(app => ({
-//           id: app._id,
-//           trackingId: app.trackingId,
-//           studentName: app.studentDetails.name,
-//           appliedClass: app.studentDetails.appliedClass,
-//           paymentDetails: app.paymentDetails,
-//           submittedOn: app.createdAt
-//         }))
-//       });
-//     } catch (error) {
-//       res.status(500).json({ error: error.message });
-//     }
-//   },
-
-//   clerkVerification: async (req, res) => {
-//     try {
-//       const { applicationId } = req.params;
-//       const { status, comments } = req.body;
-
-//       const application = await AdmissionApplication.findById(applicationId);
-//       if (!application) {
-//         return res.status(404).json({ message: 'Application not found' });
-//       }
-
-//       // Verify all required documents are present and authentic
-//       const hasAllDocuments = application.validateDocuments();
-//       if (!hasAllDocuments) {
-//         return res.status(400).json({ 
-//           message: 'Missing required documents' 
-//         });
-//       }
-
-//       application.clerkVerification = {
-//         status,
-//         verifiedBy: req.user._id,
-//         verifiedAt: new Date(),
-//         comments
-//       };
-
-//       if (status === 'verified') {
-//         application.status = application.admissionType === 'RTE' ? 
-//           'approved' : 
-//           'fees_pending';
-//       } else {
-//         application.status = 'rejected';
-//       }
-
-//       await application.save();
-
-//       res.json({
-//         message: 'Verification completed',
-//         nextStep: status === 'verified' ? 
-//           (application.admissionType === 'RTE' ? 
-//             'Admission approved' : 
-//             'Visit fees department') : 
-//           'Application rejected'
-//       });
-//     } catch (error) {
-//       res.status(500).json({ error: error.message });
-//     }
-//   },
-
-//   // Get pending verification applications for clerks
-//   getPendingVerifications: async (req, res) => {
-//     try {
-//       const applications = await AdmissionApplication.find({
-//         status: { $in: ['pending', 'document_verification'] },
-//         'clerkVerification.status': 'pending'
-//       }).sort({ createdAt: -1 });
-      
-//       res.json({
-//         status: 'success',
-//         count: applications.length,
-//         applications: applications.map(app => ({
-//           id: app._id,
-//           trackingId: app.trackingId,
-//           studentName: app.studentDetails.name,
-//           admissionType: app.admissionType,
-//           appliedClass: app.studentDetails.appliedClass,
-//           status: app.status,
-//           submittedOn: app.createdAt
-//         }))
-//       });
-//     } catch (error) {
-//       res.status(500).json({ error: error.message });
-//     }
-//   },
-
-//   feesVerification: async (req, res) => {
-//     try {
-//       const { applicationId } = req.params;
-//       const { status, receiptNumber } = req.body;
-
-//       const application = await AdmissionApplication.findById(applicationId);
-//       if (!application) {
-//         return res.status(404).json({ message: 'Application not found' });
-//       }
-
-//       if (application.admissionType === 'RTE') {
-//         return res.status(400).json({ 
-//           message: 'Fees verification not required for RTE applications' 
-//         });
-//       }
-
-//       application.feesVerification = {
-//         status,
-//         verifiedBy: req.user._id,
-//         verifiedAt: new Date(),
-//         receiptNumber
-//       };
-
-//       if (status === 'verified') {
-//         application.status = 'approved';
-//       } else {
-//         application.status = 'rejected';
-//       }
-
-//       await application.save();
-
-//       res.json({
-//         message: 'Fees verification completed',
-//         nextStep: status === 'verified' ? 
-//           'Return to clerk for final admission' : 
-//           'Application rejected'
-//       });
-//     } catch (error) {
-//       res.status(500).json({ error: error.message });
-//     }
-//   },
-
-//   enrollStudent: async (req, res) => {
-//       try {
-//         const { applicationId } = req.params;
-//         const { classId, grNumber } = req.body;
-  
-//         const application = await AdmissionApplication.findById(applicationId);
-//         if (!application) {
-//           return res.status(404).json({ message: 'Application not found' });
-//         }
-  
-//         if (application.status !== 'approved') {
-//           return res.status(400).json({ 
-//             message: 'Only approved applications can be enrolled' 
-//           });
-//         }
-  
-//         // Validate if GR number is unique
-//         const existingGR = await User.findOne({ 'studentDetails.grNumber': grNumber });
-//         if (existingGR) {
-//           return res.status(400).json({ 
-//             message: 'GR number already exists' 
-//           });
-//         }
-  
-//         // Get selected class
-//         const selectedClass = await Class.findById(classId);
-//         if (!selectedClass) {
-//           return res.status(404).json({ message: 'Class not found' });
-//         }
-  
-//         // Check class capacity
-//         if (selectedClass.students.length >= selectedClass.capacity) {
-//           return res.status(400).json({ 
-//             message: 'Class is at full capacity' 
-//           });
-//         }
-  
-//         // Create student user account
-//         const student = new User({
-//           school: application.school,
-//           name: application.studentDetails.name,
-//           email: application.studentDetails.email,
-//           password: Math.random().toString(36).slice(-8), // Generate temporary password
-//           role: 'student',
-//           studentDetails: {
-//             grNumber,
-//             class: classId,
-//             admissionType: application.admissionType,
-//             parentDetails: application.parentDetails,
-//             dob: application.studentDetails.dob,
-//             gender: application.studentDetails.gender
-//           }
-//         });
-  
-//         await student.save();
-  
-//         // Update class with new student
-//         await Class.findByIdAndUpdate(classId, {
-//           $push: { students: student._id }
-//         });
-  
-//         // Update application status
-//         application.status = 'enrolled';
-//         application.grNumber = grNumber;
-//         application.assignedClass = classId;
-//         await application.save();
-  
-//         res.json({
-//           message: 'Student enrolled successfully',
-//           studentDetails: {
-//             id: student._id,
-//             name: student.name,
-//             email: student.email,
-//             grNumber,
-//             class: {
-//               name: selectedClass.name,
-//               division: selectedClass.division
-//             },
-//             temporaryPassword: student.password
-//           }
-//         });
-//       } catch (error) {
-//         res.status(500).json({ error: error.message });
-//       }
-//     },
-
-//   confirmAdmission: async (req, res) => {
-//     try {
-//       const { applicationId } = req.params;
-//       const { classSection, studentEmail, temporaryPassword } = req.body;
-
-//       const application = await AdmissionApplication.findById(applicationId);
-//       if (!application) {
-//         return res.status(404).json({ message: 'Application not found' });
-//       }
-
-//       if (application.status !== 'approved') {
-//         return res.status(400).json({ 
-//           message: 'Application not approved for admission' 
-//         });
-//       }
-
-//       // Additional checks for document verification
-//       const documentsVerified = application.documents.every(doc => doc.verified);
-//       if (!documentsVerified) {
-//         return res.status(400).json({ 
-//           message: 'All documents must be verified first' 
-//         });
-//       }
-
-//       // Check fees status for non-RTE applications
-//       if (application.admissionType !== 'RTE' && 
-//           application.paymentStatus !== 'completed') {
-//         return res.status(400).json({ 
-//           message: 'All fees must be paid first' 
-//         });
-//       }
-
-//       // Update application status
-//       application.status = 'confirmed';
-//       await application.save();
-
-//       res.json({
-//         message: 'Admission confirmed successfully',
-//         studentDetails: {
-//           name: application.studentDetails.name,
-//           email: studentEmail,
-//           class: application.studentDetails.appliedClass,
-//           section: classSection,
-//           admissionType: application.admissionType
-//         }
-//       });
-//     } catch (error) {
-//       res.status(500).json({ error: error.message });
-//     }
-//   },
-
-//   // Implementation of search applications for staff
-//   searchApplications: async (req, res) => {
-//     try {
-//       const { 
-//         searchTerm, 
-//         status, 
-//         admissionType,
-//         fromDate,
-//         toDate,
-//         schoolId
-//       } = req.query;
-      
-//       // Build query based on filters
-//       const query = {
-//         school: schoolId
-//       };
-      
-//       if (searchTerm) {
-//         query.$or = [
-//           { 'studentDetails.name': { $regex: searchTerm, $options: 'i' } },
-//           { trackingId: { $regex: searchTerm, $options: 'i' } },
-//           { 'parentDetails.name': { $regex: searchTerm, $options: 'i' } }
-//         ];
-//       }
-      
-//       if (status) {
-//         query.status = status;
-//       }
-      
-//       if (admissionType) {
-//         query.admissionType = admissionType;
-//       }
-      
-//       if (fromDate && toDate) {
-//         query.createdAt = {
-//           $gte: new Date(fromDate),
-//           $lte: new Date(toDate)
-//         };
-//       }
-      
-//       const applications = await AdmissionApplication.find(query)
-//         .sort({ createdAt: -1 })
-//         .limit(100);
-      
-//       res.json({
-//         status: 'success',
-//         count: applications.length,
-//         applications: applications.map(app => ({
-//           id: app._id,
-//           trackingId: app.trackingId,
-//           studentName: app.studentDetails.name,
-//           admissionType: app.admissionType,
-//           appliedClass: app.studentDetails.appliedClass,
-//           status: app.status,
-//           submittedOn: app.createdAt
-//         }))
-//       });
-//     } catch (error) {
-//       res.status(500).json({ error: error.message });
-//     }
-//   },
-
-
-//   getAllFormsBySchool: async (req, res) => {
-//     try {
-//       const schoolId  = req.school;
-      
-//       const forms = await AdmissionForm.find({ 
-//         school: schoolId 
-//       }).sort({ createdAt: -1 });
-      
-//       res.json({
-//         status: 'success',
-//         count: forms.length,
-//         forms: forms.map(form => ({
-//           id: form._id,
-//           title: form.title,
-//           status: form.isActive ? 'Active' : 'Inactive',
-//           formUrl: form.formUrl,
-//           createdAt: form.createdAt
-//         }))
-//       });
-//     } catch (error) {
-//       res.status(500).json({ error: error.message });
-//     }
-//   },
-  
-//   // Toggle form active status (activate/deactivate)
-//   toggleFormStatus: async (req, res) => {
-//     try {
-//       const { formId } = req.params;
-//       const { isActive } = req.body;
-      
-//       const form = await AdmissionForm.findById(formId);
-//       if (!form) {
-//         return res.status(404).json({ message: 'Form not found' });
-//       }
-      
-//       form.isActive = isActive;
-//       await form.save();
-      
-//       res.json({
-//         status: 'success',
-//         message: `Form ${isActive ? 'activated' : 'deactivated'} successfully`,
-//         form: {
-//           id: form._id,
-//           title: form.title,
-//           status: form.isActive ? 'Active' : 'Inactive'
-//         }
-//       });
-//     } catch (error) {
-//       res.status(500).json({ error: error.message });
-//     }
-//   },
-  
-//   // Validate if a form URL is active and valid
-//   validateFormUrl: async (req, res) => {
-//     try {
-//       const { formUrl } = req.params;
-      
-//       const form = await AdmissionForm.findOne({ 
-//         formUrl,
-//         isActive: true
-//       });
-      
-//       if (!form) {
-//         return res.status(404).json({ 
-//           valid: false,
-//           message: 'Form not found or no longer active'
-//         });
-//       }
-      
-//       res.json({
-//         valid: true,
-//         formId: form._id,
-//         schoolId: form.school
-//       });
-//     } catch (error) {
-//       res.status(500).json({ error: error.message });
-//     }
-//   },
-  
-//   // Get admission reports and analytics for admin
-//   getAdmissionReports: async (req, res) => {
-//     try {
-//       const schoolId  = req.school;
-//       const { year } = req.query;
-      
-//       // Default to current year if not specified
-//       const selectedYear = year || new Date().getFullYear();
-      
-//       // Define start and end date for the selected year
-//       const startDate = new Date(selectedYear, 0, 1); // January 1st
-//       const endDate = new Date(selectedYear, 11, 31); // December 31st
-      
-//       // Query applications within the date range
-//       const applications = await AdmissionApplication.find({
-//         school: schoolId,
-//         createdAt: {
-//           $gte: startDate,
-//           $lte: endDate
-//         }
-//       });
-      
-//       // Generate statistics
-//       const stats = {
-//         totalApplications: applications.length,
-//         byStatus: {
-//           pending: applications.filter(app => app.status === 'pending').length,
-//           verified: applications.filter(app => app.status === 'document_verification').length,
-//           feesPending: applications.filter(app => app.status === 'fees_pending').length,
-//           approved: applications.filter(app => app.status === 'approved').length,
-//           confirmed: applications.filter(app => app.status === 'confirmed').length,
-//           rejected: applications.filter(app => app.status === 'rejected').length
-//         },
-//         byAdmissionType: {
-//           regular: applications.filter(app => app.admissionType === 'Regular').length,
-//           rte: applications.filter(app => app.admissionType === 'RTE').length
-//         },
-//         byClass: {}
-//       };
-      
-//       // Calculate applications by class
-//       applications.forEach(app => {
-//         const classLevel = app.studentDetails.appliedClass;
-//         stats.byClass[classLevel] = (stats.byClass[classLevel] || 0) + 1;
-//       });
-      
-//       // Calculate monthly trends
-//       const monthlyTrends = Array(12).fill(0);
-//       applications.forEach(app => {
-//         const month = app.createdAt.getMonth();
-//         monthlyTrends[month]++;
-//       });
-      
-//       res.json({
-//         status: 'success',
-//         year: selectedYear,
-//         stats,
-//         monthlyTrends
-//       });
-//     } catch (error) {
-//       res.status(500).json({ error: error.message });
-//     }
-//   },
-  
-//   // Get RTE (Right to Education) specific statistics
-//   getRTEStats: async (req, res) => {
-//     try {
-//       const  schoolId  = req.school;
-//       const { year } = req.query;
-      
-//       // Default to current year if not specified
-//       const selectedYear = year || new Date().getFullYear();
-      
-//       // Define start and end date for the selected year
-//       const startDate = new Date(selectedYear, 0, 1); // January 1st
-//       const endDate = new Date(selectedYear, 11, 31); // December 31st
-      
-//       // Query RTE applications within the date range
-//       const rteApplications = await AdmissionApplication.find({
-//         school: schoolId,
-//         admissionType: 'RTE',
-//         createdAt: {
-//           $gte: startDate,
-//           $lte: endDate
-//         }
-//       });
-      
-//       // Generate RTE-specific statistics
-//       const stats = {
-//         totalRTEApplications: rteApplications.length,
-//         byStatus: {
-//           pending: rteApplications.filter(app => app.status === 'pending').length,
-//           verified: rteApplications.filter(app => app.status === 'document_verification').length,
-//           approved: rteApplications.filter(app => app.status === 'approved').length,
-//           confirmed: rteApplications.filter(app => app.status === 'confirmed').length,
-//           rejected: rteApplications.filter(app => app.status === 'rejected').length
-//         },
-//         byCategory: {},
-//         byClass: {}
-//       };
-      
-//       // Calculate RTE applications by category and class
-//       rteApplications.forEach(app => {
-//         // Count by socio-economic category if available
-//         if (app.studentDetails.category) {
-//           const category = app.studentDetails.category;
-//           stats.byCategory[category] = (stats.byCategory[category] || 0) + 1;
-//         }
-        
-//         // Count by class
-//         const classLevel = app.studentDetails.appliedClass;
-//         stats.byClass[classLevel] = (stats.byClass[classLevel] || 0) + 1;
-//       });
-      
-//       // Calculate monthly trends for RTE applications
-//       const monthlyTrends = Array(12).fill(0);
-//       rteApplications.forEach(app => {
-//         const month = app.createdAt.getMonth();
-//         monthlyTrends[month]++;
-//       });
-      
-//       res.json({
-//         status: 'success',
-//         year: selectedYear,
-//         stats,
-//         monthlyTrends,
-//         rteQuota: {
-//           total: 25, // assuming 25% RTE quota
-//           filled: rteApplications.filter(app => app.status === 'confirmed').length,
-//           remaining: 25 - rteApplications.filter(app => app.status === 'confirmed').length
-//         }
-//       });
-//     } catch (error) {
-//       res.status(500).json({ error: error.message });
-//     }
-//   },
-
-//   // Method for application status check by tracking ID
-//   checkApplicationStatus: async (req, res) => {
-//     try {
-//       const { trackingId } = req.params;
-      
-//       const application = await AdmissionApplication.findOne({ trackingId });
-      
-//       if (!application) {
-//         return res.status(404).json({ 
-//           message: 'Application not found with the given tracking ID' 
-//         });
-//       }
-      
-//       const statusInfo = {
-//         trackingId: application.trackingId,
-//         studentName: application.studentDetails.name,
-//         appliedClass: application.studentDetails.appliedClass,
-//         admissionType: application.admissionType,
-//         status: application.status,
-//         paymentStatus: application.paymentStatus,
-//         timeline: [
-//           {
-//             stage: 'Application Submitted',
-//             date: application.createdAt,
-//             completed: true
-//           },
-//           {
-//             stage: 'Payment',
-//             date: application.paymentDetails?.paidAt || null,
-//             completed: application.paymentStatus === 'completed' || application.admissionType === 'RTE'
-//           },
-//           {
-//             stage: 'Document Verification',
-//             date: application.clerkVerification?.verifiedAt || null,
-//             completed: application.clerkVerification?.status === 'verified'
-//           },
-//           {
-//             stage: 'Fees Verification',
-//             date: application.feesVerification?.verifiedAt || null,
-//             completed: application.feesVerification?.status === 'verified' || application.admissionType === 'RTE'
-//           },
-//           {
-//             stage: 'Admission Confirmed',
-//             date: application.status === 'confirmed' ? new Date() : null,
-//             completed: application.status === 'confirmed'
-//           }
-//         ],
-//         nextSteps: getNextSteps(application)
-//       };
-      
-//       res.json({
-//         status: 'success',
-//         application: statusInfo
-//       });
-//     } catch (error) {
-//       res.status(500).json({ error: error.message });
-//     }
-//   },
-//   getAvailableClasses: async (req, res) => {
-//     try {
-//       const { schoolId } = req.school;
-//       const { appliedClass } = req.query;
-      
-//       const classes = await Class.find({
-//         school: schoolId,
-//         name: appliedClass,
-//         $expr: {
-//           $lt: [{ $size: "$students" }, "$capacity"] // Check if class has capacity
-//         }
-//       })
-//       .select('name division capacity students')
-//       .populate('classTeacher', 'name');
-      
-//       res.json({
-//         status: 'success',
-//         classes: classes.map(cls => ({
-//           id: cls._id,
-//           name: cls.name,
-//           division: cls.division,
-//           availableSeats: cls.capacity - cls.students.length,
-//           totalSeats: cls.capacity,
-//           classTeacher: cls.classTeacher?.name
-//         }))
-//       });
-//     } catch (error) {
-//       res.status(500).json({ error: error.message });
-//     }
-//   },
-
-  
-//   // Get student details by class
-//   getStudentsByClass: async (req, res) => {
-//     try {
-//       const { classId } = req.params;
-      
-//       const students = await User.find({
-//         'studentDetails.class': classId,
-//         role: 'student'
-//       })
-//       .select('name email studentDetails');
-      
-//       res.json({
-//         status: 'success',
-//         count: students.length,
-//         students: students.map(student => ({
-//           id: student._id,
-//           name: student.name,
-//           email: student.email,
-//           grNumber: student.studentDetails.grNumber,
-//           admissionType: student.studentDetails.admissionType
-//         }))
-//       });
-//     } catch (error) {
-//       res.status(500).json({ error: error.message });
-//     }
-//   }
-// };
-
-// // Helper function to determine next steps based on application status
-// function getNextSteps(application) {
-//   switch(application.status) {
-//     case 'pending':
-//       return application.admissionType === 'RTE' ? 
-//         'Visit clerk with original documents for verification' : 
-//         'Complete payment and visit clerk with original documents';
-//     case 'document_verification':
-//       return 'Awaiting document verification by clerk';
-//     case 'fees_pending':
-//       return 'Visit fees department for payment verification';
-//     case 'approved':
-//       return 'Return to clerk for final admission confirmation';
-//     case 'confirmed':
-//       return 'Admission process completed successfully';
-//     case 'rejected':
-//       return 'Application rejected. Please contact the school for more information.';
-//     default:
-//       return 'Contact school administration for status update';
-//   }
-// }
-
-
-// module.exports = admissionController;
-
 const { upload, cloudinary } = require('../config/cloudinary');
 const User = require('../models/User');
 const AdmissionForm = require('../models/AdmissionForm');
 const AdmissionApplication = require('../models/AdmissionApplication');
 const { generateTrackingId } = require('../utils/helpers');
+const { generatePaymentQR } = require('../utils/qrGenerator');
 
 
 const uploadDocuments = upload.fields([
@@ -900,42 +16,7 @@ const uploadDocuments = upload.fields([
 ]);
 
 const admissionController = {
- 
 
-// createAdmissionForm: async (req, res) => {
-//   try {
-//     // Ensure schoolId is a string (extract _id if it's an object)
-//     const schoolId = req.user.school?._id?.toString() || req.user.school; // Handle both object and string cases
-
-//     if (!schoolId) {
-//       return res.status(400).json({ error: "School ID is required" });
-//     }
-
-//     const { title, description, additionalFields = [] } = req.body;
-
-//     const timestamp = Date.now();
-//     const formUrl = `admission/${schoolId}/${timestamp}`; // Ensure formUrl is a clean string
-//     const admissionForm = new AdmissionForm({
-//       school: schoolId,
-//       title,
-//       description,
-//       additionalFields,
-//       formUrl,
-//     });
-
-//     await admissionForm.save();
-//     res.status(201).json({
-//       id: admissionForm._id,
-//       schoolId: admissionForm.school,
-//       title: admissionForm.title,
-//       description: admissionForm.description,
-//       formUrl: admissionForm.formUrl, // Return the clean formUrl string
-//       createdAt: admissionForm.createdAt,
-//     });
-//   } catch (error) {
-//     res.status(500).json({ error: error.message });
-//   }
-// },
 
 createAdmissionForm: async (req, res) => {
   try {
@@ -945,7 +26,11 @@ createAdmissionForm: async (req, res) => {
       return res.status(400).json({ error: "School ID is required" });
     }
 
-    const { title, description, additionalFields = [] } = req.body;
+    const { title, description, additionalFields = [],admissionFee  } = req.body;
+
+    if (admissionFee === undefined || admissionFee < 0) {
+      return res.status(400).json({ error: "Valid admission fee is required" });
+    }
 
     // Get current academic year (e.g., "2024-2025")
     const currentDate = new Date();
@@ -963,7 +48,8 @@ createAdmissionForm: async (req, res) => {
       description,
       additionalFields,
       formUrl,
-      academicYear, // Add the academic year
+      academicYear,
+      admissionFee // Add the academic year
     });
 
     await admissionForm.save();
@@ -974,6 +60,7 @@ createAdmissionForm: async (req, res) => {
       description: admissionForm.description,
       formUrl: admissionForm.formUrl,
       academicYear: admissionForm.academicYear,
+      admissionFee: admissionForm.admissionFee,
       createdAt: admissionForm.createdAt,
     });
   } catch (error) {
@@ -1029,91 +116,73 @@ createAdmissionForm: async (req, res) => {
     }
   },
 
-  // submitApplication: async (req, res) => {
-  //   try {
-  //     const schoolId = req.user.school;
-  //     const {
-  //       studentDetails,
-  //       parentDetails,
-  //       admissionType,
-  //       additionalResponses = {}
-  //     } = req.body;
 
-  //     if (!studentDetails || !parentDetails || !admissionType) {
-  //       return res.status(400).json({
-  //         message: 'Missing required fields'
-  //       });
-  //     }
+  //new for Payment
 
-  //     // Process uploaded files
-  //     const uploadedDocuments = [];
-  //     for (const fileType in req.files) {
-  //       const file = req.files[fileType][0];
-  //       const cloudinaryFolder = `admissions/${schoolId}/${Date.now()}`;
-        
-  //       const result = await cloudinary.uploader.upload(file.path, {
-  //         folder: cloudinaryFolder,
-  //         resource_type: 'auto'
-  //       });
-
-  //       uploadedDocuments.push({
-  //         type: fileType,
-  //         documentUrl: result.secure_url,
-  //         public_id: result.public_id
-  //       });
-  //     }
-
-  //     const trackingId = generateTrackingId(schoolId);
+  getPaymentDetails: async (req, res) => {
+    try {
+      const { formUrl } = req.params;
       
-  //     const application = new AdmissionApplication({
-  //       school: schoolId,
-  //       studentDetails,
-  //       parentDetails,
-  //       admissionType,
-  //       documents: uploadedDocuments,
-  //       trackingId,
-  //       paymentStatus: admissionType === 'RTE' ? 'not_applicable' : 'pending'
-  //     });
+      const form = await AdmissionForm.findOne({ formUrl, isActive: true });
+      if (!form) {
+        return res.status(404).json({ message: 'Form not found' });
+      }
 
-  //     if (!application.validateDocuments()) {
-  //       // Delete uploaded files if validation fails
-  //       for (const doc of uploadedDocuments) {
-  //         await cloudinary.uploader.destroy(doc.public_id);
-  //       }
+      const paymentDetails = {
+        admissionFee: form.admissionFee,
+        schoolId: form.school,
+        formUrl: form.formUrl
+      };
 
-  //       return res.status(400).json({
-  //         message: 'Missing required documents',
-  //         required: admissionType === 'RTE' ? 
-  //           ['rteCertificate', 'studentPhoto', 'aadharCard'] :
-  //           studentDetails.appliedClass === '1st' ?
-  //             ['studentPhoto', 'aadharCard', 'birthCertificate'] :
-  //             ['studentPhoto', 'aadharCard', 'birthCertificate', 'schoolLeavingCertificate']
-  //       });
-  //     }
+      res.json({
+        status: 'success',
+        paymentDetails
+      });
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  },
 
-  //     await application.save();
+  generatePaymentQR: async (req, res) => {
+    try {
+      const { applicationId } = req.params;
+      
+      const application = await AdmissionApplication.findById(applicationId)
+        .populate({
+          path: 'school',
+          select: 'name'
+        });
 
-  //     res.status(201).json({
-  //       message: 'Application submitted successfully',
-  //       trackingId,
-  //       nextSteps: admissionType === 'RTE' ? 
-  //         'Visit clerk with original documents for verification' : 
-  //         'Complete payment and visit clerk with original documents'
-  //     });
-  //   } catch (error) {
-  //     // Delete uploaded files if there's an error
-  //     if (req.files) {
-  //       for (const fileType in req.files) {
-  //         const file = req.files[fileType][0];
-  //         const public_id = file.filename; // Assuming filename is the public_id
-  //         await cloudinary.uploader.destroy(public_id);
-  //       }
-  //     }
-  //     res.status(500).json({ error: error.message });
-  //   }
-  // },
+      if (!application) {
+        return res.status(404).json({ message: 'Application not found' });
+      }
 
-  // submitApplication: async (req, res) => {
+      if (application.admissionType === 'RTE') {
+        return res.status(400).json({ message: 'Payment not required for RTE applications' });
+      }
+
+      const form = await AdmissionForm.findOne({ school: application.school });
+      
+      const qrCode = await generatePaymentQR(
+        form.admissionFee,
+        applicationId,
+        application.school._id
+      );
+
+      res.json({
+        status: 'success',
+        data: {
+          qrCode,
+          amount: form.admissionFee,
+          applicationId: application._id
+        }
+      });
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  },
+
+  // submitApplication : async (req, res) => {
   //   try {
   //     const {
   //       formUrl,
@@ -1122,96 +191,132 @@ createAdmissionForm: async (req, res) => {
   //       admissionType,
   //       additionalResponses = {},
   //     } = req.body;
-
-  //     if (!formUrl) return res.status(400).json({ error: "Form URL is missing" });
-  //   if (typeof studentDetails !== "string" || typeof parentDetails !== "string") {
-  //     return res.status(400).json({ error: "studentDetails and parentDetails must be JSON strings" });
-  //   }
-
-  //   const parsedStudentDetails = JSON.parse(studentDetails);
-  //   const parsedParentDetails = JSON.parse(parentDetails);
-
-  //     // Find the form by formUrl
+  
+  //     // Basic validation
+  //     if (!formUrl) {
+  //       return res.status(400).json({ error: "Form URL is missing" });
+  //     }
+  //     if (typeof studentDetails !== "string" || typeof parentDetails !== "string") {
+  //       return res.status(400).json({ error: "studentDetails and parentDetails must be JSON strings" });
+  //     }
+  
+  //     // Parse JSON data
+  //     let parsedStudentDetails;
+  //     let parsedParentDetails;
+  //     try {
+  //       parsedStudentDetails = JSON.parse(studentDetails);
+  //       parsedParentDetails = JSON.parse(parentDetails);
+  //     } catch (error) {
+  //       return res.status(400).json({ error: "Invalid JSON format in student or parent details" });
+  //     }
+  
+  //     // Find and validate form
   //     const form = await AdmissionForm.findOne({ formUrl, isActive: true });
   //     if (!form) {
   //       return res.status(404).json({ message: "Form not found or inactive" });
   //     }
-
+  
   //     const schoolId = form.school;
-
-  //     if (!studentDetails || !parentDetails || !admissionType) {
-  //       return res.status(400).json({
-  //         message: "Missing required fields",
-  //       });
+  
+  //     // Validate admission type
+  //     if (!['Regular', 'RTE'].includes(admissionType)) {
+  //       return res.status(400).json({ error: "Invalid admission type" });
   //     }
-
+  
+  //     // Validate additional fields if present
+  //     if (form.additionalFields?.length > 0) {
+  //       for (const field of form.additionalFields) {
+  //         if (field.required && !additionalResponses[field.name]) {
+  //           return res.status(400).json({
+  //             message: `Missing required additional field: ${field.label}`
+  //           });
+  //         }
+  //       }
+  //     }
+  
   //     // Process uploaded files
   //     const uploadedDocuments = [];
-  //     for (const fileType in req.files) {
-  //       const file = req.files[fileType][0];
-  //       const cloudinaryFolder = `admissions/${schoolId}/${Date.now()}`;
-
-  //       const result = await cloudinary.uploader.upload(file.path, {
-  //         folder: cloudinaryFolder,
-  //         resource_type: "auto",
-  //       });
-
-  //       uploadedDocuments.push({
-  //         type: fileType,
-  //         documentUrl: result.secure_url,
-  //         public_id: result.public_id,
-  //       });
-  //     }
-
-  //     const trackingId = generateTrackingId(schoolId);
-
-  //     const application = new AdmissionApplication({
-  //       school: schoolId,
-  //       studentDetails,
-  //       parentDetails,
-  //       admissionType,
-  //       documents: uploadedDocuments,
-  //       trackingId,
-  //       paymentStatus: admissionType === "RTE" ? "not_applicable" : "pending",
-  //     });
-
-  //     if (!application.validateDocuments()) {
+  //     try {
+  //       for (const fileType in req.files) {
+  //         const file = req.files[fileType][0];
+  //         const cloudinaryFolder = `admissions/${schoolId}/${Date.now()}`;
+  
+  //         const result = await cloudinary.uploader.upload(file.path, {
+  //           folder: cloudinaryFolder,
+  //           resource_type: "auto",
+  //         });
+  
+  //         uploadedDocuments.push({
+  //           type: fileType,
+  //           documentUrl: result.secure_url,
+  //           public_id: result.public_id,
+  //         });
+  //       }
+  //     } catch (error) {
+  //       // Cleanup any uploaded files if there's an error
   //       for (const doc of uploadedDocuments) {
   //         await cloudinary.uploader.destroy(doc.public_id);
   //       }
-
+  //       throw new Error("File upload failed: " + error.message);
+  //     }
+  
+  //     const trackingId = generateTrackingId(schoolId);
+  
+  //     // Create application instance
+  //     const application = new AdmissionApplication({
+  //       school: schoolId,
+  //       studentDetails: parsedStudentDetails,
+  //       parentDetails: parsedParentDetails,
+  //       admissionType,
+  //       documents: uploadedDocuments,
+  //       trackingId,
+  //       status: 'pending',
+  //       paymentStatus: admissionType === "RTE" ? "not_applicable" : "pending",
+  //       additionalResponses,
+  //       clerkVerification: { status: 'pending' },
+  //       feesVerification: { status: 'pending' }
+  //     });
+  
+  //     // Validate application data against mongoose schema
+  //     const validationError = application.validateSync();
+  //     if (validationError) {
+  //       // Cleanup uploaded files if validation fails
+  //       for (const doc of uploadedDocuments) {
+  //         await cloudinary.uploader.destroy(doc.public_id);
+  //       }
+  //       return res.status(400).json({ error: validationError.message });
+  //     }
+  
+  //     // Validate required documents
+  //     if (!application.validateDocuments()) {
+  //       // Cleanup uploaded files if document validation fails
+  //       for (const doc of uploadedDocuments) {
+  //         await cloudinary.uploader.destroy(doc.public_id);
+  //       }
+  
   //       return res.status(400).json({
   //         message: "Missing required documents",
-  //         required:
-  //           admissionType === "RTE"
-  //             ? ["rteCertificate", "studentPhoto", "aadharCard"]
-  //             : studentDetails.appliedClass === "1st"
-  //             ? ["studentPhoto", "aadharCard", "birthCertificate"]
-  //             : [
-  //                 "studentPhoto",
-  //                 "aadharCard",
-  //                 "birthCertificate",
-  //                 "schoolLeavingCertificate",
-  //               ],
+  //         required: getRequiredDocuments(admissionType, parsedStudentDetails.appliedClass)
   //       });
   //     }
-
+  
   //     await application.save();
-
+  
   //     res.status(201).json({
   //       message: "Application submitted successfully",
   //       trackingId,
-  //       nextSteps:
-  //         admissionType === "RTE"
-  //           ? "Visit clerk with original documents for verification"
-  //           : "Complete payment and visit clerk with original documents",
+  //       nextSteps: getNextSteps(admissionType),
+  //       status: application.status
   //     });
+  
   //   } catch (error) {
+  //     // Cleanup files in case of any error
   //     if (req.files) {
   //       for (const fileType in req.files) {
   //         const file = req.files[fileType][0];
-  //         const public_id = file.filename;
-  //         await cloudinary.uploader.destroy(public_id);
+  //         if (file.public_id) {
+  //           await cloudinary.uploader.destroy(file.public_id);
+  //         }
   //       }
   //     }
   //     res.status(500).json({ error: error.message });
@@ -1219,7 +324,43 @@ createAdmissionForm: async (req, res) => {
   // },
 
 
-  submitApplication : async (req, res) => {
+  verifyPayment: async (req, res) => {
+    try {
+      const { applicationId } = req.params;
+      const { transactionId, paymentScreenshot } = req.body;
+
+      const application = await AdmissionApplication.findById(applicationId);
+      if (!application) {
+        return res.status(404).json({ message: 'Application not found' });
+      }
+
+      if (application.admissionType === 'RTE') {
+        return res.status(400).json({ message: 'Payment verification not required for RTE applications' });
+      }
+
+      // Update application with payment details
+      application.paymentStatus = 'completed';
+      application.paymentDetails = {
+        transactionId,
+        paidAt: new Date(),
+        paymentScreenshot
+      };
+
+      await application.save();
+
+      res.json({
+        status: 'success',
+        message: 'Payment verified successfully',
+        nextStep: 'Submit your application form'
+      });
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  },
+
+
+
+  submitApplication: async (req, res) => {
     try {
       const {
         formUrl,
@@ -1227,17 +368,29 @@ createAdmissionForm: async (req, res) => {
         parentDetails,
         admissionType,
         additionalResponses = {},
+        paymentTransactionId // Add this
       } = req.body;
-  
-      // Basic validation
+
       if (!formUrl) {
         return res.status(400).json({ error: "Form URL is missing" });
       }
-      if (typeof studentDetails !== "string" || typeof parentDetails !== "string") {
-        return res.status(400).json({ error: "studentDetails and parentDetails must be JSON strings" });
+
+      // Find and validate form
+      const form = await AdmissionForm.findOne({ formUrl, isActive: true });
+      if (!form) {
+        return res.status(404).json({ message: "Form not found or inactive" });
       }
-  
-      // Parse JSON data
+
+      // Check payment for regular admission
+      if (admissionType === 'Regular') {
+        if (!paymentTransactionId) {
+          return res.status(400).json({ 
+            error: "Payment is required for regular admission" 
+          });
+        }
+      }
+
+      // Rest of your existing submitApplication code...
       let parsedStudentDetails;
       let parsedParentDetails;
       try {
@@ -1246,31 +399,10 @@ createAdmissionForm: async (req, res) => {
       } catch (error) {
         return res.status(400).json({ error: "Invalid JSON format in student or parent details" });
       }
-  
-      // Find and validate form
-      const form = await AdmissionForm.findOne({ formUrl, isActive: true });
-      if (!form) {
-        return res.status(404).json({ message: "Form not found or inactive" });
-      }
-  
+
       const schoolId = form.school;
-  
-      // Validate admission type
-      if (!['Regular', 'RTE'].includes(admissionType)) {
-        return res.status(400).json({ error: "Invalid admission type" });
-      }
-  
-      // Validate additional fields if present
-      if (form.additionalFields?.length > 0) {
-        for (const field of form.additionalFields) {
-          if (field.required && !additionalResponses[field.name]) {
-            return res.status(400).json({
-              message: `Missing required additional field: ${field.label}`
-            });
-          }
-        }
-      }
-  
+      const trackingId = generateTrackingId(schoolId);
+
       // Process uploaded files
       const uploadedDocuments = [];
       try {
@@ -1296,10 +428,7 @@ createAdmissionForm: async (req, res) => {
         }
         throw new Error("File upload failed: " + error.message);
       }
-  
-      const trackingId = generateTrackingId(schoolId);
-  
-      // Create application instance
+
       const application = new AdmissionApplication({
         school: schoolId,
         studentDetails: parsedStudentDetails,
@@ -1308,54 +437,29 @@ createAdmissionForm: async (req, res) => {
         documents: uploadedDocuments,
         trackingId,
         status: 'pending',
-        paymentStatus: admissionType === "RTE" ? "not_applicable" : "pending",
+        paymentStatus: admissionType === 'Regular' ? 
+          (paymentTransactionId ? 'completed' : 'pending') : 
+          'not_applicable',
+        paymentDetails: admissionType === 'Regular' ? {
+          transactionId: paymentTransactionId,
+          amount: form.admissionFee,
+          paidAt: new Date()
+        } : undefined,
         additionalResponses,
         clerkVerification: { status: 'pending' },
         feesVerification: { status: 'pending' }
       });
-  
-      // Validate application data against mongoose schema
-      const validationError = application.validateSync();
-      if (validationError) {
-        // Cleanup uploaded files if validation fails
-        for (const doc of uploadedDocuments) {
-          await cloudinary.uploader.destroy(doc.public_id);
-        }
-        return res.status(400).json({ error: validationError.message });
-      }
-  
-      // Validate required documents
-      if (!application.validateDocuments()) {
-        // Cleanup uploaded files if document validation fails
-        for (const doc of uploadedDocuments) {
-          await cloudinary.uploader.destroy(doc.public_id);
-        }
-  
-        return res.status(400).json({
-          message: "Missing required documents",
-          required: getRequiredDocuments(admissionType, parsedStudentDetails.appliedClass)
-        });
-      }
-  
+
       await application.save();
-  
+
       res.status(201).json({
         message: "Application submitted successfully",
         trackingId,
-        nextSteps: getNextSteps(admissionType),
+        nextSteps: getNextSteps(application),
         status: application.status
       });
-  
+
     } catch (error) {
-      // Cleanup files in case of any error
-      if (req.files) {
-        for (const fileType in req.files) {
-          const file = req.files[fileType][0];
-          if (file.public_id) {
-            await cloudinary.uploader.destroy(file.public_id);
-          }
-        }
-      }
       res.status(500).json({ error: error.message });
     }
   },
@@ -1376,40 +480,40 @@ createAdmissionForm: async (req, res) => {
     }
   },
 
-  // Payment Processing
-  processPayment: async (req, res) => {
-    try {
-      const { applicationId } = req.params;
-      const { paymentDetails } = req.body;
+  // // Payment Processing
+  // processPayment: async (req, res) => {
+  //   try {
+  //     const { applicationId } = req.params;
+  //     const { paymentDetails } = req.body;
 
-      const application = await AdmissionApplication.findById(applicationId);
-      if (!application) {
-        return res.status(404).json({ message: 'Application not found' });
-      }
+  //     const application = await AdmissionApplication.findById(applicationId);
+  //     if (!application) {
+  //       return res.status(404).json({ message: 'Application not found' });
+  //     }
 
-      if (application.admissionType === 'RTE') {
-        return res.status(400).json({ 
-          message: 'Payment not required for RTE applications' 
-        });
-      }
+  //     if (application.admissionType === 'RTE') {
+  //       return res.status(400).json({ 
+  //         message: 'Payment not required for RTE applications' 
+  //       });
+  //     }
 
-      application.paymentStatus = 'completed';
-      application.paymentDetails = {
-        ...paymentDetails,
-        paidAt: new Date()
-      };
-      application.status = 'document_verification';
+  //     application.paymentStatus = 'completed';
+  //     application.paymentDetails = {
+  //       ...paymentDetails,
+  //       paidAt: new Date()
+  //     };
+  //     application.status = 'document_verification';
 
-      await application.save();
+  //     await application.save();
 
-      res.json({
-        message: 'Payment processed successfully',
-        nextStep: 'Visit clerk with original documents for verification'
-      });
-    } catch (error) {
-      res.status(500).json({ error: error.message });
-    }
-  },
+  //     res.json({
+  //       message: 'Payment processed successfully',
+  //       nextStep: 'Visit clerk with original documents for verification'
+  //     });
+  //   } catch (error) {
+  //     res.status(500).json({ error: error.message });
+  //   }
+  // },
 
   // Status Check and Reports
   checkApplicationStatus: async (req, res) => {

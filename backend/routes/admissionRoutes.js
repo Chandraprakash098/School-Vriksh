@@ -23,13 +23,29 @@ router.get(
   admissionController.getAdmissionForm
 );
 
+
+router.get(
+  '/payment-details/:formUrl',
+  admissionController.getPaymentDetails
+);
+
+router.get(
+  '/payment-qr/:applicationId',
+  admissionController.generatePaymentQR
+);
+
+router.post(
+  '/verify-payment/:applicationId',
+  admissionController.verifyPayment
+);
+
 router.post("/apply", uploadDocuments, admissionController.submitApplication);
 
 // Payment processing
-router.post(
-  '/payment/:applicationId',
-  admissionController.processPayment
-);
+// router.post(
+//   '/payment/:applicationId',
+//   admissionController.processPayment
+// );
 
 
 // Application status check
