@@ -1150,6 +1150,8 @@ const admissionController = {
     }
   },
 
+
+
   getPaymentDetails: async (req, res) => {
     try {
       const { formUrl } = req.params;
@@ -1489,24 +1491,64 @@ const admissionController = {
     }
   },
 
+  // validateFormUrl: async (req, res) => {
+  //   try {
+  //     const { formUrl } = req.params;
+  //     const connection = req.connection;
+  //     const AdmissionForm = require('../models/AdmissionForm')(connection);
+
+  //     const form = await AdmissionForm.findOne({
+  //       formUrl,
+  //       isActive: true,
+  //     });
+
+  //     if (!form) {
+  //       return res.status(404).json({
+  //         valid: false,
+  //         message: 'Form not found or no longer active',
+  //       });
+  //     }
+
+  //     res.json({
+  //       valid: true,
+  //       form: {
+  //         id: form._id,
+  //         schoolId: form.school,
+  //         title: form.title,
+  //         description: form.description,
+  //         standardFields: form.standardFields,
+  //         regularDocuments: form.regularDocuments,
+  //         rteDocuments: form.rteDocuments,
+  //         additionalFields: form.additionalFields,
+  //         formUrl: form.formUrl,
+  //       },
+  //     });
+  //   } catch (error) {
+  //     res.status(500).json({ error: error.message });
+  //   }
+  // },
+
   validateFormUrl: async (req, res) => {
     try {
       const { formUrl } = req.params;
       const connection = req.connection;
+      console.log('Form URL:', formUrl);
+      console.log('Connection:', connection);
       const AdmissionForm = require('../models/AdmissionForm')(connection);
-
+  
       const form = await AdmissionForm.findOne({
         formUrl,
         isActive: true,
       });
-
+      console.log('Found form:', form);
+  
       if (!form) {
         return res.status(404).json({
           valid: false,
           message: 'Form not found or no longer active',
         });
       }
-
+  
       res.json({
         valid: true,
         form: {
@@ -1522,6 +1564,7 @@ const admissionController = {
         },
       });
     } catch (error) {
+      console.error('Validate form error:', error);
       res.status(500).json({ error: error.message });
     }
   },
