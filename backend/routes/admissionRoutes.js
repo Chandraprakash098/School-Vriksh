@@ -7,16 +7,51 @@ const { connectToDatabase, getOwnerConnection } = require('../config/database');
 
 
 // Middleware to set database connection for public routes
+// const setDatabaseConnection = async (req, res, next) => {
+//   try {
+//     const { formUrl } = req.params;
+//     const [_, schoolId] = formUrl.split('/'); // Extract schoolId from formUrl (e.g., "admission/67c1526fc056c832dbc5263e/1740730641073")
+
+//     if (!schoolId || !/^[0-9a-fA-F]{24}$/.test(schoolId)) {
+//       return res.status(400).json({ error: 'Invalid school ID in form URL' });
+//     }
+
+//     // Get the school from the owner database
+//     const ownerConnection = await getOwnerConnection();
+//     const School = ownerConnection.model('School', require('../models/School').schema);
+//     const school = await School.findById(schoolId);
+
+//     if (!school || !school.dbName) {
+//       return res.status(404).json({ error: 'School not found or database not configured' });
+//     }
+
+//     // Set the Mongoose connection for the school's database
+//     req.connection = await connectToDatabase(school.dbName);
+//     next();
+//   } catch (error) {
+//     console.error('Error setting database connection:', error);
+//     res.status(500).json({ error: 'Failed to establish database connection: ' + error.message });
+//   }
+// };
+
 const setDatabaseConnection = async (req, res, next) => {
   try {
-    const { formUrl } = req.params;
-    const [_, schoolId] = formUrl.split('/'); // Extract schoolId from formUrl (e.g., "admission/67c1526fc056c832dbc5263e/1740730641073")
+    let formUrl;
+    // Check if formUrl is in req.params (GET routes) or req.body (POST routes)
+    if (req.params.formUrl) {
+      formUrl = req.params.formUrl;
+    } else if (req.body.formUrl) {
+      formUrl = req.body.formUrl;
+    } else {
+      return res.status(400).json({ error: 'Form URL is required' });
+    }
+
+    const [_, schoolId] = formUrl.split('/'); // Extract schoolId from formUrl
 
     if (!schoolId || !/^[0-9a-fA-F]{24}$/.test(schoolId)) {
       return res.status(400).json({ error: 'Invalid school ID in form URL' });
     }
 
-    // Get the school from the owner database
     const ownerConnection = await getOwnerConnection();
     const School = ownerConnection.model('School', require('../models/School').schema);
     const school = await School.findById(schoolId);
@@ -25,7 +60,6 @@ const setDatabaseConnection = async (req, res, next) => {
       return res.status(404).json({ error: 'School not found or database not configured' });
     }
 
-    // Set the Mongoose connection for the school's database
     req.connection = await connectToDatabase(school.dbName);
     next();
   } catch (error) {
