@@ -4478,7 +4478,69 @@ const adminController = {
     }
   },
 
-  uploadSyllabus: async (req, res) => {
+  // uploadSyllabus: async (req, res) => {
+  //   try {
+  //     const { classId, subjectId, content } = req.body;
+  //     const schoolId = req.school._id;
+  //     const uploadedBy = req.user._id;
+  //     const connection = req.connection;
+  //     const Class = require('../models/Class')(connection);
+  //     const Subject = require('../models/Subject')(connection);
+  //     const Syllabus = require('../models/Syllabus')(connection);
+
+  //     const classExists = await Class.findOne({ _id: classId, school: schoolId });
+  //     if (!classExists) {
+  //       if (req.files?.length > 0) {
+  //         req.files.forEach(file => cloudinary.uploader.destroy(file.public_id));
+  //       }
+  //       return res.status(404).json({ message: 'Class not found' });
+  //     }
+
+  //     const subject = await Subject.findOne({ _id: subjectId, class: classId, school: schoolId });
+  //     if (!subject) {
+  //       if (req.files?.length > 0) {
+  //         req.files.forEach(file => cloudinary.uploader.destroy(file.public_id));
+  //       }
+  //       return res.status(404).json({ message: 'Subject not found in the specified class' });
+  //     }
+
+  //     const documents = req.files?.map(file => ({
+  //       title: file.originalname,
+  //       url: file.path,
+  //       public_id: file.public_id,
+  //       uploadedBy,
+  //     })) || [];
+
+  //     let syllabus = await Syllabus.findOne({ subject: subjectId });
+  //     if (!syllabus) {
+  //       syllabus = new Syllabus({
+  //         school: schoolId,
+  //         subject: subjectId,
+  //         class: classId,
+  //         content,
+  //         documents,
+  //       });
+  //     } else {
+  //       syllabus.content = content;
+  //       if (documents.length > 0) {
+  //         syllabus.documents = [...syllabus.documents, ...documents];
+  //       }
+  //     }
+
+  //     await syllabus.save();
+  //     subject.syllabus = syllabus._id;
+  //     await subject.save();
+
+  //     res.status(201).json(syllabus);
+  //   } catch (error) {
+  //     if (req.files?.length > 0) {
+  //       req.files.forEach(file => cloudinary.uploader.destroy(file.public_id));
+  //     }
+  //     res.status(500).json({ error: error.message });
+  //   }
+  // },
+
+  uploadSyllabus : async (req, res) => {
     try {
       const { classId, subjectId, content } = req.body;
       const schoolId = req.school._id;
@@ -4487,7 +4549,8 @@ const adminController = {
       const Class = require('../models/Class')(connection);
       const Subject = require('../models/Subject')(connection);
       const Syllabus = require('../models/Syllabus')(connection);
-
+  
+      // Validate class
       const classExists = await Class.findOne({ _id: classId, school: schoolId });
       if (!classExists) {
         if (req.files?.length > 0) {
@@ -4495,7 +4558,8 @@ const adminController = {
         }
         return res.status(404).json({ message: 'Class not found' });
       }
-
+  
+      // Validate subject
       const subject = await Subject.findOne({ _id: subjectId, class: classId, school: schoolId });
       if (!subject) {
         if (req.files?.length > 0) {
@@ -4503,14 +4567,26 @@ const adminController = {
         }
         return res.status(404).json({ message: 'Subject not found in the specified class' });
       }
-
-      const documents = req.files?.map(file => ({
-        title: file.originalname,
-        url: file.path,
-        public_id: file.public_id,
-        uploadedBy,
-      })) || [];
-
+  
+      // Check uploaded files
+      if (!req.files || req.files.length === 0) {
+        console.log('No files uploaded');
+      } else {
+        console.log('Files uploaded:', req.files);
+      }
+  
+      const documents = req.files?.map(file => {
+        if (!file.public_id) {
+          throw new Error('Missing public_id for document');
+        }
+        return {
+          title: file.originalname,
+          url: file.path,
+          public_id: file.public_id,
+          uploadedBy,
+        };
+      }) || [];
+  
       let syllabus = await Syllabus.findOne({ subject: subjectId });
       if (!syllabus) {
         syllabus = new Syllabus({
@@ -4526,13 +4602,14 @@ const adminController = {
           syllabus.documents = [...syllabus.documents, ...documents];
         }
       }
-
+  
       await syllabus.save();
       subject.syllabus = syllabus._id;
       await subject.save();
-
+  
       res.status(201).json(syllabus);
     } catch (error) {
+      console.error('Error in uploadSyllabus:', error);
       if (req.files?.length > 0) {
         req.files.forEach(file => cloudinary.uploader.destroy(file.public_id));
       }
