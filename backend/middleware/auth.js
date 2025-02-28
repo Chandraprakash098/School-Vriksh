@@ -179,7 +179,7 @@ const auth = async (req, res, next) => {
 
     const token = authHeader.replace('Bearer ', '');
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    console.log('Decoded JWT:', decoded);
+    // console.log('Decoded JWT:', decoded);
 
     let connection, UserModel;
 
@@ -190,7 +190,7 @@ const auth = async (req, res, next) => {
       const ownerConnection = await getOwnerConnection();
       const School = ownerConnection.model('School', require('../models/School').schema);
       const userSchool = await School.findById(decoded.schoolId);
-      console.log('User School from decoded.schoolId:', userSchool);
+      // console.log('User School from decoded.schoolId:', userSchool);
 
       if (!userSchool || !userSchool.dbName) {
         return res.status(400).json({ error: 'User is not associated with any school' });
@@ -201,7 +201,7 @@ const auth = async (req, res, next) => {
     }
 
     const user = await UserModel.findOne({ _id: decoded.userId });
-    console.log('User:', user);
+    // console.log('User:', user);
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
@@ -215,7 +215,7 @@ const auth = async (req, res, next) => {
       const ownerConnection = await getOwnerConnection();
       const School = ownerConnection.model('School', require('../models/School').schema);
       req.school = await School.findById(user.school); // Use user.school instead of decoded.schoolId
-      console.log('req.school after assignment:', req.school);
+      // console.log('req.school after assignment:', req.school);
       if (!req.school) {
         return res.status(400).json({ error: 'School not found for user' });
       }
