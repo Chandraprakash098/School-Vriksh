@@ -54,10 +54,12 @@ router.get(
 );
 
 
-router.get(
-  '/payment-details/:formUrl',
-  admissionController.getPaymentDetails
-);
+// router.get(
+//   '/payment-details/:formUrl',
+//   admissionController.getPaymentDetails
+// );
+
+router.get('/payment-details/:formUrl', setDatabaseConnection, admissionController.getPaymentDetails);
 
 // router.get(
 //   '/payment-qr/:applicationId',
