@@ -71,7 +71,7 @@ router.post(
   admissionController.verifyPayment
 );
 
-router.post("/apply", uploadDocuments, admissionController.submitApplication);
+router.post("/apply", uploadDocuments,setDatabaseConnection, admissionController.submitApplication);
 
 // Payment processing
 // router.post(
