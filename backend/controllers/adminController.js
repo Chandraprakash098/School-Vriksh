@@ -4554,7 +4554,8 @@ const adminController = {
       const classExists = await Class.findOne({ _id: classId, school: schoolId });
       if (!classExists) {
         if (req.files?.length > 0) {
-          req.files.forEach(file => cloudinary.uploader.destroy(file.public_id));
+          // req.files.forEach(file => cloudinary.uploader.destroy(file.public_id));
+          req.files.forEach(file => cloudinary.uploader.destroy(file.filename));
         }
         return res.status(404).json({ message: 'Class not found' });
       }
@@ -4563,7 +4564,8 @@ const adminController = {
       const subject = await Subject.findOne({ _id: subjectId, class: classId, school: schoolId });
       if (!subject) {
         if (req.files?.length > 0) {
-          req.files.forEach(file => cloudinary.uploader.destroy(file.public_id));
+          // req.files.forEach(file => cloudinary.uploader.destroy(file.public_id));
+          req.files.forEach(file => cloudinary.uploader.destroy(file.filename));
         }
         return res.status(404).json({ message: 'Subject not found in the specified class' });
       }
