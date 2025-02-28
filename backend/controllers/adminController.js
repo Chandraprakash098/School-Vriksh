@@ -4576,13 +4576,16 @@ const adminController = {
       }
   
       const documents = req.files?.map(file => {
-        if (!file.public_id) {
-          throw new Error('Missing public_id for document');
-        }
+        // if (!file.public_id) {
+        //   throw new Error('Missing public_id for document');
+        // }
+
+        const publicId = file.filename.replace(/^syllabuses\//, '');
         return {
           title: file.originalname,
           url: file.path,
-          public_id: file.public_id,
+          // public_id: file.public_id,
+          public_id: publicId,
           uploadedBy,
         };
       }) || [];
@@ -4611,7 +4614,8 @@ const adminController = {
     } catch (error) {
       console.error('Error in uploadSyllabus:', error);
       if (req.files?.length > 0) {
-        req.files.forEach(file => cloudinary.uploader.destroy(file.public_id));
+        // req.files.forEach(file => cloudinary.uploader.destroy(file.public_id));
+        req.files.forEach(file => cloudinary.uploader.destroy(file.filename));
       }
       res.status(500).json({ error: error.message });
     }
