@@ -16,7 +16,8 @@ const storage = new CloudinaryStorage({
     params: {
         folder: 'syllabuses',
         allowed_formats: ['pdf', 'doc', 'docx', 'jpg', 'jpeg'],
-        resource_type: 'raw',
+        // resource_type: 'raw',
+        resource_type: 'auto',
 
         public_id: (req, file) => {
           // Sanitize the filename
@@ -42,8 +43,10 @@ const upload = multer({
     storage: storage,
     limits: {
         fileSize: 10 * 1024 * 1024, // 10 MB limit
+
     },
     fileFilter: (req, file, cb) => {
+        console.log('Uploading file type:', file.mimetype);
         const allowedTypes = [
             'application/pdf',
             'application/msword',
