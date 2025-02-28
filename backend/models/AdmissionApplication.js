@@ -177,4 +177,5 @@ admissionApplicationSchema.pre('save', function(next) {
   next();
 });
 
-module.exports = mongoose.model('AdmissionApplication', admissionApplicationSchema);
+// module.exports = mongoose.model('AdmissionApplication', admissionApplicationSchema);
+module.exports = (connection) => connection.model('AdmissionApplication', admissionApplicationSchema);

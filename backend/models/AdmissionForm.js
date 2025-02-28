@@ -338,4 +338,5 @@ admissionFormSchema.methods.validateField = function(fieldName, value) {
   return { valid: true };
 };
 
-module.exports = mongoose.model('AdmissionForm', admissionFormSchema);
+// module.exports = mongoose.model('AdmissionForm', admissionFormSchema);
+module.exports = (connection) => connection.model('AdmissionForm', admissionFormSchema);

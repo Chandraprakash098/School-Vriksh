@@ -995,32 +995,83 @@ const uploadDocuments = upload.fields([
 ]);
 
 const admissionController = {
+  // createAdmissionForm: async (req, res) => {
+  //   try {
+  //     const schoolId = req.school._id.toString(); // Use req.school from auth middleware
+  //     const connection = req.connection; // School-specific connection
+  //     const AdmissionForm = require('../models/AdmissionForm')(connection);
+
+  //     if (!schoolId) {
+  //       return res.status(400).json({ error: 'School ID is required' });
+  //     }
+
+  //     const { title, description, additionalFields = [], admissionFee } = req.body;
+
+  //     if (admissionFee === undefined || admissionFee < 0) {
+  //       return res.status(400).json({ error: 'Valid admission fee is required' });
+  //     }
+
+  //     // Get current academic year (e.g., "2024-2025")
+  //     const currentDate = new Date();
+  //     const currentYear = currentDate.getFullYear();
+  //     const academicYear = currentDate.getMonth() >= 3
+  //       ? `${currentYear}-${currentYear + 1}`
+  //       : `${currentYear - 1}-${currentYear}`;
+
+  //     const timestamp = Date.now();
+  //     const formUrl = `admission/${schoolId}/${timestamp}`;
+
+  //     const admissionForm = new AdmissionForm({
+  //       school: schoolId,
+  //       title,
+  //       description,
+  //       additionalFields,
+  //       formUrl,
+  //       academicYear,
+  //       admissionFee, // Add the academic year
+  //     });
+
+  //     await admissionForm.save();
+  //     res.status(201).json({
+  //       id: admissionForm._id,
+  //       schoolId: admissionForm.school,
+  //       title: admissionForm.title,
+  //       description: admissionForm.description,
+  //       formUrl: admissionForm.formUrl,
+  //       academicYear: admissionForm.academicYear,
+  //       admissionFee: admissionForm.admissionFee,
+  //       createdAt: admissionForm.createdAt,
+  //     });
+  //   } catch (error) {
+  //     res.status(500).json({ error: error.message });
+  //   }
+  // },
+
   createAdmissionForm: async (req, res) => {
     try {
       const schoolId = req.school._id.toString(); // Use req.school from auth middleware
       const connection = req.connection; // School-specific connection
       const AdmissionForm = require('../models/AdmissionForm')(connection);
-
+  
       if (!schoolId) {
         return res.status(400).json({ error: 'School ID is required' });
       }
-
+  
       const { title, description, additionalFields = [], admissionFee } = req.body;
-
+  
       if (admissionFee === undefined || admissionFee < 0) {
         return res.status(400).json({ error: 'Valid admission fee is required' });
       }
-
-      // Get current academic year (e.g., "2024-2025")
+  
       const currentDate = new Date();
       const currentYear = currentDate.getFullYear();
       const academicYear = currentDate.getMonth() >= 3
         ? `${currentYear}-${currentYear + 1}`
         : `${currentYear - 1}-${currentYear}`;
-
+  
       const timestamp = Date.now();
       const formUrl = `admission/${schoolId}/${timestamp}`;
-
+  
       const admissionForm = new AdmissionForm({
         school: schoolId,
         title,
@@ -1028,9 +1079,9 @@ const admissionController = {
         additionalFields,
         formUrl,
         academicYear,
-        admissionFee, // Add the academic year
+        admissionFee,
       });
-
+  
       await admissionForm.save();
       res.status(201).json({
         id: admissionForm._id,
