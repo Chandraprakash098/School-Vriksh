@@ -3,6 +3,36 @@ const router = express.Router();
 const { admissionController, uploadDocuments } = require('../controllers/admissionController');
 const auth = require('../middleware/auth');
 const roleCheck = require('../middleware/roleCheck');
+const { connectToDatabase, getOwnerConnection } = require('../config/database');
+
+
+// Middleware to set database connection for public routes
+const setDatabaseConnection = async (req, res, next) => {
+  try {
+    const { formUrl } = req.params;
+    const [_, schoolId] = formUrl.split('/'); // Extract schoolId from formUrl (e.g., "admission/67c1526fc056c832dbc5263e/1740730641073")
+
+    if (!schoolId || !/^[0-9a-fA-F]{24}$/.test(schoolId)) {
+      return res.status(400).json({ error: 'Invalid school ID in form URL' });
+    }
+
+    // Get the school from the owner database
+    const ownerConnection = await getOwnerConnection();
+    const School = ownerConnection.model('School', require('../models/School').schema);
+    const school = await School.findById(schoolId);
+
+    if (!school || !school.dbName) {
+      return res.status(404).json({ error: 'School not found or database not configured' });
+    }
+
+    // Set the Mongoose connection for the school's database
+    req.connection = await connectToDatabase(school.dbName);
+    next();
+  } catch (error) {
+    console.error('Error setting database connection:', error);
+    res.status(500).json({ error: 'Failed to establish database connection: ' + error.message });
+  }
+};
 
 // School admin routes
 router.post(
@@ -72,10 +102,12 @@ router.put(
 // Public routes for form access and submission
 
 
-router.get(
-  '/validate-form/:formUrl',
-  admissionController.validateFormUrl
-);
+// router.get(
+//   '/validate-form/:formUrl',
+//   admissionController.validateFormUrl
+// );
+
+router.get('/validate-form/:formUrl', setDatabaseConnection, admissionController.validateFormUrl);
 
 
 

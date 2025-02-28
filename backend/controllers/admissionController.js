@@ -1533,7 +1533,7 @@ const admissionController = {
       const { formUrl } = req.params;
       const connection = req.connection;
       console.log('Form URL:', formUrl);
-      console.log('Connection:', connection);
+      console.log('Connection type:', connection.constructor.name);
       const AdmissionForm = require('../models/AdmissionForm')(connection);
   
       const form = await AdmissionForm.findOne({
