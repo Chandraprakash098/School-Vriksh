@@ -21,5 +21,6 @@ const subjectMarksSchema = new mongoose.Schema({
   reviewComments: String
 });
 
-module.exports= mongoose.model('SubjectMarks', subjectMarksSchema);
+// module.exports= mongoose.model('SubjectMarks', subjectMarksSchema);
+module.exports = (connection) => connection.model('SubjectMarks', subjectMarksSchema);
  

@@ -24,7 +24,14 @@ const bookIssueSchema = new mongoose.Schema({
   status: { type: String, enum: ['issued', 'returned', 'overdue'], required: true }
 }, { timestamps: true });
 
+// module.exports = {
+//   Library: mongoose.model('Library', librarySchema),
+//   BookIssue: mongoose.model('BookIssue', bookIssueSchema)
+// };
+
 module.exports = {
-  Library: mongoose.model('Library', librarySchema),
-  BookIssue: mongoose.model('BookIssue', bookIssueSchema)
+  Library: (connection) => connection.model('Library', librarySchema),
+  BookIssue: (connection) => connection.model('BookIssue', bookIssueSchema)
 };
+
+

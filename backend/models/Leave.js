@@ -52,4 +52,5 @@ const LeaveSchema = new mongoose.Schema({
   }
 });
 
-module.exports = mongoose.model('Leave', LeaveSchema);
+// module.exports = mongoose.model('Leave', LeaveSchema);
+module.exports = (connection) => connection.model('Leave', LeaveSchema);

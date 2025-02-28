@@ -10,4 +10,5 @@ const paymentSchema = new mongoose.Schema({
   paymentDate: { type: Date, default: Date.now }
 }, { timestamps: true });
 
-module.exports = mongoose.model('Payment', paymentSchema);
+// module.exports = mongoose.model('Payment', paymentSchema);
+module.exports = (connection) => connection.model('Payment',paymentSchema);

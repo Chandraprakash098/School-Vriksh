@@ -11,4 +11,5 @@ const studyMaterialSchema = new mongoose.Schema({
     isActive: { type: Boolean, default: true }
   }, { timestamps: true });
 
-  module.exports = mongoose.model('StudyMaterial', studyMaterialSchema);
+  // module.exports = mongoose.model('StudyMaterial', studyMaterialSchema);
+  module.exports = (connection) => connection.model('StudyMaterial', studyMaterialSchema);

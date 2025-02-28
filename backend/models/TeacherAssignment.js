@@ -36,4 +36,5 @@ const teacherAssignmentSchema = new mongoose.Schema({
   academicYear: { type: String, required: true }
 }, { timestamps: true });
 
-module.exports = mongoose.model('TeacherAssignment', teacherAssignmentSchema);
+// module.exports = mongoose.model('TeacherAssignment', teacherAssignmentSchema);
+module.exports = (connection) => connection.model('TeacherAssignment', teacherAssignmentSchema);

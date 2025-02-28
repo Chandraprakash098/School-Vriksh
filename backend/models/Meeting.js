@@ -19,4 +19,5 @@ const meetingSchema = new mongoose.Schema({
   scheduledBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
 }, { timestamps: true });
 
-module.exports = mongoose.model('Meeting', meetingSchema);
+// module.exports = mongoose.model('Meeting', meetingSchema);
+module.exports = (connection) => connection.model('Meeting',meetingSchema);

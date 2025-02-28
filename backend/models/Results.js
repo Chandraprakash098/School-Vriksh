@@ -21,4 +21,5 @@ const resultSchema = new mongoose.Schema({
   publishedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
 }, { timestamps: true });
 
-module.exports = mongoose.model('Result', resultSchema);
+// module.exports = mongoose.model('Result', resultSchema);
+module.exports = (connection) => connection.model('Result', resultSchema);

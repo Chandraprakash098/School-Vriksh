@@ -28,4 +28,5 @@ const homeworkSchema = new mongoose.Schema({
   }]
 }, { timestamps: true });
 
-module.exports = mongoose.model('Homework', homeworkSchema);
+// module.exports = mongoose.model('Homework', homeworkSchema);
+module.exports = (connection) => connection.model('Homework', homeworkSchema);

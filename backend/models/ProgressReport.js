@@ -22,4 +22,5 @@ const progressReportSchema = new mongoose.Schema({
     remarks: String
   }, { timestamps: true });
 
-  module.exports = mongoose.model('ProgressReport', progressReportSchema)
+  // module.exports = mongoose.model('ProgressReport', progressReportSchema)
+  module.exports = (connection) => connection.model('ProgressReport',progressReportSchema);

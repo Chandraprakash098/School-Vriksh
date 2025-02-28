@@ -28,4 +28,5 @@ const teacherScheduleSchema = new mongoose.Schema({
   }]
 }, { timestamps: true });
 
-module.exports = mongoose.model('TeacherSchedule', teacherScheduleSchema);
+// module.exports = mongoose.model('TeacherSchedule', teacherScheduleSchema);
+module.exports = (connection) => connection.model('TeacherSchedule', teacherScheduleSchema);

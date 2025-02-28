@@ -10,4 +10,5 @@ const attendanceSchema = new mongoose.Schema({
   markedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
 }, { timestamps: true });
 
-module.exports = mongoose.model('Attendance', attendanceSchema);
+// module.exports = mongoose.model('Attendance', attendanceSchema);
+module.exports = (connection) => connection.model('Attendance', attendanceSchema);

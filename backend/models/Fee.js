@@ -20,4 +20,5 @@ const feeSchema = new mongoose.Schema({
   }
 }, { timestamps: true });
 
-module.exports = mongoose.model('Fee', feeSchema);
+// module.exports = mongoose.model('Fee', feeSchema);
+module.exports = (connection) => connection.model('Fee', feeSchema);

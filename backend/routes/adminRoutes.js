@@ -4,7 +4,8 @@ const router = express.Router();
 const auth = require('../middleware/auth');
 const roleCheck = require('../middleware/roleCheck');
 const adminController = require('../controllers/adminController');
-const { upload } = require('../config/cloudinary'); // Assuming you have this middleware
+const { upload } = require('../config/cloudinary');
+const { announcementUpload } = require('../config/cloudinary');
 
 // User Management
 router.post('/users', auth, roleCheck(['admin']), adminController.createUser);
@@ -36,7 +37,28 @@ router.post('/exams/:examId/seating', auth, roleCheck(['admin']), adminControlle
 
 
 // Announcement Management
-router.post('/announcements', auth, roleCheck(['admin']), adminController.createAnnouncement);
+// router.post('/announcements', auth, roleCheck(['admin']), adminController.createAnnouncement);
+
+router.post('/announcements', auth, roleCheck(['admin']), 
+    announcementUpload.array('files', 5), // Allow up to 5 files
+    adminController.createAnnouncement
+);
+// Get all announcements
+router.get('/announcements', auth, roleCheck(['admin']), adminController.getAnnouncements);
+
+// Get a specific announcement
+router.get('/announcements/:id', auth, roleCheck(['admin']), adminController.getAnnouncementById);
+
+// Update an announcement
+// router.put('/announcements/:id', auth, roleCheck(['admin']), adminController.updateAnnouncement);
+router.put('/announcements/:id', auth, roleCheck(['admin']),
+    announcementUpload.array('files', 5),
+    adminController.updateAnnouncement
+);
+
+// Delete an announcement
+router.delete('/announcements/:id', auth, roleCheck(['admin']), adminController.deleteAnnouncement);
+
 
 // Subject Management
 router.post('/subjects', auth, roleCheck(['admin']), adminController.createSubject);
