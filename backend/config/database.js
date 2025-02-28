@@ -39,8 +39,8 @@ const connectToDatabase = async (dbName) => {
 
   const uri = `${process.env.MONGODB_BASE_URI}${dbName}?retryWrites=true&w=majority&appName=Codeniche`;
   const connection = await mongoose.createConnection(uri, {
-    useNewUrlParser: true,
-    useUnifiedTopology: true,
+    connectTimeoutMS: 20000, // 20 seconds
+    serverSelectionTimeoutMS: 20000, // 20 seconds
   });
 
   connections[dbName] = connection;
