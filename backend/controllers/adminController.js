@@ -3644,10 +3644,322 @@ const adminController = {
     }
   },
 
-  updateTeacherAssignments: async (req, res) => {
-    const session = await mongoose.startSession();
-    session.startTransaction();
+  // updateTeacherAssignments: async (req, res) => {
+  //   const session = await mongoose.startSession();
+  //   session.startTransaction();
 
+  //   try {
+  //     const { teacherId } = req.params;
+  //     const {
+  //       classTeacherOf, // New class ID for class teacher role
+  //       removeClassTeacherRole, // Boolean to remove class teacher role
+  //       addSubjectAssignments, // Array of {classId, subjectId} to add
+  //       removeSubjectAssignments, // Array of {classId, subjectId} to remove
+  //     } = req.body;
+  //     const schoolId = req.school._id;
+  //     const adminId = req.user._id;
+  //     const connection = req.connection;
+  //     const User = require('../models/User')(connection);
+  //     const Class = require('../models/Class')(connection);
+  //     const Subject = require('../models/Subject')(connection);
+  //     const TeacherAssignment = require('../models/TeacherAssignment')(connection);
+
+  //     // Verify teacher exists
+  //     const teacher = await User.findOne({
+  //       _id: teacherId,
+  //       school: schoolId,
+  //       role: 'teacher',
+  //     });
+
+  //     if (!teacher) {
+  //       return res.status(404).json({ message: 'Teacher not found' });
+  //     }
+
+  //     // Get current teacher assignment
+  //     let teacherAssignment = await TeacherAssignment.findOne({
+  //       teacher: teacherId,
+  //       school: schoolId,
+  //     });
+
+  //     if (!teacherAssignment) {
+  //       // Create new assignment record if it doesn't exist
+  //       teacherAssignment = new TeacherAssignment({
+  //         school: schoolId,
+  //         teacher: teacherId,
+  //         classTeacherAssignment: null,
+  //         subjectAssignments: [],
+  //         academicYear: getCurrentAcademicYear(),
+  //       });
+  //     }
+
+  //     // HANDLE CLASS TEACHER ASSIGNMENT
+  //     if (classTeacherOf) {
+  //       // Validate the new class
+  //       const newClass = await Class.findOne({
+  //         _id: classTeacherOf,
+  //         school: schoolId,
+  //       });
+
+  //       if (!newClass) {
+  //         return res.status(400).json({ message: 'Class not found' });
+  //       }
+
+  //       // Check if the class already has a teacher assigned (that's not this teacher)
+  //       if (newClass.classTeacher && newClass.classTeacher.toString() !== teacherId) {
+  //         return res.status(400).json({
+  //           message: 'This class already has a different class teacher assigned',
+  //         });
+  //       }
+
+  //       // If teacher is already class teacher of a different class, remove that assignment
+  //       if (
+  //         teacherAssignment.classTeacherAssignment &&
+  //         teacherAssignment.classTeacherAssignment.class &&
+  //         teacherAssignment.classTeacherAssignment.class.toString() !== classTeacherOf
+  //       ) {
+  //         // Remove teacher from old class
+  //         await Class.findByIdAndUpdate(
+  //           teacherAssignment.classTeacherAssignment.class,
+  //           {
+  //             $unset: { classTeacher: '' },
+  //             lastUpdated: new Date(),
+  //             updatedBy: adminId,
+  //           },
+  //           { session }
+  //         );
+
+  //         // Update teacher's attendance permissions
+  //         await User.findByIdAndUpdate(
+  //           teacherId,
+  //           {
+  //             $pull: { 'permissions.canTakeAttendance': teacherAssignment.classTeacherAssignment.class },
+  //           },
+  //           { session }
+  //         );
+  //       }
+
+  //       // Assign teacher to new class
+  //       await Class.findByIdAndUpdate(
+  //         classTeacherOf,
+  //         {
+  //           classTeacher: teacherId,
+  //           lastUpdated: new Date(),
+  //           updatedBy: adminId,
+  //         },
+  //         { session }
+  //       );
+
+  //       // Update teacher assignment record
+  //       teacherAssignment.classTeacherAssignment = {
+  //         class: classTeacherOf,
+  //         assignedAt: new Date(),
+  //       };
+
+  //       // Update teacher's attendance permissions
+  //       await User.findByIdAndUpdate(
+  //         teacherId,
+  //         {
+  //           $addToSet: { 'permissions.canTakeAttendance': classTeacherOf },
+  //         },
+  //         { session }
+  //       );
+  //     }
+  //     // Handle class teacher removal
+  //     else if (removeClassTeacherRole && teacherAssignment.classTeacherAssignment) {
+  //       // Remove teacher from class
+  //       await Class.findByIdAndUpdate(
+  //         teacherAssignment.classTeacherAssignment.class,
+  //         {
+  //           $unset: { classTeacher: '' },
+  //           lastUpdated: new Date(),
+  //           updatedBy: adminId,
+  //         },
+  //         { session }
+  //       );
+
+  //       // Update teacher's attendance permissions
+  //       await User.findByIdAndUpdate(
+  //         teacherId,
+  //         {
+  //           $pull: { 'permissions.canTakeAttendance': teacherAssignment.classTeacherAssignment.class },
+  //         },
+  //         { session }
+  //       );
+
+  //       // Remove from assignment record
+  //       teacherAssignment.classTeacherAssignment = null;
+  //     }
+
+  //     // HANDLE SUBJECT TEACHER ASSIGNMENTS - ADDITIONS
+  //     if (addSubjectAssignments?.length) {
+  //       // Validate all new subject assignments
+  //       const validationPromises = addSubjectAssignments.map(async ({ classId, subjectId }) => {
+  //         const subject = await Subject.findOne({
+  //           _id: subjectId,
+  //           class: classId,
+  //           school: schoolId,
+  //         });
+
+  //         if (!subject) {
+  //           throw new Error(`Invalid subject assignment: Subject ${subjectId} for class ${classId}`);
+  //         }
+
+  //         return { classId, subjectId };
+  //       });
+
+  //       const validAssignments = await Promise.all(validationPromises);
+
+  //       // Add new subject assignments
+  //       for (const { classId, subjectId } of validAssignments) {
+  //         // Check if assignment already exists
+  //         const existingAssignment = teacherAssignment.subjectAssignments.find(
+  //           a => a.class.toString() === classId && a.subject.toString() === subjectId
+  //         );
+
+  //         if (!existingAssignment) {
+  //           // Add to teacher assignment record
+  //           teacherAssignment.subjectAssignments.push({
+  //             class: classId,
+  //             subject: subjectId,
+  //             assignedAt: new Date(),
+  //           });
+
+  //           // Add to subject's teachers
+  //           await Subject.findByIdAndUpdate(
+  //             subjectId,
+  //             {
+  //               $addToSet: {
+  //                 teachers: {
+  //                   teacher: teacherId,
+  //                   assignedAt: new Date(),
+  //                 },
+  //               },
+  //             },
+  //             { session }
+  //           );
+
+  //           // Update teacher's mark-entry permissions
+  //           await User.findByIdAndUpdate(
+  //             teacherId,
+  //             {
+  //               $addToSet: {
+  //                 'permissions.canEnterMarks': {
+  //                   class: classId,
+  //                   subject: subjectId,
+  //                 },
+  //               },
+  //             },
+  //             { session }
+  //           );
+  //         }
+  //       }
+  //     }
+
+  //     // HANDLE SUBJECT TEACHER ASSIGNMENTS - REMOVALS
+  //     if (removeSubjectAssignments?.length) {
+  //       for (const { classId, subjectId } of removeSubjectAssignments) {
+  //         // Remove from teacher assignment record
+  //         teacherAssignment.subjectAssignments = teacherAssignment.subjectAssignments.filter(
+  //           a => !(a.class.toString() === classId && a.subject.toString() === subjectId)
+  //         );
+
+  //         // Remove from subject's teachers
+  //         await Subject.findByIdAndUpdate(
+  //           subjectId,
+  //           {
+  //             $pull: {
+  //               teachers: {
+  //                 teacher: teacherId,
+  //               },
+  //             },
+  //           },
+  //           { session }
+  //         );
+
+  //         // Update teacher's mark-entry permissions
+  //         await User.findByIdAndUpdate(
+  //           teacherId,
+  //           {
+  //             $pull: {
+  //               'permissions.canEnterMarks': {
+  //                 class: classId,
+  //                 subject: subjectId,
+  //               },
+  //             },
+  //           },
+  //           { session }
+  //         );
+  //       }
+  //     }
+
+  //     // Save all changes
+  //     await teacherAssignment.save({ session });
+  //     await session.commitTransaction();
+
+  //     // Fetch fully populated data for response
+  //     const updatedTeacher = await User.findById(teacherId)
+  //       .populate('permissions.canTakeAttendance', 'name division', Class)
+  //       .populate('permissions.canEnterMarks.subject', 'name', Subject)
+  //       .populate('permissions.canEnterMarks.class', 'name division', Class);
+
+  //     const updatedAssignment = await TeacherAssignment.findById(teacherAssignment._id)
+  //       .populate('classTeacherAssignment.class', 'name division', Class)
+  //       .populate('subjectAssignments.class', 'name division', Class)
+  //       .populate('subjectAssignments.subject', 'name', Subject);
+
+  //     res.json({
+  //       teacher: updatedTeacher,
+  //       assignment: updatedAssignment,
+  //       message: 'Teacher assignments updated successfully',
+  //     });
+  //   } catch (error) {
+  //     await session.abortTransaction();
+  //     res.status(500).json({
+  //       error: error.message,
+  //       message: 'Failed to update teacher assignments',
+  //     });
+  //   } finally {
+  //     session.endSession();
+  //   }
+  // },
+
+  updateTeacherAssignments: async (req, res) => {
+    const connection = req.connection;
+  
+    // Debugging: Log connection state
+    console.log('Connection readyState before session:', connection.readyState);
+    console.log('Connection name:', connection.name);
+  
+    // Check if connection is ready
+    if (connection.readyState !== 1) {
+      return res.status(500).json({
+        success: false,
+        message: 'Database connection is not ready',
+        readyState: connection.readyState,
+      });
+    }
+  
+    // Start session using the specific connection
+    let session;
+    try {
+      session = await connection.startSession({
+        defaultTransactionOptions: {
+          readPreference: 'primary',
+          readConcern: { level: 'local' },
+          writeConcern: { w: 'majority' },
+        },
+      });
+      console.log('Session started successfully');
+      session.startTransaction();
+    } catch (error) {
+      console.error('Failed to start session:', error.message);
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to start database session',
+        error: error.message,
+      });
+    }
+  
     try {
       const { teacherId } = req.params;
       const {
@@ -3658,31 +3970,30 @@ const adminController = {
       } = req.body;
       const schoolId = req.school._id;
       const adminId = req.user._id;
-      const connection = req.connection;
+  
       const User = require('../models/User')(connection);
       const Class = require('../models/Class')(connection);
       const Subject = require('../models/Subject')(connection);
       const TeacherAssignment = require('../models/TeacherAssignment')(connection);
-
+  
       // Verify teacher exists
       const teacher = await User.findOne({
         _id: teacherId,
         school: schoolId,
         role: 'teacher',
-      });
-
+      }).session(session);
+  
       if (!teacher) {
         return res.status(404).json({ message: 'Teacher not found' });
       }
-
+  
       // Get current teacher assignment
       let teacherAssignment = await TeacherAssignment.findOne({
         teacher: teacherId,
         school: schoolId,
-      });
-
+      }).session(session);
+  
       if (!teacherAssignment) {
-        // Create new assignment record if it doesn't exist
         teacherAssignment = new TeacherAssignment({
           school: schoolId,
           teacher: teacherId,
@@ -3691,33 +4002,29 @@ const adminController = {
           academicYear: getCurrentAcademicYear(),
         });
       }
-
+  
       // HANDLE CLASS TEACHER ASSIGNMENT
       if (classTeacherOf) {
-        // Validate the new class
         const newClass = await Class.findOne({
           _id: classTeacherOf,
           school: schoolId,
-        });
-
+        }).session(session);
+  
         if (!newClass) {
           return res.status(400).json({ message: 'Class not found' });
         }
-
-        // Check if the class already has a teacher assigned (that's not this teacher)
+  
         if (newClass.classTeacher && newClass.classTeacher.toString() !== teacherId) {
           return res.status(400).json({
             message: 'This class already has a different class teacher assigned',
           });
         }
-
-        // If teacher is already class teacher of a different class, remove that assignment
+  
         if (
           teacherAssignment.classTeacherAssignment &&
           teacherAssignment.classTeacherAssignment.class &&
           teacherAssignment.classTeacherAssignment.class.toString() !== classTeacherOf
         ) {
-          // Remove teacher from old class
           await Class.findByIdAndUpdate(
             teacherAssignment.classTeacherAssignment.class,
             {
@@ -3727,8 +4034,7 @@ const adminController = {
             },
             { session }
           );
-
-          // Update teacher's attendance permissions
+  
           await User.findByIdAndUpdate(
             teacherId,
             {
@@ -3737,8 +4043,7 @@ const adminController = {
             { session }
           );
         }
-
-        // Assign teacher to new class
+  
         await Class.findByIdAndUpdate(
           classTeacherOf,
           {
@@ -3748,14 +4053,12 @@ const adminController = {
           },
           { session }
         );
-
-        // Update teacher assignment record
+  
         teacherAssignment.classTeacherAssignment = {
           class: classTeacherOf,
           assignedAt: new Date(),
         };
-
-        // Update teacher's attendance permissions
+  
         await User.findByIdAndUpdate(
           teacherId,
           {
@@ -3763,10 +4066,7 @@ const adminController = {
           },
           { session }
         );
-      }
-      // Handle class teacher removal
-      else if (removeClassTeacherRole && teacherAssignment.classTeacherAssignment) {
-        // Remove teacher from class
+      } else if (removeClassTeacherRole && teacherAssignment.classTeacherAssignment) {
         await Class.findByIdAndUpdate(
           teacherAssignment.classTeacherAssignment.class,
           {
@@ -3776,8 +4076,7 @@ const adminController = {
           },
           { session }
         );
-
-        // Update teacher's attendance permissions
+  
         await User.findByIdAndUpdate(
           teacherId,
           {
@@ -3785,46 +4084,40 @@ const adminController = {
           },
           { session }
         );
-
-        // Remove from assignment record
+  
         teacherAssignment.classTeacherAssignment = null;
       }
-
+  
       // HANDLE SUBJECT TEACHER ASSIGNMENTS - ADDITIONS
       if (addSubjectAssignments?.length) {
-        // Validate all new subject assignments
         const validationPromises = addSubjectAssignments.map(async ({ classId, subjectId }) => {
           const subject = await Subject.findOne({
             _id: subjectId,
             class: classId,
             school: schoolId,
-          });
-
+          }).session(session);
+  
           if (!subject) {
             throw new Error(`Invalid subject assignment: Subject ${subjectId} for class ${classId}`);
           }
-
+  
           return { classId, subjectId };
         });
-
+  
         const validAssignments = await Promise.all(validationPromises);
-
-        // Add new subject assignments
+  
         for (const { classId, subjectId } of validAssignments) {
-          // Check if assignment already exists
           const existingAssignment = teacherAssignment.subjectAssignments.find(
             a => a.class.toString() === classId && a.subject.toString() === subjectId
           );
-
+  
           if (!existingAssignment) {
-            // Add to teacher assignment record
             teacherAssignment.subjectAssignments.push({
               class: classId,
               subject: subjectId,
               assignedAt: new Date(),
             });
-
-            // Add to subject's teachers
+  
             await Subject.findByIdAndUpdate(
               subjectId,
               {
@@ -3837,8 +4130,7 @@ const adminController = {
               },
               { session }
             );
-
-            // Update teacher's mark-entry permissions
+  
             await User.findByIdAndUpdate(
               teacherId,
               {
@@ -3854,16 +4146,14 @@ const adminController = {
           }
         }
       }
-
+  
       // HANDLE SUBJECT TEACHER ASSIGNMENTS - REMOVALS
       if (removeSubjectAssignments?.length) {
         for (const { classId, subjectId } of removeSubjectAssignments) {
-          // Remove from teacher assignment record
           teacherAssignment.subjectAssignments = teacherAssignment.subjectAssignments.filter(
             a => !(a.class.toString() === classId && a.subject.toString() === subjectId)
           );
-
-          // Remove from subject's teachers
+  
           await Subject.findByIdAndUpdate(
             subjectId,
             {
@@ -3875,8 +4165,7 @@ const adminController = {
             },
             { session }
           );
-
-          // Update teacher's mark-entry permissions
+  
           await User.findByIdAndUpdate(
             teacherId,
             {
@@ -3891,28 +4180,29 @@ const adminController = {
           );
         }
       }
-
+  
       // Save all changes
       await teacherAssignment.save({ session });
       await session.commitTransaction();
-
+  
       // Fetch fully populated data for response
       const updatedTeacher = await User.findById(teacherId)
         .populate('permissions.canTakeAttendance', 'name division', Class)
         .populate('permissions.canEnterMarks.subject', 'name', Subject)
         .populate('permissions.canEnterMarks.class', 'name division', Class);
-
+  
       const updatedAssignment = await TeacherAssignment.findById(teacherAssignment._id)
         .populate('classTeacherAssignment.class', 'name division', Class)
         .populate('subjectAssignments.class', 'name division', Class)
         .populate('subjectAssignments.subject', 'name', Subject);
-
+  
       res.json({
         teacher: updatedTeacher,
         assignment: updatedAssignment,
         message: 'Teacher assignments updated successfully',
       });
     } catch (error) {
+      console.error('Transaction error:', error.message);
       await session.abortTransaction();
       res.status(500).json({
         error: error.message,
@@ -3920,6 +4210,7 @@ const adminController = {
       });
     } finally {
       session.endSession();
+      console.log('Session ended');
     }
   },
 

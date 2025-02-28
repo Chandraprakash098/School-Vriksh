@@ -41,6 +41,7 @@ const connectToDatabase = async (dbName) => {
   const connection = await mongoose.createConnection(uri, {
     connectTimeoutMS: 20000, // 20 seconds
     serverSelectionTimeoutMS: 20000, // 20 seconds
+    socketTimeoutMS: 45000,
   });
 
   connections[dbName] = connection;
