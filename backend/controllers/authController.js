@@ -163,7 +163,7 @@ const authController = {
     }
   },
 
-  // Login for both Owner and Admin
+//   // Login for both Owner and Admin
 //   login: async (req, res) => {
 //     try {
 //       const { email, password } = req.body;
@@ -251,51 +251,61 @@ login: async (req, res) => {
   try {
     const { email, password } = req.body;
 
+    // First, check if the user is an owner (in owner_db)
     const ownerConnection = await getOwnerConnection();
-    const OwnerUser = getModel('User', ownerConnection); // Use getModel
+    const OwnerUser = require('../models/User')(ownerConnection);
     let user = await OwnerUser.findOne({ email });
 
     let schoolDetails = null;
     let tokenPayload = {};
 
     if (user) {
+      // Owner login
       if (user.role !== 'owner') {
         return res.status(401).json({ message: 'Invalid credentials' });
       }
 
+      // Verify password
       const isPasswordValid = await bcrypt.compare(password, user.password);
       if (!isPasswordValid) {
         return res.status(401).json({ message: 'Invalid credentials' });
       }
 
+      // Check if user is active
       if (user.status !== 'active') {
         return res.status(401).json({ message: 'Account is inactive' });
       }
 
-      tokenPayload = { userId: user._id, role: user.role };
+      tokenPayload = { userId: user._id, role: user.role }; // No schoolId for owner
     } else {
-      // Use getModel for School
-      const SchoolModel = getModel('School', ownerConnection);
-      const schools = await SchoolModel.find({});
+      // Not an owner, check school-specific databases
+      // Import School model correctly
+      const School = require('../models/School');
+      const ownerSchoolModel = ownerConnection.model('School', School.schema || School(ownerConnection).schema);
+      
+      const schools = await ownerSchoolModel.find({}); // Fetch all schools to find the user
 
       for (const school of schools) {
         const schoolConnection = await getSchoolConnection(school._id);
-        const SchoolUser = getModel('User', schoolConnection); // Use getModel
+        const SchoolUser = require('../models/User')(schoolConnection);
 
         user = await SchoolUser.findOne({ email });
         if (user) {
+          // Verify password
           const isPasswordValid = await bcrypt.compare(password, user.password);
           if (!isPasswordValid) {
             return res.status(401).json({ message: 'Invalid credentials' });
           }
 
+          // Check if user is active
           if (user.status !== 'active') {
             return res.status(401).json({ message: 'Account is inactive' });
           }
 
-          schoolDetails = await SchoolModel.findById(user.school).select('name');
+          // Fetch school details from owner_db
+          schoolDetails = await ownerSchoolModel.findById(user.school).select('name');
           tokenPayload = { userId: user._id, role: user.role, schoolId: user.school };
-          break;
+          break; // Found the user, exit loop
         }
       }
 
@@ -304,6 +314,7 @@ login: async (req, res) => {
       }
     }
 
+    // Generate JWT token
     const token = jwt.sign(tokenPayload, process.env.JWT_SECRET, { expiresIn: '24h' });
 
     res.json({
@@ -317,9 +328,12 @@ login: async (req, res) => {
       token,
     });
   } catch (error) {
+    console.error('Login error:', error);
     res.status(500).json({ error: error.message });
   }
 },
 };
+
+
 
 module.exports = authController;
