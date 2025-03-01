@@ -75,4 +75,8 @@ const schoolSchema = new mongoose.Schema({
 //   schema: schoolSchema
 // };
 
-module.exports = (connection) => connection.model('School', schoolSchema);
+// module.exports = (connection) => connection.model('School', schoolSchema);
+module.exports = {
+  schema: schoolSchema,
+  model: (connection) => connection.model('School', schoolSchema),
+};
