@@ -44,24 +44,49 @@ console.log('Loaded models:', Object.keys(models).map(name => ({
   name,
   type: typeof models[name],
   isFunction: typeof models[name] === 'function',
+  hasModelFunction: typeof models[name]?.model === 'function',
 })));
 
 // Ensure all models are functions
+
+// Object.keys(models).forEach(name => {
+//   if (typeof models[name] !== 'function') {
+//     console.error(`Error: ${name} is not a factory function, got type: ${typeof models[name]}`);
+//   }
+// });
+
+// Normalize model factories
+const normalizedModels = {};
 Object.keys(models).forEach(name => {
-  if (typeof models[name] !== 'function') {
-    console.error(`Error: ${name} is not a factory function, got type: ${typeof models[name]}`);
+  if (typeof models[name] === 'function') {
+    // Direct factory function (e.g., User, Class, etc.)
+    normalizedModels[name] = models[name];
+  } else if (typeof models[name]?.model === 'function') {
+    // Object with a model factory (e.g., School)
+    normalizedModels[name] = models[name].model;
+  } else {
+    console.error(`Error: ${name} is not a valid model factory, got type: ${typeof models[name]}`);
   }
 });
 
+// const getModel = (name, connection) => {
+//   console.log('getModel called with:', { name, connectionName: connection.name });
+//   if (!models[name]) {
+//     throw new Error(`Model ${name} not found`);
+//   }
+//   if (typeof models[name] !== 'function') {
+//     throw new Error(`Model ${name} is not a function, got: ${typeof models[name]}`);
+//   }
+//   const model = models[name](connection);
+//   console.log(`Returning model for ${name}`);
+//   return model;
+// };
 const getModel = (name, connection) => {
   console.log('getModel called with:', { name, connectionName: connection.name });
-  if (!models[name]) {
-    throw new Error(`Model ${name} not found`);
+  if (!normalizedModels[name]) {
+    throw new Error(`Model ${name} not found or not a valid factory`);
   }
-  if (typeof models[name] !== 'function') {
-    throw new Error(`Model ${name} is not a function, got: ${typeof models[name]}`);
-  }
-  const model = models[name](connection);
+  const model = normalizedModels[name](connection);
   console.log(`Returning model for ${name}`);
   return model;
 };
