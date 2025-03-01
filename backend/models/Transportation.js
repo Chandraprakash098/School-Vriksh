@@ -9,4 +9,6 @@ const transportationSchema = new mongoose.Schema({
     dropTime: String
   }, { timestamps: true });
 
-  module.exports =mongoose.model('Transportation', transportationSchema);
+  // module.exports =mongoose.model('Transportation', transportationSchema);
+
+  module.exports = (connection) => connection.model('Transportation', transportationSchema);

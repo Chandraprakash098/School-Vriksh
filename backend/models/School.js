@@ -70,7 +70,9 @@ const schoolSchema = new mongoose.Schema({
 
 // Export as a factory function
 // module.exports = (connection) => connection.model('School', schoolSchema);
-module.exports = {
-  model: (connection) => connection.model('School', schoolSchema),
-  schema: schoolSchema
-};
+// module.exports = {
+//   model: (connection) => connection.model('School', schoolSchema),
+//   schema: schoolSchema
+// };
+
+module.exports = (connection) => connection.model('School', schoolSchema);

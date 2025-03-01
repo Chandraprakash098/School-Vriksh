@@ -167,66 +167,180 @@
 
 
 
+// const jwt = require('jsonwebtoken');
+// const { connectToDatabase, getOwnerConnection } = require('../config/database');
+
+// const auth = async (req, res, next) => {
+//   try {
+//     const authHeader = req.header('Authorization');
+//     if (!authHeader) {
+//       return res.status(401).json({ error: 'No Authorization header provided' });
+//     }
+
+//     const token = authHeader.replace('Bearer ', '');
+//     const decoded = jwt.verify(token, process.env.JWT_SECRET);
+//     // console.log('Decoded JWT:', decoded);
+
+//     let connection, UserModel;
+
+//     if (decoded.role === 'owner') {
+//       connection = await getOwnerConnection();
+//       UserModel = require('../models/User')(connection);
+//     } else {
+//       const ownerConnection = await getOwnerConnection();
+//       const School = ownerConnection.model('School', require('../models/School').schema);
+//       const userSchool = await School.findById(decoded.schoolId);
+//       // console.log('User School from decoded.schoolId:', userSchool);
+
+//       if (!userSchool || !userSchool.dbName) {
+//         return res.status(400).json({ error: 'User is not associated with any school' });
+//       }
+
+//       connection = await connectToDatabase(userSchool.dbName);
+//       UserModel = require('../models/User')(connection);
+//     }
+
+//     const user = await UserModel.findOne({ _id: decoded.userId });
+//     // console.log('User:', user);
+//     if (!user) {
+//       return res.status(404).json({ error: 'User not found' });
+//     }
+
+//     req.user = user;
+//     req.connection = connection;
+//     req.token = token;
+
+//     // Set req.school only if not owner
+//     if (user.role !== 'owner') {
+//       const ownerConnection = await getOwnerConnection();
+//       const School = ownerConnection.model('School', require('../models/School').schema);
+//       req.school = await School.findById(user.school); // Use user.school instead of decoded.schoolId
+//       // console.log('req.school after assignment:', req.school);
+//       if (!req.school) {
+//         return res.status(400).json({ error: 'School not found for user' });
+//       }
+//     } else {
+//       req.school = null;
+//     }
+
+//     next();
+//   } catch (error) {
+//     console.error('Authentication Error:', error.message);
+//     res.status(401).json({ error: 'Please authenticate', details: error.message });
+//   }
+// };
+
+// module.exports = auth;
+
+
+// const jwt = require('jsonwebtoken');
+// const { getOwnerConnection, connectToDatabase } = require('../config/database');
+
+// const auth = async (req, res, next) => {
+//   try {
+//     const authHeader = req.header('Authorization');
+//     if (!authHeader) {
+//       return res.status(401).json({ error: 'No Authorization header provided' });
+//     }
+
+//     const token = authHeader.replace('Bearer ', '');
+//     const decoded = jwt.verify(token, process.env.JWT_SECRET);
+//     console.log('Decoded JWT:', decoded);
+
+//     let connection, UserModel;
+
+//     if (decoded.role === 'owner') {
+//       connection = await getOwnerConnection();
+//       UserModel = require('../models/User')(connection);
+//     } else {
+//       const ownerConnection = await getOwnerConnection();
+//       const School = ownerConnection.model('School', require('../models/School').schema);
+//       const userSchool = await School.findById(decoded.schoolId);
+//       console.log('User School:', userSchool);
+
+//       if (!userSchool || !userSchool.dbName) {
+//         return res.status(400).json({ error: 'User is not associated with any school' });
+//       }
+
+//       connection = await connectToDatabase(userSchool.dbName);
+//       UserModel = require('../models/User')(connection);
+//     }
+
+//     const user = await UserModel.findOne({ _id: decoded.userId });
+//     console.log('Found User:', user);
+//     if (!user) {
+//       return res.status(404).json({ error: 'User not found' });
+//     }
+
+//     req.user = user;
+//     req.connection = connection;
+//     req.token = token;
+
+//     if (user.role !== 'owner') {
+//       const ownerConnection = await getOwnerConnection();
+//       const School = ownerConnection.model('School', require('../models/School').schema);
+//       req.school = await School.findById(user.school);
+//       console.log('Assigned req.school:', req.school);
+//       if (!req.school) {
+//         return res.status(400).json({ error: 'School not found for user' });
+//       }
+//     } else {
+//       req.school = null;
+//     }
+
+//     next();
+//   } catch (error) {
+//     console.error('Authentication Error:', error.message);
+//     res.status(401).json({ error: 'Please authenticate', details: error.message });
+//   }
+// };
+
+// module.exports = auth;
+
+// auth.js
 const jwt = require('jsonwebtoken');
-const { connectToDatabase, getOwnerConnection } = require('../config/database');
+const { getOwnerConnection, connectToDatabase } = require('../config/database');
+const getModel = require('../models/index');
 
 const auth = async (req, res, next) => {
   try {
-    const authHeader = req.header('Authorization');
-    if (!authHeader) {
-      return res.status(401).json({ error: 'No Authorization header provided' });
-    }
+    const token = req.header('Authorization')?.replace('Bearer ', '');
+    if (!token) return res.status(401).json({ error: 'No token provided' });
 
-    const token = authHeader.replace('Bearer ', '');
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    // console.log('Decoded JWT:', decoded);
+    const ownerConnection = getOwnerConnection();
 
-    let connection, UserModel;
-
-    if (decoded.role === 'owner') {
-      connection = await getOwnerConnection();
-      UserModel = require('../models/User')(connection);
-    } else {
-      const ownerConnection = await getOwnerConnection();
-      const School = ownerConnection.model('School', require('../models/School').schema);
-      const userSchool = await School.findById(decoded.schoolId);
-      // console.log('User School from decoded.schoolId:', userSchool);
-
-      if (!userSchool || !userSchool.dbName) {
-        return res.status(400).json({ error: 'User is not associated with any school' });
-      }
-
-      connection = await connectToDatabase(userSchool.dbName);
-      UserModel = require('../models/User')(connection);
+    if (!ownerConnection) {
+      throw new Error('Owner database connection is not initialized');
     }
 
-    const user = await UserModel.findOne({ _id: decoded.userId });
-    // console.log('User:', user);
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
-    }
+    const [user, school] = await Promise.all([
+      decoded.role === 'owner'
+        ? getModel('User', ownerConnection).findOne({ _id: decoded.userId }).lean()
+        : (async () => {
+            const School = getModel('School', ownerConnection);
+            const userSchool = await School.findById(decoded.schoolId).lean();
+            if (!userSchool || !userSchool.dbName) {
+              throw new Error('School not found');
+            }
+            const schoolConnection = await connectToDatabase(userSchool.dbName);
+            return getModel('User', schoolConnection).findOne({ _id: decoded.userId }).lean();
+          })(),
+      decoded.role !== 'owner'
+        ? getModel('School', ownerConnection).findById(decoded.schoolId).lean()
+        : null,
+    ]);
+
+    if (!user) return res.status(404).json({ error: 'User not found' });
 
     req.user = user;
-    req.connection = connection;
+    req.connection = decoded.role === 'owner' ? ownerConnection : await connectToDatabase(school.dbName);
+    req.school = school;
     req.token = token;
-
-    // Set req.school only if not owner
-    if (user.role !== 'owner') {
-      const ownerConnection = await getOwnerConnection();
-      const School = ownerConnection.model('School', require('../models/School').schema);
-      req.school = await School.findById(user.school); // Use user.school instead of decoded.schoolId
-      // console.log('req.school after assignment:', req.school);
-      if (!req.school) {
-        return res.status(400).json({ error: 'School not found for user' });
-      }
-    } else {
-      req.school = null;
-    }
-
     next();
   } catch (error) {
     console.error('Authentication Error:', error.message);
-    res.status(401).json({ error: 'Please authenticate', details: error.message });
+    res.status(401).json({ error: 'Authentication failed', details: error.message });
   }
 };
 

@@ -15,4 +15,5 @@ const classResultSchema = new mongoose.Schema({
   publishedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
 });
 
-module.exports= mongoose.model('ClassResult', classResultSchema);
+// module.exports= mongoose.model('ClassResult', classResultSchema);
+module.exports = (connection) => connection.model('ClassResult', classResultSchema);

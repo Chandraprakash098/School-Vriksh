@@ -24,4 +24,5 @@ const parentCommunicationSchema = new mongoose.Schema({
   }]
 }, { timestamps: true });
 
-module.exports = mongoose.model('ParentCommunication', parentCommunicationSchema);
+// module.exports = mongoose.model('ParentCommunication', parentCommunicationSchema);
+module.exports = (connection) => connection.model('ParentCommunication', parentCommunicationSchema);

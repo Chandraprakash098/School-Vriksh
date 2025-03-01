@@ -20,4 +20,5 @@ const timetableSchema = new mongoose.Schema({
   academicYear: { type: String, required: true }
 }, { timestamps: true });
 
-module.exports = mongoose.model('Timetable', timetableSchema);
+// module.exports = mongoose.model('Timetable', timetableSchema);
+module.exports = (connection) => connection.model('Timetable', timetableSchema);

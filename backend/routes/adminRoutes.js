@@ -6,6 +6,8 @@ const roleCheck = require('../middleware/roleCheck');
 const adminController = require('../controllers/adminController');
 const { upload } = require('../config/cloudinary');
 const { announcementUpload } = require('../config/cloudinary');
+const cloudinary = require('../config/cloudinary').cloudinary;
+const path = require('path');
 
 // User Management
 router.post('/users', auth, roleCheck(['admin']), adminController.createUser);
@@ -40,7 +42,7 @@ router.post('/exams/:examId/seating', auth, roleCheck(['admin']), adminControlle
 // router.post('/announcements', auth, roleCheck(['admin']), adminController.createAnnouncement);
 
 router.post('/announcements', auth, roleCheck(['admin']), 
-    announcementUpload.array('files', 5), // Allow up to 5 files
+    announcementUpload.array('files'), // Allow up to 5 files
     adminController.createAnnouncement
 );
 // Get all announcements
@@ -106,4 +108,22 @@ router.post(
   [auth, roleCheck(['admin'])],
   adminController.publishResults
 );
+
+
+router.post('/test-upload', async (req, res) => {
+  try {
+    const filePath = path.join('C:', 'Users', 'asus', 'Downloads', 'sem6.pdf'); // Proper path construction
+    console.log('Attempting to upload file from:', filePath);
+
+    const result = await cloudinary.uploader.upload(filePath, {
+      folder: 'announcements',
+      resource_type: 'auto',
+      timeout: 60000,
+    });
+    res.json({ success: true, result });
+  } catch (error) {
+    console.error('Direct Cloudinary upload error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
 module.exports = router;
