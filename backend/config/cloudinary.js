@@ -15,7 +15,7 @@ const storage = new CloudinaryStorage({
     cloudinary: cloudinary,
     params: {
         folder: 'syllabuses',
-        allowed_formats: ['pdf', 'doc', 'docx', 'jpg', 'jpeg'],
+        allowed_formats: ['pdf', 'doc', 'docx', 'jpg', 'jpeg','png'],
         // resource_type: 'raw',
         resource_type: 'auto',
 

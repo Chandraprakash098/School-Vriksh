@@ -45,4 +45,5 @@ const announcementSchema = new mongoose.Schema({
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' } 
 }, { timestamps: true });
 
-module.exports = mongoose.model('Announcement', announcementSchema);
+// module.exports = mongoose.model('Announcement', announcementSchema);
+module.exports = (connection) => connection.model('Announcement', announcementSchema);

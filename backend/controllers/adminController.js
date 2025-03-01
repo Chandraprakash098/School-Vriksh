@@ -3061,9 +3061,27 @@
 
 
 
-const mongoose = require('mongoose');
+
+
+const User = require('../models/User');
+const Class = require('../models/Class');
+const Subject = require('../models/Subject');
+const Syllabus = require('../models/Syllabus');
+const TeacherAssignment = require('../models/TeacherAssignment');
+const Timetable = require('../models/Timetable');
+const Attendance = require('../models/Attendance');
+const Exam = require('../models/Exam');
+const Result = require('../models/Results');
+const Announcement = require('../models/Announcement');
+const Meeting = require('../models/Meeting');
+const SubjectMarks = require('../models/SubjectMarks')
+const classResult = require('../models/ClassResult')
+// const TrusteeActivity = require('../models/TrusteeActivity');
 const bcrypt = require('bcryptjs');
-const { cloudinary } = require('../config/cloudinary');
+const mongoose = require('mongoose');
+const { cloudinary } = require('../config/cloudinary')
+const multer = require('multer');
+
 
 const adminController = {
   // ============ User Management ============
