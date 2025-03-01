@@ -109,6 +109,7 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { getOwnerConnection, getSchoolConnection } = require('../config/database');
+const getModel = require('../models/index')
 
 const authController = {
   // Owner Registration
