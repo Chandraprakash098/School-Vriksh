@@ -19,6 +19,8 @@ router.post('/enroll/:applicationId', clerkController.enrollStudent);
 router.put('/verify-documents/:studentId', clerkController.verifyDocuments);
 // router.put('/confirm-admission/:studentId', clerkController.confirmAdmission);
 
+router.get('/students/class/:classId', clerkController.getStudentsByClass);
+
 // Certificate routes
 router.post('/certificate/:studentId', clerkController.generateCertificate);
 
