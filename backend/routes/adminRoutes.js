@@ -80,7 +80,7 @@ router.put('/trustees/:trusteeId', auth, roleCheck(['admin']), adminController.m
 //test for exam manage
 
 router.post(
-  '/:schoolId/schedule',
+  '/schedule',
   [auth, roleCheck(['admin']), ],
   adminController.createExamSchedule
 );

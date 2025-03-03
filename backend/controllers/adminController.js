@@ -4200,80 +4200,141 @@ const adminController = {
     }
   },
 
+  // createExamSchedule: async (req, res) => {
+  //   try {
+  //     const { name, examType, startDate, endDate, classes, subjects, availableRooms } = req.body;
+  //     const schoolId = req.school._id;
+  //     const connection = req.connection;
+  //     const Exam = getModel('Exam', connection);
+  //     const SubjectMarks = getModel('SubjectMarks', connection);
+  //     const User = getModel('User', connection);
+
+  //     // const totalStudents = await User.countDocuments({ role: 'student', class: { $in: classes }, school: schoolId });
+  //     // if (totalStudents === 0) return res.status(400).json({ error: 'No students found' });
+
+  //     const session = await connection.startSession();
+  //     session.startTransaction();
+
+  //     try {
+  //       const examSchedule = new Exam({
+  //         school: schoolId,
+  //         name,
+  //         examType,
+  //         startDate,
+  //         endDate,
+  //         classes: classes.map(classId => ({
+  //           class: classId,
+  //           subjects: subjects.filter(s => s.classes.includes(classId)).map(subject => ({
+  //             subject: subject.id,
+  //             date: subject.date,
+  //             startTime: subject.startTime,
+  //             endTime: subject.endTime,
+  //             totalMarks: subject.totalMarks,
+  //           })),
+  //         })),
+  //       });
+
+  //       await examSchedule.save({ session });
+
+  //       const seatingArrangements = {};
+  //       const uniqueDates = [...new Set(subjects.map(s => s.date))];
+  //       for (const date of uniqueDates) {
+  //         const classesOnThisDate = classes.filter(c => subjects.some(s => s.date === date && s.classes.includes(c)));
+  //         const totalStudentsOnDate = await User.countDocuments({ role: 'student', class: { $in: classesOnThisDate }, school: schoolId });
+  //         seatingArrangements[date] = adminController.generateSeatingArrangement(totalStudentsOnDate, availableRooms, totalStudentsOnDate);
+  //       }
+
+  //       examSchedule.seatingArrangement = seatingArrangements;
+  //       await examSchedule.save({ session });
+
+  //       for (const classObj of classes) {
+  //         for (const subject of subjects) {
+  //           if (subject.classes.includes(classObj)) {
+  //             const subjectExam = new SubjectMarks({
+  //               exam: examSchedule._id,
+  //               class: classObj,
+  //               subject: subject.id,
+  //               totalMarks: subject.totalMarks,
+  //               status: 'pending',
+  //             });
+  //             await subjectExam.save({ session });
+  //           }
+  //         }
+  //       }
+
+  //       await session.commitTransaction();
+  //       res.status(201).json({ examSchedule, seatingArrangements });
+  //     } catch (error) {
+  //       await session.abortTransaction();
+  //       throw error;
+  //     } finally {
+  //       session.endSession();
+  //     }
+  //   } catch (error) {
+  //     res.status(500).json({ error: error.message });
+  //   }
+  // },
+
+
   createExamSchedule: async (req, res) => {
     try {
-      const { name, examType, startDate, endDate, classes, subjects, availableRooms } = req.body;
-      const schoolId = req.school._id;
-      const connection = req.connection;
-      const Exam = getModel('Exam', connection);
-      const SubjectMarks = getModel('SubjectMarks', connection);
-      const User = getModel('User', connection);
+        const { name, examType, startDate, endDate, classes, subjects, availableRooms } = req.body;
+        const schoolId = req.school._id;
+        const connection = req.connection;
+        const Exam = getModel('Exam', connection);
+        const SubjectMarks = getModel('SubjectMarks', connection);
+        const User = getModel('User', connection);
 
-      const totalStudents = await User.countDocuments({ role: 'student', class: { $in: classes }, school: schoolId });
-      if (totalStudents === 0) return res.status(400).json({ error: 'No students found' });
+        const session = await connection.startSession();
+        session.startTransaction();
 
-      const session = await connection.startSession();
-      session.startTransaction();
+        try {
+            const exams = [];
 
-      try {
-        const examSchedule = new Exam({
-          school: schoolId,
-          name,
-          examType,
-          startDate,
-          endDate,
-          classes: classes.map(classId => ({
-            class: classId,
-            subjects: subjects.filter(s => s.classes.includes(classId)).map(subject => ({
-              subject: subject.id,
-              date: subject.date,
-              startTime: subject.startTime,
-              endTime: subject.endTime,
-              totalMarks: subject.totalMarks,
-            })),
-          })),
-        });
+            for (const classId of classes) {
+                for (const subject of subjects) {
+                    if (subject.classes.includes(classId)) {
+                        const examEntry = new Exam({
+                            school: schoolId,
+                            name,
+                            examType,
+                            startDate,
+                            endDate,
+                            class: classId,
+                            subject: subject.id,
+                            date: subject.date,
+                            duration: (new Date(`1970-01-01T${subject.endTime}Z`) - new Date(`1970-01-01T${subject.startTime}Z`)) / 60000, // Convert to minutes
+                            totalMarks: subject.totalMarks,
+                        });
 
-        await examSchedule.save({ session });
-
-        const seatingArrangements = {};
-        const uniqueDates = [...new Set(subjects.map(s => s.date))];
-        for (const date of uniqueDates) {
-          const classesOnThisDate = classes.filter(c => subjects.some(s => s.date === date && s.classes.includes(c)));
-          const totalStudentsOnDate = await User.countDocuments({ role: 'student', class: { $in: classesOnThisDate }, school: schoolId });
-          seatingArrangements[date] = adminController.generateSeatingArrangement(totalStudentsOnDate, availableRooms, totalStudentsOnDate);
-        }
-
-        examSchedule.seatingArrangement = seatingArrangements;
-        await examSchedule.save({ session });
-
-        for (const classObj of classes) {
-          for (const subject of subjects) {
-            if (subject.classes.includes(classObj)) {
-              const subjectExam = new SubjectMarks({
-                exam: examSchedule._id,
-                class: classObj,
-                subject: subject.id,
-                totalMarks: subject.totalMarks,
-                status: 'pending',
-              });
-              await subjectExam.save({ session });
+                        await examEntry.save({ session });
+                        exams.push(examEntry);
+                    }
+                }
             }
-          }
-        }
 
-        await session.commitTransaction();
-        res.status(201).json({ examSchedule, seatingArrangements });
-      } catch (error) {
-        await session.abortTransaction();
-        throw error;
-      } finally {
-        session.endSession();
-      }
+            // Generate seating arrangement
+            const seatingArrangements = {};
+            const uniqueDates = [...new Set(subjects.map(s => s.date))];
+            for (const date of uniqueDates) {
+                const classesOnThisDate = classes.filter(c => subjects.some(s => s.date === date && s.classes.includes(c)));
+                const totalStudentsOnDate = await User.countDocuments({ role: 'student', class: { $in: classesOnThisDate }, school: schoolId });
+                seatingArrangements[date] = adminController.generateSeatingArrangement(totalStudentsOnDate, availableRooms, totalStudentsOnDate);
+            }
+
+            await session.commitTransaction();
+            res.status(201).json({ exams, seatingArrangements });
+
+        } catch (error) {
+            await session.abortTransaction();
+            throw error;
+        } finally {
+            session.endSession();
+        }
     } catch (error) {
-      res.status(500).json({ error: error.message });
+        res.status(500).json({ error: error.message });
     }
-  },
+},
 
   enterResults: async (req, res) => {
     try {

@@ -573,6 +573,36 @@ const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 
 const clerkController = {
+  // getPendingVerifications: async (req, res) => {
+  //   try {
+  //     const schoolId = req.school._id.toString();
+  //     const connection = req.connection;
+  //     const AdmissionApplication = require('../models/AdmissionApplication')(connection);
+
+  //     const applications = await AdmissionApplication.find({
+  //       school: schoolId,
+  //       status: { $in: ['pending', 'document_verification'] },
+  //       'clerkVerification.status': 'pending',
+  //     }).sort({ createdAt: -1 });
+
+  //     res.json({
+  //       status: 'success',
+  //       count: applications.length,
+  //       applications: applications.map((app) => ({
+  //         id: app._id,
+  //         trackingId: app.trackingId,
+  //         studentName: app.studentDetails.name,
+  //         admissionType: app.admissionType,
+  //         appliedClass: app.studentDetails.appliedClass,
+  //         status: app.status,
+  //         submittedOn: app.createdAt,
+  //       })),
+  //     });
+  //   } catch (error) {
+  //     res.status(500).json({ error: error.message });
+  //   }
+  // },
+
   getPendingVerifications: async (req, res) => {
     try {
       const schoolId = req.school._id.toString();
@@ -583,7 +613,9 @@ const clerkController = {
         school: schoolId,
         status: { $in: ['pending', 'document_verification'] },
         'clerkVerification.status': 'pending',
-      }).sort({ createdAt: -1 });
+      })
+       // Optional: if you need school details
+      .sort({ createdAt: -1 });
 
       res.json({
         status: 'success',
@@ -591,15 +623,59 @@ const clerkController = {
         applications: applications.map((app) => ({
           id: app._id,
           trackingId: app.trackingId,
-          studentName: app.studentDetails.name,
+          
+          // Student Details
+          studentDetails: {
+            name: app.studentDetails.name,
+            dob: app.studentDetails.dob,
+            gender: app.studentDetails.gender,
+            email: app.studentDetails.email,
+            mobile: app.studentDetails.mobile,
+            appliedClass: app.studentDetails.appliedClass
+          },
+          
+          // Parent Details
+          parentDetails: {
+            name: app.parentDetails.name,
+            email: app.parentDetails.email,
+            mobile: app.parentDetails.mobile,
+            occupation: app.parentDetails.occupation,
+            address: {
+              street: app.parentDetails.address.street,
+              city: app.parentDetails.address.city,
+              state: app.parentDetails.address.state,
+              pincode: app.parentDetails.address.pincode
+            }
+          },
+          
+          // Admission Details
           admissionType: app.admissionType,
-          appliedClass: app.studentDetails.appliedClass,
           status: app.status,
           submittedOn: app.createdAt,
+          
+          // Documents
+          documents: app.documents.map(doc => ({
+            type: doc.type,
+            documentUrl: doc.documentUrl,
+            public_id: doc.public_id,
+            verified: doc.verified
+          })),
+          
+          // Additional Responses (if any)
+          additionalResponses: app.additionalResponses ? Object.fromEntries(app.additionalResponses) : {},
+          
+          // Verification Status
+          clerkVerification: {
+            status: app.clerkVerification.status,
+            comments: app.clerkVerification.comments
+          }
         })),
       });
     } catch (error) {
-      res.status(500).json({ error: error.message });
+      res.status(500).json({ 
+        status: 'error',
+        error: error.message 
+      });
     }
   },
 
