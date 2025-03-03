@@ -573,6 +573,7 @@ const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 
 const clerkController = {
+  
   // getPendingVerifications: async (req, res) => {
   //   try {
   //     const schoolId = req.school._id.toString();
@@ -583,7 +584,9 @@ const clerkController = {
   //       school: schoolId,
   //       status: { $in: ['pending', 'document_verification'] },
   //       'clerkVerification.status': 'pending',
-  //     }).sort({ createdAt: -1 });
+  //     })
+  //      // Optional: if you need school details
+  //     .sort({ createdAt: -1 });
 
   //     res.json({
   //       status: 'success',
@@ -591,15 +594,59 @@ const clerkController = {
   //       applications: applications.map((app) => ({
   //         id: app._id,
   //         trackingId: app.trackingId,
-  //         studentName: app.studentDetails.name,
+          
+  //         // Student Details
+  //         studentDetails: {
+  //           name: app.studentDetails.name,
+  //           dob: app.studentDetails.dob,
+  //           gender: app.studentDetails.gender,
+  //           email: app.studentDetails.email,
+  //           mobile: app.studentDetails.mobile,
+  //           appliedClass: app.studentDetails.appliedClass
+  //         },
+          
+  //         // Parent Details
+  //         parentDetails: {
+  //           name: app.parentDetails.name,
+  //           email: app.parentDetails.email,
+  //           mobile: app.parentDetails.mobile,
+  //           occupation: app.parentDetails.occupation,
+  //           address: {
+  //             street: app.parentDetails.address.street,
+  //             city: app.parentDetails.address.city,
+  //             state: app.parentDetails.address.state,
+  //             pincode: app.parentDetails.address.pincode
+  //           }
+  //         },
+          
+  //         // Admission Details
   //         admissionType: app.admissionType,
-  //         appliedClass: app.studentDetails.appliedClass,
   //         status: app.status,
   //         submittedOn: app.createdAt,
+          
+  //         // Documents
+  //         documents: app.documents.map(doc => ({
+  //           type: doc.type,
+  //           documentUrl: doc.documentUrl,
+  //           public_id: doc.public_id,
+  //           verified: doc.verified
+  //         })),
+          
+  //         // Additional Responses (if any)
+  //         additionalResponses: app.additionalResponses ? Object.fromEntries(app.additionalResponses) : {},
+          
+  //         // Verification Status
+  //         clerkVerification: {
+  //           status: app.clerkVerification.status,
+  //           comments: app.clerkVerification.comments
+  //         }
   //       })),
   //     });
   //   } catch (error) {
-  //     res.status(500).json({ error: error.message });
+  //     res.status(500).json({ 
+  //       status: 'error',
+  //       error: error.message 
+  //     });
   //   }
   // },
 
@@ -611,11 +658,20 @@ const clerkController = {
 
       const applications = await AdmissionApplication.find({
         school: schoolId,
-        status: { $in: ['pending', 'document_verification'] },
-        'clerkVerification.status': 'pending',
-      })
-       // Optional: if you need school details
-      .sort({ createdAt: -1 });
+        $or: [
+          // Pending document verification by clerk
+          {
+            status: { $in: ['pending', 'document_verification'] },
+            'clerkVerification.status': 'pending',
+          },
+          // Approved by fees manager, awaiting clerk's final enrollment
+          {
+            status: 'approved',
+            'feesVerification.status': 'verified',
+            'clerkVerification.status': 'verified', // Ensure clerk has already verified documents
+          },
+        ],
+      }).sort({ createdAt: -1 });
 
       res.json({
         status: 'success',
@@ -623,18 +679,14 @@ const clerkController = {
         applications: applications.map((app) => ({
           id: app._id,
           trackingId: app.trackingId,
-          
-          // Student Details
           studentDetails: {
             name: app.studentDetails.name,
             dob: app.studentDetails.dob,
             gender: app.studentDetails.gender,
             email: app.studentDetails.email,
             mobile: app.studentDetails.mobile,
-            appliedClass: app.studentDetails.appliedClass
+            appliedClass: app.studentDetails.appliedClass,
           },
-          
-          // Parent Details
           parentDetails: {
             name: app.parentDetails.name,
             email: app.parentDetails.email,
@@ -644,31 +696,28 @@ const clerkController = {
               street: app.parentDetails.address.street,
               city: app.parentDetails.address.city,
               state: app.parentDetails.address.state,
-              pincode: app.parentDetails.address.pincode
-            }
+              pincode: app.parentDetails.address.pincode,
+            },
           },
-          
-          // Admission Details
           admissionType: app.admissionType,
           status: app.status,
           submittedOn: app.createdAt,
-          
-          // Documents
           documents: app.documents.map(doc => ({
             type: doc.type,
             documentUrl: doc.documentUrl,
             public_id: doc.public_id,
-            verified: doc.verified
+            verified: doc.verified,
           })),
-          
-          // Additional Responses (if any)
           additionalResponses: app.additionalResponses ? Object.fromEntries(app.additionalResponses) : {},
-          
-          // Verification Status
           clerkVerification: {
             status: app.clerkVerification.status,
-            comments: app.clerkVerification.comments
-          }
+            comments: app.clerkVerification.comments,
+          },
+          feesVerification: {
+            status: app.feesVerification.status,
+            receiptNumber: app.feesVerification.receiptNumber,
+            verifiedAt: app.feesVerification.verifiedAt,
+          }, // Include fees verification details
         })),
       });
     } catch (error) {
@@ -726,97 +775,97 @@ const clerkController = {
     }
   },
 
-  processAdmission: async (req, res) => {
-    try {
-      const schoolId = req.school._id.toString(); // Use req.school instead of req.params
-      const { studentDetails, isRTE, classId, documents, parentDetails, admissionType } = req.body;
-      const connection = req.connection;
-      const User = require('../models/User')(connection);
-      const Class = require('../models/Class')(connection);
-      const Fee = require('../models/Fee')(connection);
+  // processAdmission: async (req, res) => {
+  //   try {
+  //     const schoolId = req.school._id.toString(); // Use req.school instead of req.params
+  //     const { studentDetails, isRTE, classId, documents, parentDetails, admissionType } = req.body;
+  //     const connection = req.connection;
+  //     const User = require('../models/User')(connection);
+  //     const Class = require('../models/Class')(connection);
+  //     const Fee = require('../models/Fee')(connection);
 
-      const session = await mongoose.startSession();
-      session.startTransaction();
+  //     const session = await mongoose.startSession();
+  //     session.startTransaction();
 
-      try {
-        // Verify RTE documents if applicable (implement validateRTEDocuments if needed)
-        if (isRTE) {
-          const isEligible = true; // Placeholder; replace with actual logic
-          if (!isEligible) {
-            throw new Error('RTE eligibility criteria not met');
-          }
-        }
+  //     try {
+  //       // Verify RTE documents if applicable (implement validateRTEDocuments if needed)
+  //       if (isRTE) {
+  //         const isEligible = true; // Placeholder; replace with actual logic
+  //         if (!isEligible) {
+  //           throw new Error('RTE eligibility criteria not met');
+  //         }
+  //       }
 
-        // Generate unique GR number (implement generateGRNumber if needed)
-        const grNumber = `GR${Date.now()}`; // Placeholder
+  //       // Generate unique GR number (implement generateGRNumber if needed)
+  //       const grNumber = `GR${Date.now()}`; // Placeholder
 
-        // Hash passwords
-        const parentPassword = await bcrypt.hash(parentDetails.password || 'default123', 10);
-        const studentPassword = await bcrypt.hash(studentDetails.password || 'default123', 10);
+  //       // Hash passwords
+  //       const parentPassword = await bcrypt.hash(parentDetails.password || 'default123', 10);
+  //       const studentPassword = await bcrypt.hash(studentDetails.password || 'default123', 10);
 
-        // Create parent account
-        const parent = new User({
-          school: schoolId,
-          name: parentDetails.name,
-          email: parentDetails.email,
-          password: parentPassword,
-          role: 'parent',
-          profile: parentDetails.profile,
-        });
-        await parent.save({ session });
+  //       // Create parent account
+  //       const parent = new User({
+  //         school: schoolId,
+  //         name: parentDetails.name,
+  //         email: parentDetails.email,
+  //         password: parentPassword,
+  //         role: 'parent',
+  //         profile: parentDetails.profile,
+  //       });
+  //       await parent.save({ session });
 
-        // Create student account
-        const student = new User({
-          school: schoolId,
-          name: studentDetails.name,
-          email: studentDetails.email,
-          password: studentPassword,
-          role: 'student',
-          studentDetails: {
-            grNumber,
-            class: classId,
-            admissionType,
-            parentDetails: { parentId: parent._id }, // Adjust to store parent ID if separate User
-            dob: studentDetails.dob,
-            gender: studentDetails.gender,
-          },
-        });
-        await student.save({ session });
+  //       // Create student account
+  //       const student = new User({
+  //         school: schoolId,
+  //         name: studentDetails.name,
+  //         email: studentDetails.email,
+  //         password: studentPassword,
+  //         role: 'student',
+  //         studentDetails: {
+  //           grNumber,
+  //           class: classId,
+  //           admissionType,
+  //           parentDetails: { parentId: parent._id }, // Adjust to store parent ID if separate User
+  //           dob: studentDetails.dob,
+  //           gender: studentDetails.gender,
+  //         },
+  //       });
+  //       await student.save({ session });
 
-        // If not RTE, create fee records
-        if (!isRTE) {
-          const feeTypes = ['admission', 'tuition', 'computer', 'examination'];
-          const feePromises = feeTypes.map((type) => {
-            const fee = new Fee({
-              school: schoolId,
-              student: student._id,
-              type,
-              amount: getFeeAmount(type, classId), // Placeholder; implement as needed
-              dueDate: getFeeDueDate(type), // Placeholder; implement as needed
-              status: 'pending',
-              isRTE: false,
-            });
-            return fee.save({ session });
-          });
-          await Promise.all(feePromises);
-        }
+  //       // If not RTE, create fee records
+  //       if (!isRTE) {
+  //         const feeTypes = ['admission', 'tuition', 'computer', 'examination'];
+  //         const feePromises = feeTypes.map((type) => {
+  //           const fee = new Fee({
+  //             school: schoolId,
+  //             student: student._id,
+  //             type,
+  //             amount: getFeeAmount(type, classId), // Placeholder; implement as needed
+  //             dueDate: getFeeDueDate(type), // Placeholder; implement as needed
+  //             status: 'pending',
+  //             isRTE: false,
+  //           });
+  //           return fee.save({ session });
+  //         });
+  //         await Promise.all(feePromises);
+  //       }
 
-        await session.commitTransaction();
-        res.status(201).json({
-          message: 'Admission processed successfully',
-          student,
-          parent,
-        });
-      } catch (error) {
-        await session.abortTransaction();
-        throw error;
-      } finally {
-        session.endSession();
-      }
-    } catch (error) {
-      res.status(500).json({ error: error.message });
-    }
-  },
+  //       await session.commitTransaction();
+  //       res.status(201).json({
+  //         message: 'Admission processed successfully',
+  //         student,
+  //         parent,
+  //       });
+  //     } catch (error) {
+  //       await session.abortTransaction();
+  //       throw error;
+  //     } finally {
+  //       session.endSession();
+  //     }
+  //   } catch (error) {
+  //     res.status(500).json({ error: error.message });
+  //   }
+  // },
 
   verifyDocuments: async (req, res) => {
     try {
@@ -960,45 +1009,45 @@ const clerkController = {
     }
   },
 
-  confirmAdmission: async (req, res) => {
-    try {
-      const { studentId } = req.params; // Changed from req.school to req.params
-      const { classSection } = req.body;
-      const schoolId = req.school._id.toString();
-      const connection = req.connection;
-      const User = require('../models/User')(connection);
-      const Fee = require('../models/Fee')(connection);
+  // confirmAdmission: async (req, res) => {
+  //   try {
+  //     const { studentId } = req.params; // Changed from req.school to req.params
+  //     const { classSection } = req.body;
+  //     const schoolId = req.school._id.toString();
+  //     const connection = req.connection;
+  //     const User = require('../models/User')(connection);
+  //     const Fee = require('../models/Fee')(connection);
 
-      const student = await User.findOne({ _id: studentId, school: schoolId });
-      if (!student) {
-        return res.status(404).json({ message: 'Student not found' });
-      }
+  //     const student = await User.findOne({ _id: studentId, school: schoolId });
+  //     if (!student) {
+  //       return res.status(404).json({ message: 'Student not found' });
+  //     }
 
-      // Placeholder: Check document verification (implement if Document model exists)
-      const allVerified = true; // Adjust with actual logic
-      if (!allVerified) {
-        return res.status(400).json({ message: 'All documents must be verified first' });
-      }
+  //     // Placeholder: Check document verification (implement if Document model exists)
+  //     const allVerified = true; // Adjust with actual logic
+  //     if (!allVerified) {
+  //       return res.status(400).json({ message: 'All documents must be verified first' });
+  //     }
 
-      if (!student.studentDetails.isRTE) { // Adjusted to studentDetails.isRTE
-        const pendingFees = await Fee.findOne({ student: studentId, status: 'pending', school: schoolId });
-        if (pendingFees) {
-          return res.status(400).json({ message: 'All fees must be paid first' });
-        }
-      }
+  //     if (!student.studentDetails.isRTE) { // Adjusted to studentDetails.isRTE
+  //       const pendingFees = await Fee.findOne({ student: studentId, status: 'pending', school: schoolId });
+  //       if (pendingFees) {
+  //         return res.status(400).json({ message: 'All fees must be paid first' });
+  //       }
+  //     }
 
-      student.studentDetails.status = 'confirmed';
-      student.studentDetails.classSection = classSection;
-      await student.save();
+  //     student.studentDetails.status = 'confirmed';
+  //     student.studentDetails.classSection = classSection;
+  //     await student.save();
 
-      // Notify parent (implement if needed)
-      // await notifyParent(student);
+  //     // Notify parent (implement if needed)
+  //     // await notifyParent(student);
 
-      res.json({ message: 'Admission confirmed successfully' });
-    } catch (error) {
-      res.status(500).json({ error: error.message });
-    }
-  },
+  //     res.json({ message: 'Admission confirmed successfully' });
+  //   } catch (error) {
+  //     res.status(500).json({ error: error.message });
+  //   }
+  // },
 
   generateCertificate: async (req, res) => {
     try {

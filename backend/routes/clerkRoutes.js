@@ -11,13 +11,13 @@ router.use(auth, roleCheck(['clerk']));
 router.get('/applications/pending-verification',clerkController.getPendingVerifications);
 
 // Admission routes
-router.post('/admission/:schoolId', clerkController.processAdmission);
+// router.post('/admission/:schoolId', clerkController.processAdmission);
 router.put('/verify/:applicationId',clerkController.clerkVerification);
 router.get('/classes/available',clerkController.getAvailableClasses);
 router.post('/enroll/:applicationId', clerkController.enrollStudent);
 // router.post('/enroll', clerkController.enrollStudent);
 router.put('/verify-documents/:studentId', clerkController.verifyDocuments);
-router.put('/confirm-admission/:studentId', clerkController.confirmAdmission);
+// router.put('/confirm-admission/:studentId', clerkController.confirmAdmission);
 
 // Certificate routes
 router.post('/certificate/:studentId', clerkController.generateCertificate);
