@@ -895,23 +895,56 @@ const clerkController = {
     }
   },
 
+  // getAvailableClasses: async (req, res) => {
+  //   try {
+  //     const schoolId = req.school._id.toString();
+  //     const connection = req.connection;
+  //     const Class = require('../models/Class')(connection);
+  //     const User = require('../models/User')(connection);
+
+  //     const availableClasses = await Class.find({
+  //       school: schoolId,
+  //       $or: [
+  //         { classTeacher: null },
+  //         { classTeacher: { $exists: false } },
+  //       ],
+  //     })
+  //       .select('name division academicYear')
+  //       .sort({ name: 1, division: 1 });
+
+  //     const assignedClasses = await Class.find({
+  //       school: schoolId,
+  //       classTeacher: { $exists: true, $ne: null },
+  //     })
+  //       .select('name division academicYear classTeacher')
+  //       .populate('classTeacher', 'name', User)
+  //       .sort({ name: 1, division: 1 });
+
+  //     res.json({
+  //       available: availableClasses,
+  //       assigned: assignedClasses,
+  //     });
+  //   } catch (error) {
+  //     res.status(500).json({ error: error.message });
+  //   }
+  // },
+
   getAvailableClasses: async (req, res) => {
     try {
       const schoolId = req.school._id.toString();
       const connection = req.connection;
       const Class = require('../models/Class')(connection);
       const User = require('../models/User')(connection);
-
+  
+      // Classes with available capacity (students < capacity)
       const availableClasses = await Class.find({
         school: schoolId,
-        $or: [
-          { classTeacher: null },
-          { classTeacher: { $exists: false } },
-        ],
+        $expr: { $lt: [{ $size: "$students" }, "$capacity"] }, // Compare students array size to capacity
       })
-        .select('name division academicYear')
+        .select('name division academicYear capacity')
         .sort({ name: 1, division: 1 });
-
+  
+      // Classes with teachers assigned (regardless of capacity)
       const assignedClasses = await Class.find({
         school: schoolId,
         classTeacher: { $exists: true, $ne: null },
@@ -919,9 +952,15 @@ const clerkController = {
         .select('name division academicYear classTeacher')
         .populate('classTeacher', 'name', User)
         .sort({ name: 1, division: 1 });
-
+  
       res.json({
-        available: availableClasses,
+        available: availableClasses.map(cls => ({
+          _id: cls._id,
+          name: cls.name,
+          division: cls.division,
+          academicYear: cls.academicYear,
+          remainingCapacity: cls.capacity - (cls.students ? cls.students.length : 0),
+        })),
         assigned: assignedClasses,
       });
     } catch (error) {
