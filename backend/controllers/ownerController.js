@@ -23,8 +23,8 @@ const ownerController = {
 
       const ownerConnection = await getOwnerConnection();
       // const School = ownerConnection.model('School', require('../models/School').schema);
-      const School = require('../models/School').model(ownerConnection);
-      // const School = require('../models/School')(ownerConnection);
+      // const School = require('../models/School').model(ownerConnection);
+      const School = require('../models/School')(ownerConnection);
 
       // Generate unique dbName for the school
       const dbName = `school_db_${new mongoose.Types.ObjectId()}`;
