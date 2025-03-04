@@ -367,7 +367,8 @@ const admissionController = {
       const { razorpay_order_id, razorpay_payment_id, razorpay_signature, schoolId } = req.body;
 
       const ownerConnection = await getOwnerConnection();
-      const School = require('../models/School').model(ownerConnection);
+      // const School = require('../models/School').model(ownerConnection);
+      const School = require('../models/School')(ownerConnection);
       const school = await School.findById(schoolId).select('paymentConfig');
       
       if (!school || !school.paymentConfig?.isPaymentConfigured) {
