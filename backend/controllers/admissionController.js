@@ -4,6 +4,7 @@ const { upload, cloudinary } = require('../config/cloudinary');
 const Razorpay = require('razorpay');
 const crypto = require('crypto');
 const { generateTrackingId } = require('../utils/helpers');
+const { encrypt, decrypt } = require('../utils/encryption');
 
 const razorpay = new Razorpay({
   key_id: process.env.RAZORPAY_KEY_ID,
@@ -126,6 +127,104 @@ const admissionController = {
 
 
 
+  // getPaymentDetails: async (req, res) => {
+  //   try {
+  //     const { formUrl } = req.params;
+  //     const connection = req.connection;
+  //     const AdmissionForm = require('../models/AdmissionForm')(connection);
+
+  //     const form = await AdmissionForm.findOne({ formUrl, isActive: true });
+  //     if (!form) {
+  //       return res.status(404).json({ message: 'Form not found' });
+  //     }
+
+  //     // Create Razorpay order
+  //     const options = {
+  //       amount: form.admissionFee * 100, // Razorpay expects amount in paise
+  //       currency: 'INR',
+  //       receipt: `adm_${Date.now()}`,
+  //       notes: {
+  //         formUrl: form.formUrl,
+  //         schoolId: form.school.toString(),
+  //       },
+  //     };
+
+  //     const order = await razorpay.orders.create(options);
+
+  //     const paymentDetails = {
+  //       orderId: order.id,
+  //       amount: form.admissionFee,
+  //       currency: order.currency,
+  //       schoolId: form.school,
+  //       formUrl: form.formUrl,
+  //       key: process.env.RAZORPAY_KEY_ID, // Frontend needs this
+  //     };
+
+  //     res.json({
+  //       status: 'success',
+  //       paymentDetails,
+  //     });
+  //   } catch (error) {
+  //     res.status(500).json({ error: error.message });
+  //   }
+  // },
+
+  // getPaymentDetails: async (req, res) => {
+  //   try {
+  //     const { formUrl } = req.params;
+  //     const connection = req.connection;
+  //     const AdmissionForm = require('../models/AdmissionForm')(connection);
+
+  //     const form = await AdmissionForm.findOne({ formUrl, isActive: true });
+  //     if (!form) {
+  //       return res.status(404).json({ message: 'Form not found' });
+  //     }
+
+  //     // Get school payment credentials
+  //     const ownerConnection = await getOwnerConnection();
+  //     const School = require('../models/School').model(ownerConnection);
+  //     const school = await School.findById(form.school).select('paymentConfig');
+      
+  //     if (!school || !school.paymentConfig?.isPaymentConfigured) {
+  //       return res.status(400).json({ error: 'School payment configuration not set up' });
+  //     }
+
+  //     // Create Razorpay instance with school's credentials
+  //     const razorpay = new Razorpay({
+  //       key_id: school.paymentConfig.razorpayKeyId,
+  //       key_secret: school.paymentConfig.razorpayKeySecret,
+  //     });
+
+  //     const options = {
+  //       amount: form.admissionFee * 100,
+  //       currency: 'INR',
+  //       receipt: `adm_${Date.now()}`,
+  //       notes: {
+  //         formUrl: form.formUrl,
+  //         schoolId: form.school.toString(),
+  //       },
+  //     };
+
+  //     const order = await razorpay.orders.create(options);
+
+  //     const paymentDetails = {
+  //       orderId: order.id,
+  //       amount: form.admissionFee,
+  //       currency: order.currency,
+  //       schoolId: form.school,
+  //       formUrl: form.formUrl,
+  //       key: school.paymentConfig.razorpayKeyId,
+  //     };
+
+  //     res.json({
+  //       status: 'success',
+  //       paymentDetails,
+  //     });
+  //   } catch (error) {
+  //     res.status(500).json({ error: error.message });
+  //   }
+  // },
+
   getPaymentDetails: async (req, res) => {
     try {
       const { formUrl } = req.params;
@@ -137,9 +236,25 @@ const admissionController = {
         return res.status(404).json({ message: 'Form not found' });
       }
 
-      // Create Razorpay order
+      const ownerConnection = await getOwnerConnection();
+      const School = require('../models/School').model(ownerConnection);
+      const school = await School.findById(form.school).select('paymentConfig');
+      
+      if (!school || !school.paymentConfig?.isPaymentConfigured) {
+        return res.status(400).json({ error: 'School payment configuration not set up' });
+      }
+
+      // Decrypt Razorpay credentials
+      const decryptedKeyId = decrypt(school.paymentConfig.razorpayKeyId);
+      const decryptedKeySecret = decrypt(school.paymentConfig.razorpayKeySecret);
+
+      const razorpay = new Razorpay({
+        key_id: decryptedKeyId,
+        key_secret: decryptedKeySecret,
+      });
+
       const options = {
-        amount: form.admissionFee * 100, // Razorpay expects amount in paise
+        amount: form.admissionFee * 100,
         currency: 'INR',
         receipt: `adm_${Date.now()}`,
         notes: {
@@ -156,7 +271,7 @@ const admissionController = {
         currency: order.currency,
         schoolId: form.school,
         formUrl: form.formUrl,
-        key: process.env.RAZORPAY_KEY_ID, // Frontend needs this
+        key: decryptedKeyId, // Send decrypted keyId to frontend
       };
 
       res.json({
@@ -168,14 +283,107 @@ const admissionController = {
     }
   },
 
+  // verifyPayment: async (req, res) => {
+  //   try {
+  //     const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
+
+  //     // Verify signature
+  //     const body = razorpay_order_id + '|' + razorpay_payment_id;
+  //     const expectedSignature = crypto
+  //       .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
+  //       .update(body.toString())
+  //       .digest('hex');
+
+  //     const isAuthentic = expectedSignature === razorpay_signature;
+
+  //     if (!isAuthentic) {
+  //       return res.status(400).json({ message: 'Invalid payment signature' });
+  //     }
+
+  //     // Get payment details from Razorpay
+  //     const payment = await razorpay.payments.fetch(razorpay_payment_id);
+
+  //     res.json({
+  //       status: 'success',
+  //       message: 'Payment verified successfully',
+  //       paymentId: razorpay_payment_id,
+  //       orderId: razorpay_order_id,
+  //     });
+  //   } catch (error) {
+  //     res.status(500).json({ error: error.message });
+  //   }
+  // },
+
+  // verifyPayment: async (req, res) => {
+  //   try {
+  //     const { razorpay_order_id, razorpay_payment_id, razorpay_signature, schoolId } = req.body;
+
+  //     // Get school payment credentials
+  //     const ownerConnection = await getOwnerConnection();
+  //     const School = require('../models/School').model(ownerConnection);
+  //     const school = await School.findById(schoolId).select('paymentConfig');
+      
+  //     if (!school || !school.paymentConfig?.isPaymentConfigured) {
+  //       return res.status(400).json({ error: 'School payment configuration not set up' });
+  //     }
+
+  //     // Create Razorpay instance with school's credentials
+  //     const razorpay = new Razorpay({
+  //       key_id: school.paymentConfig.razorpayKeyId,
+  //       key_secret: school.paymentConfig.razorpayKeySecret,
+  //     });
+
+  //     // Verify signature
+  //     const body = razorpay_order_id + '|' + razorpay_payment_id;
+  //     const expectedSignature = crypto
+  //       .createHmac('sha256', school.paymentConfig.razorpayKeySecret)
+  //       .update(body.toString())
+  //       .digest('hex');
+
+  //     const isAuthentic = expectedSignature === razorpay_signature;
+
+  //     if (!isAuthentic) {
+  //       return res.status(400).json({ message: 'Invalid payment signature' });
+  //     }
+
+  //     // Get payment details
+  //     const payment = await razorpay.payments.fetch(razorpay_payment_id);
+
+  //     res.json({
+  //       status: 'success',
+  //       message: 'Payment verified successfully',
+  //       paymentId: razorpay_payment_id,
+  //       orderId: razorpay_order_id,
+  //     });
+  //   } catch (error) {
+  //     res.status(500).json({ error: error.message });
+  //   }
+  // },
+
   verifyPayment: async (req, res) => {
     try {
-      const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
+      const { razorpay_order_id, razorpay_payment_id, razorpay_signature, schoolId } = req.body;
 
-      // Verify signature
+      const ownerConnection = await getOwnerConnection();
+      const School = require('../models/School').model(ownerConnection);
+      const school = await School.findById(schoolId).select('paymentConfig');
+      
+      if (!school || !school.paymentConfig?.isPaymentConfigured) {
+        return res.status(400).json({ error: 'School payment configuration not set up' });
+      }
+
+      // Decrypt Razorpay credentials
+      const decryptedKeyId = decrypt(school.paymentConfig.razorpayKeyId);
+      const decryptedKeySecret = decrypt(school.paymentConfig.razorpayKeySecret);
+
+      const razorpay = new Razorpay({
+        key_id: decryptedKeyId,
+        key_secret: decryptedKeySecret,
+      });
+
       const body = razorpay_order_id + '|' + razorpay_payment_id;
       const expectedSignature = crypto
-        .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
+        .createHmac('sha256', decryptedKeySecret)
         .update(body.toString())
         .digest('hex');
 
@@ -185,7 +393,6 @@ const admissionController = {
         return res.status(400).json({ message: 'Invalid payment signature' });
       }
 
-      // Get payment details from Razorpay
       const payment = await razorpay.payments.fetch(razorpay_payment_id);
 
       res.json({
@@ -198,6 +405,74 @@ const admissionController = {
       res.status(500).json({ error: error.message });
     }
   },
+
+  // submitApplication: async (req, res) => {
+  //   try {
+  //     const {
+  //       formUrl,
+  //       studentDetails,
+  //       parentDetails,
+  //       admissionType,
+  //       additionalResponses = {},
+  //       razorpay_payment_id,
+  //       razorpay_order_id,
+  //       razorpay_signature,
+  //     } = req.body;
+
+  //     const connection = req.connection;
+  //     const AdmissionForm = require('../models/AdmissionForm')(connection);
+  //     const AdmissionApplication = require('../models/AdmissionApplication')(connection);
+
+  //     if (!formUrl) {
+  //       return res.status(400).json({ error: 'Form URL is missing' });
+  //     }
+
+  //     // Find and validate form
+  //     const form = await AdmissionForm.findOne({ formUrl, isActive: true });
+  //     if (!form) {
+  //       return res.status(404).json({ message: 'Form not found or inactive' });
+  //     }
+
+  //     // Verify payment for regular admission
+  //     if (admissionType === 'Regular') {
+  //       if (!razorpay_payment_id || !razorpay_order_id || !razorpay_signature) {
+  //         return res.status(400).json({
+  //           error: 'Payment verification failed. Required payment details missing.',
+  //         });
+  //       }
+
+  //       const ownerConnection = await getOwnerConnection();
+  //       const School = require('../models/School').model(ownerConnection);
+  //       const school = await School.findById(form.school).select('paymentConfig');
+
+  //       const razorpay = new Razorpay({
+  //         key_id: school.paymentConfig.razorpayKeyId,
+  //         key_secret: school.paymentConfig.razorpayKeySecret,
+  //       });
+
+  //       // Verify payment signature
+  //       const body = razorpay_order_id + '|' + razorpay_payment_id;
+  //       const expectedSignature = crypto
+  //         .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
+  //         .update(body.toString())
+  //         .digest('hex');
+
+  //       if (expectedSignature !== razorpay_signature) {
+  //         return res.status(400).json({
+  //           error: 'Payment verification failed. Invalid signature.',
+  //         });
+  //       }
+
+  //       // Fetch payment details from Razorpay
+  //       const payment = await razorpay.payments.fetch(razorpay_payment_id);
+
+  //       // Verify payment amount
+  //       if (payment.amount !== form.admissionFee * 100) {
+  //         return res.status(400).json({
+  //           error: 'Payment amount mismatch',
+  //         });
+  //       }
+  //     }
 
   submitApplication: async (req, res) => {
     try {
@@ -220,13 +495,11 @@ const admissionController = {
         return res.status(400).json({ error: 'Form URL is missing' });
       }
 
-      // Find and validate form
       const form = await AdmissionForm.findOne({ formUrl, isActive: true });
       if (!form) {
         return res.status(404).json({ message: 'Form not found or inactive' });
       }
 
-      // Verify payment for regular admission
       if (admissionType === 'Regular') {
         if (!razorpay_payment_id || !razorpay_order_id || !razorpay_signature) {
           return res.status(400).json({
@@ -234,10 +507,22 @@ const admissionController = {
           });
         }
 
-        // Verify payment signature
+        const ownerConnection = await getOwnerConnection();
+        const School = require('../models/School').model(ownerConnection);
+        const school = await School.findById(form.school).select('paymentConfig');
+
+        // Decrypt Razorpay credentials
+        const decryptedKeyId = decrypt(school.paymentConfig.razorpayKeyId);
+        const decryptedKeySecret = decrypt(school.paymentConfig.razorpayKeySecret);
+
+        const razorpay = new Razorpay({
+          key_id: decryptedKeyId,
+          key_secret: decryptedKeySecret,
+        });
+
         const body = razorpay_order_id + '|' + razorpay_payment_id;
         const expectedSignature = crypto
-          .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
+          .createHmac('sha256', decryptedKeySecret)
           .update(body.toString())
           .digest('hex');
 
@@ -247,10 +532,7 @@ const admissionController = {
           });
         }
 
-        // Fetch payment details from Razorpay
         const payment = await razorpay.payments.fetch(razorpay_payment_id);
-
-        // Verify payment amount
         if (payment.amount !== form.admissionFee * 100) {
           return res.status(400).json({
             error: 'Payment amount mismatch',

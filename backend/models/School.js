@@ -5,6 +5,7 @@
 //   address: { type: String, required: true },
 //   contact: { type: String, required: true },
 //   email: { type: String, required: true, unique: true },
+//   dbName: { type: String, unique: true }, // Unique database name for the school
 //   registrationDate: { type: Date, default: Date.now },
 //   subscriptionStatus: { 
 //     type: String, 
@@ -15,7 +16,8 @@
 //     plan: String,
 //     startDate: Date,
 //     endDate: Date,
-//     paymentStatus: String
+//     paymentStatus: String,
+//     amount: Number
 //   },
 //   customFormFields: [{ 
 //     fieldName: String, 
@@ -28,10 +30,8 @@
 //   }
 // }, { timestamps: true });
 
-// module.exports = mongoose.model('School', schoolSchema);
-
-
-
+// module.exports = (connection) => connection.model('School', schoolSchema);
+// module.exports.schema = schoolSchema;
 
 
 
@@ -65,17 +65,27 @@ const schoolSchema = new mongoose.Schema({
   rteQuota: {
     totalSeats: { type: Number, default: 0 },
     occupied: { type: Number, default: 0 }
+  },
+  // New payment configuration fields
+  paymentConfig: {
+    razorpayKeyId: {
+      type: String,
+      required: true,
+      trim: true
+    },
+    razorpayKeySecret: {
+      type: String,
+      required: true,
+      trim: true,
+      select: false // Prevent accidental exposure in queries
+    },
+    isPaymentConfigured: {
+      type: Boolean,
+      default: false
+    }
   }
 }, { timestamps: true });
 
-// Export as a factory function
-// module.exports = (connection) => connection.model('School', schoolSchema);
-// module.exports = {
-//   model: (connection) => connection.model('School', schoolSchema),
-//   schema: schoolSchema
-// };
-
-// module.exports = (connection) => connection.model('School', schoolSchema);
-
+// Export both the model factory and schema
 module.exports = (connection) => connection.model('School', schoolSchema);
 module.exports.schema = schoolSchema;
