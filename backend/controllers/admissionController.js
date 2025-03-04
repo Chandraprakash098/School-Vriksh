@@ -238,7 +238,8 @@ const admissionController = {
       }
 
       const ownerConnection = await getOwnerConnection();
-      const School = require('../models/School').model(ownerConnection);
+      // const School = require('../models/School').model(ownerConnection);
+      const School = require('../models/School')(ownerConnection);
       const school = await School.findById(form.school).select('paymentConfig');
       
       if (!school || !school.paymentConfig?.isPaymentConfigured) {
