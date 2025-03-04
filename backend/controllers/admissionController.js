@@ -5,6 +5,7 @@ const Razorpay = require('razorpay');
 const crypto = require('crypto');
 const { generateTrackingId } = require('../utils/helpers');
 const { encrypt, decrypt } = require('../utils/encryption');
+const { getOwnerConnection } = require('../config/database');
 
 const razorpay = new Razorpay({
   key_id: process.env.RAZORPAY_KEY_ID,
