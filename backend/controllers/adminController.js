@@ -2916,6 +2916,28 @@ const adminController = {
     }
   },
 
+  // getUsers: async (req, res) => {
+  //   try {
+  //     const schoolId = req.school._id;
+  //     const connection = req.connection;
+  //     const User = getModel('User', connection);
+  //     const Class = getModel('Class', connection);
+
+  //     const users = await User.find({ school: schoolId })
+  //       .select('-password')
+  //       .populate('permissions.canTakeAttendance', 'name division', Class)
+  //       .populate('permissions.canEnterMarks.subject', 'name')
+  //       .populate('permissions.canEnterMarks.class', 'name division', Class)
+  //       .lean();
+
+        
+
+  //     res.json(users);
+  //   } catch (error) {
+  //     res.status(500).json({ error: error.message });
+  //   }
+  // },
+
   getUsers: async (req, res) => {
     try {
       const schoolId = req.school._id;
@@ -2923,25 +2945,23 @@ const adminController = {
       const User = getModel('User', connection);
       const Class = getModel('Class', connection);
 
-      const users = await User.find({ school: schoolId })
+      const users = await User.find({ 
+        school: schoolId, 
+        role: { $ne: 'student' } // Exclude users with role 'student'
+      })
         .select('-password')
         .populate('permissions.canTakeAttendance', 'name division', Class)
         .populate('permissions.canEnterMarks.subject', 'name')
         .populate('permissions.canEnterMarks.class', 'name division', Class)
         .lean();
 
-        if (!User) return res.status(404).json({ message: 'User not found' });
-
-      // Check if the user's role is 'student' and restrict access
-      if (User.role === 'student') {
-        return res.status(403).json({ message: 'Students cannot be retrieved via this endpoint' });
-      }
-
       res.json(users);
     } catch (error) {
       res.status(500).json({ error: error.message });
     }
   },
+
+  
 
   getUser: async (req, res) => {
     try {
