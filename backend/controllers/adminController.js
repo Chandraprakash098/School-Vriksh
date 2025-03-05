@@ -2930,6 +2930,13 @@ const adminController = {
         .populate('permissions.canEnterMarks.class', 'name division', Class)
         .lean();
 
+        if (!User) return res.status(404).json({ message: 'User not found' });
+
+      // Check if the user's role is 'student' and restrict access
+      if (User.role === 'student') {
+        return res.status(403).json({ message: 'Students cannot be retrieved via this endpoint' });
+      }
+
       res.json(users);
     } catch (error) {
       res.status(500).json({ error: error.message });
