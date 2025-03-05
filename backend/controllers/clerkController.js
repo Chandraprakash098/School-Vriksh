@@ -6,82 +6,7 @@ const bcrypt = require('bcryptjs');
 
 const clerkController = {
   
-  // getPendingVerifications: async (req, res) => {
-  //   try {
-  //     const schoolId = req.school._id.toString();
-  //     const connection = req.connection;
-  //     const AdmissionApplication = require('../models/AdmissionApplication')(connection);
-
-  //     const applications = await AdmissionApplication.find({
-  //       school: schoolId,
-  //       status: { $in: ['pending', 'document_verification'] },
-  //       'clerkVerification.status': 'pending',
-  //     })
-  //      // Optional: if you need school details
-  //     .sort({ createdAt: -1 });
-
-  //     res.json({
-  //       status: 'success',
-  //       count: applications.length,
-  //       applications: applications.map((app) => ({
-  //         id: app._id,
-  //         trackingId: app.trackingId,
-          
-  //         // Student Details
-  //         studentDetails: {
-  //           name: app.studentDetails.name,
-  //           dob: app.studentDetails.dob,
-  //           gender: app.studentDetails.gender,
-  //           email: app.studentDetails.email,
-  //           mobile: app.studentDetails.mobile,
-  //           appliedClass: app.studentDetails.appliedClass
-  //         },
-          
-  //         // Parent Details
-  //         parentDetails: {
-  //           name: app.parentDetails.name,
-  //           email: app.parentDetails.email,
-  //           mobile: app.parentDetails.mobile,
-  //           occupation: app.parentDetails.occupation,
-  //           address: {
-  //             street: app.parentDetails.address.street,
-  //             city: app.parentDetails.address.city,
-  //             state: app.parentDetails.address.state,
-  //             pincode: app.parentDetails.address.pincode
-  //           }
-  //         },
-          
-  //         // Admission Details
-  //         admissionType: app.admissionType,
-  //         status: app.status,
-  //         submittedOn: app.createdAt,
-          
-  //         // Documents
-  //         documents: app.documents.map(doc => ({
-  //           type: doc.type,
-  //           documentUrl: doc.documentUrl,
-  //           public_id: doc.public_id,
-  //           verified: doc.verified
-  //         })),
-          
-  //         // Additional Responses (if any)
-  //         additionalResponses: app.additionalResponses ? Object.fromEntries(app.additionalResponses) : {},
-          
-  //         // Verification Status
-  //         clerkVerification: {
-  //           status: app.clerkVerification.status,
-  //           comments: app.clerkVerification.comments
-  //         }
-  //       })),
-  //     });
-  //   } catch (error) {
-  //     res.status(500).json({ 
-  //       status: 'error',
-  //       error: error.message 
-  //     });
-  //   }
-  // },
-
+  
   getPendingVerifications: async (req, res) => {
     try {
       const schoolId = req.school._id.toString();
@@ -174,7 +99,8 @@ const clerkController = {
       }
 
       // Verify all required documents are present (implement validateDocuments if needed)
-      const hasAllDocuments = application.documents.length > 0; // Placeholder; replace with actual logic
+      // const hasAllDocuments = application.documents.length > 0;
+      const hasAllDocuments = application.validateDocuments();
       if (!hasAllDocuments) {
         return res.status(400).json({ message: 'Missing required documents' });
       }
@@ -187,20 +113,25 @@ const clerkController = {
       };
 
       if (status === 'verified') {
-        application.status = application.admissionType === 'RTE' ? 'approved' : 'fees_pending';
+        // application.status = application.admissionType === 'RTE' ? 'approved' : 'fees_pending';
+        application.status = 'fees_pending';
       } else {
         application.status = 'rejected';
       }
 
       await application.save();
 
+      // res.json({
+      //   message: 'Verification completed',
+      //   nextStep: status === 'verified'
+      //     ? application.admissionType === 'RTE'
+      //       ? 'Admission approved'
+      //       : 'Visit fees department'
+      //     : 'Application rejected',
+      // });
       res.json({
         message: 'Verification completed',
-        nextStep: status === 'verified'
-          ? application.admissionType === 'RTE'
-            ? 'Admission approved'
-            : 'Visit fees department'
-          : 'Application rejected',
+        nextStep: status === 'verified' ? 'Visit fees department for verification' : 'Application rejected',
       });
     } catch (error) {
       res.status(500).json({ error: error.message });

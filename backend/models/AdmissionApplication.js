@@ -144,7 +144,8 @@ const admissionApplicationSchema = new mongoose.Schema({
       ref: 'User'
     },
     verifiedAt: Date,
-    receiptNumber: String
+    receiptNumber: String,
+    comments: String
   },
   createdAt: {
     type: Date,
@@ -171,7 +172,7 @@ admissionApplicationSchema.methods.validateDocuments = function() {
 
 // Pre-save middleware
 admissionApplicationSchema.pre('save', function(next) {
-  if (this.admissionType === 'RTE') {
+  if (this.admissionType === 'RTE' && this.paymentStatus === 'not_applicable') {
     this.paymentStatus = 'not_applicable';
   }
   next();

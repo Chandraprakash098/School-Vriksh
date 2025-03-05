@@ -835,12 +835,18 @@ const admissionController = {
       const connection = req.connection;
       const AdmissionApplication = require('../models/AdmissionApplication')(connection);
 
+      // const applications = await AdmissionApplication.find({
+      //   school: schoolId,
+      //   status: 'fees_pending',
+      //   admissionType: 'Regular',
+      //   paymentStatus: 'completed',
+      //   'feesVerification.status': 'pending',
+      // }).sort({ createdAt: -1 });
+
       const applications = await AdmissionApplication.find({
         school: schoolId,
         status: 'fees_pending',
-        admissionType: 'Regular',
-        paymentStatus: 'completed',
-        'feesVerification.status': 'pending',
+        'feesVerification.status': 'pending', // Include all pending fees verifications
       }).sort({ createdAt: -1 });
 
       res.json({
@@ -851,7 +857,9 @@ const admissionController = {
           trackingId: app.trackingId,
           studentName: app.studentDetails.name,
           appliedClass: app.studentDetails.appliedClass,
-          paymentDetails: app.paymentDetails,
+          admissionType: app.admissionType,
+          // paymentDetails: app.paymentDetails,
+          paymentDetails: app.paymentDetails || { note: 'RTE - No payment required' },
           submittedOn: app.createdAt,
         })),
       });
@@ -863,7 +871,8 @@ const admissionController = {
   feesVerification: async (req, res) => {
     try {
       const { applicationId } = req.params;
-      const { status, receiptNumber } = req.body;
+      // const { status, receiptNumber } = req.body;
+      const { status, receiptNumber, comments } = req.body;
       const schoolId = req.school._id.toString();
       const connection = req.connection;
       const AdmissionApplication = require('../models/AdmissionApplication')(connection);
@@ -873,32 +882,47 @@ const admissionController = {
         return res.status(404).json({ message: 'Application not found' });
       }
 
-      if (application.admissionType === 'RTE') {
-        return res.status(400).json({
-          message: 'Fees verification not required for RTE applications',
-        });
-      }
+      // if (application.admissionType === 'RTE') {
+      //   return res.status(400).json({
+      //     message: 'Fees verification not required for RTE applications',
+      //   });
+      // }
 
+      // application.feesVerification = {
+      //   status,
+      //   verifiedBy: req.user._id,
+      //   verifiedAt: new Date(),
+      //   receiptNumber,
+      // };
       application.feesVerification = {
         status,
         verifiedBy: req.user._id,
         verifiedAt: new Date(),
-        receiptNumber,
+        receiptNumber: application.admissionType === 'RTE' ? receiptNumber || 'RTE-NoPayment' : receiptNumber,
+        comments: comments || (application.admissionType === 'RTE' ? 'RTE eligibility verified' : undefined),
       };
 
-      if (status === 'verified') {
-        application.status = 'approved';
-      } else {
-        application.status = 'rejected';
-      }
+      // if (status === 'verified') {
+      //   application.status = 'approved';
+      // } else {
+      //   application.status = 'rejected';
+      // }
+
+      application.status = status === 'verified' ? 'approved' : 'rejected';
+    await application.save();
 
       await application.save();
 
+      // res.json({
+      //   message: 'Fees verification completed',
+      //   nextStep: status === 'verified'
+      //     ? 'Return to clerk for final admission'
+      //     : 'Application rejected',
+      // });
+
       res.json({
         message: 'Fees verification completed',
-        nextStep: status === 'verified'
-          ? 'Return to clerk for final admission'
-          : 'Application rejected',
+        nextStep: getNextStep(application),
       });
     } catch (error) {
       res.status(500).json({ error: error.message });
@@ -1116,19 +1140,39 @@ const admissionController = {
 };
 
 // Helper function
+// function getNextSteps(application) {
+//   switch (application.status) {
+//     case 'pending':
+//       return application.admissionType === 'RTE'
+//         ? 'Visit clerk with original documents for verification'
+//         : 'Complete payment and visit clerk with original documents';
+//     case 'document_verification':
+//       return 'Awaiting document verification by clerk';
+//     case 'fees_pending':
+//       return 'Visit fees department for payment verification';
+//     case 'approved':
+//       return 'Return to clerk for final admission confirmation';
+//     case 'confirmed':
+//       return 'Admission process completed successfully';
+//     case 'rejected':
+//       return 'Application rejected. Please contact the school for more information.';
+//     default:
+//       return 'Contact school administration for status update';
+//   }
+// }
+
 function getNextSteps(application) {
   switch (application.status) {
     case 'pending':
-      return application.admissionType === 'RTE'
-        ? 'Visit clerk with original documents for verification'
-        : 'Complete payment and visit clerk with original documents';
+      return 'Visit clerk with original documents for verification';
     case 'document_verification':
       return 'Awaiting document verification by clerk';
     case 'fees_pending':
-      return 'Visit fees department for payment verification';
+      return 'Visit fees department for verification';
     case 'approved':
       return 'Return to clerk for final admission confirmation';
     case 'confirmed':
+    case 'enrolled':
       return 'Admission process completed successfully';
     case 'rejected':
       return 'Application rejected. Please contact the school for more information.';
