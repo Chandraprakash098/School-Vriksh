@@ -913,17 +913,17 @@ const admissionController = {
 
       await application.save();
 
-      // res.json({
-      //   message: 'Fees verification completed',
-      //   nextStep: status === 'verified'
-      //     ? 'Return to clerk for final admission'
-      //     : 'Application rejected',
-      // });
-
       res.json({
         message: 'Fees verification completed',
-        nextStep: getNextStep(application),
+        nextStep: status === 'verified'
+          ? 'Return to clerk for final admission'
+          : 'Application rejected',
       });
+
+      // res.json({
+      //   message: 'Fees verification completed',
+      //   nextStep: getNextStep(application),
+      // });
     } catch (error) {
       res.status(500).json({ error: error.message });
     }
