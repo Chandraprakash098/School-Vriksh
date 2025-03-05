@@ -18,7 +18,7 @@ router.get('/users', auth, roleCheck(['admin']), adminController.getUsers);
 router.get('/users/:userId', auth, roleCheck(['admin']), adminController.getUser);
 router.get('/teachers', auth, roleCheck(['admin']), adminController.getTeachers);
 
-router.get('/students/class/:classId', adminController.getStudentsByClass);
+router.get('/students/class/:classId', auth,adminController.getStudentsByClass);
 
 
 router.put('/teachers/:teacherId/assignments', auth, roleCheck(['admin']), adminController.updateTeacherAssignments);
