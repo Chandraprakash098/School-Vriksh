@@ -27,4 +27,6 @@ router.post('/certificate/:studentId', clerkController.generateCertificate);
 // RTE report routes
 router.post('/rte-report/:schoolId', clerkController.generateRTEReport);
 
+router.get('/application/:applicationId/documents', clerkController.viewApplicationDocuments);
+
 module.exports = router;

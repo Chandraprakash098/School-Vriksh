@@ -3,6 +3,7 @@
 
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
+const { sendAdmissionNotification } = require('../utils/notifications');
 
 const clerkController = {
   
@@ -138,97 +139,7 @@ const clerkController = {
     }
   },
 
-  // processAdmission: async (req, res) => {
-  //   try {
-  //     const schoolId = req.school._id.toString(); // Use req.school instead of req.params
-  //     const { studentDetails, isRTE, classId, documents, parentDetails, admissionType } = req.body;
-  //     const connection = req.connection;
-  //     const User = require('../models/User')(connection);
-  //     const Class = require('../models/Class')(connection);
-  //     const Fee = require('../models/Fee')(connection);
-
-  //     const session = await mongoose.startSession();
-  //     session.startTransaction();
-
-  //     try {
-  //       // Verify RTE documents if applicable (implement validateRTEDocuments if needed)
-  //       if (isRTE) {
-  //         const isEligible = true; // Placeholder; replace with actual logic
-  //         if (!isEligible) {
-  //           throw new Error('RTE eligibility criteria not met');
-  //         }
-  //       }
-
-  //       // Generate unique GR number (implement generateGRNumber if needed)
-  //       const grNumber = `GR${Date.now()}`; // Placeholder
-
-  //       // Hash passwords
-  //       const parentPassword = await bcrypt.hash(parentDetails.password || 'default123', 10);
-  //       const studentPassword = await bcrypt.hash(studentDetails.password || 'default123', 10);
-
-  //       // Create parent account
-  //       const parent = new User({
-  //         school: schoolId,
-  //         name: parentDetails.name,
-  //         email: parentDetails.email,
-  //         password: parentPassword,
-  //         role: 'parent',
-  //         profile: parentDetails.profile,
-  //       });
-  //       await parent.save({ session });
-
-  //       // Create student account
-  //       const student = new User({
-  //         school: schoolId,
-  //         name: studentDetails.name,
-  //         email: studentDetails.email,
-  //         password: studentPassword,
-  //         role: 'student',
-  //         studentDetails: {
-  //           grNumber,
-  //           class: classId,
-  //           admissionType,
-  //           parentDetails: { parentId: parent._id }, // Adjust to store parent ID if separate User
-  //           dob: studentDetails.dob,
-  //           gender: studentDetails.gender,
-  //         },
-  //       });
-  //       await student.save({ session });
-
-  //       // If not RTE, create fee records
-  //       if (!isRTE) {
-  //         const feeTypes = ['admission', 'tuition', 'computer', 'examination'];
-  //         const feePromises = feeTypes.map((type) => {
-  //           const fee = new Fee({
-  //             school: schoolId,
-  //             student: student._id,
-  //             type,
-  //             amount: getFeeAmount(type, classId), // Placeholder; implement as needed
-  //             dueDate: getFeeDueDate(type), // Placeholder; implement as needed
-  //             status: 'pending',
-  //             isRTE: false,
-  //           });
-  //           return fee.save({ session });
-  //         });
-  //         await Promise.all(feePromises);
-  //       }
-
-  //       await session.commitTransaction();
-  //       res.status(201).json({
-  //         message: 'Admission processed successfully',
-  //         student,
-  //         parent,
-  //       });
-  //     } catch (error) {
-  //       await session.abortTransaction();
-  //       throw error;
-  //     } finally {
-  //       session.endSession();
-  //     }
-  //   } catch (error) {
-  //     res.status(500).json({ error: error.message });
-  //   }
-  // },
+  
 
   verifyDocuments: async (req, res) => {
     try {
@@ -253,6 +164,56 @@ const clerkController = {
       await student.save();
 
       res.json({ message: 'Documents verified successfully' });
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  },
+
+  
+  viewApplicationDocuments: async (req, res) => {
+    try {
+      const { applicationId } = req.params;
+      const schoolId = req.school._id.toString();
+      const connection = req.connection;
+      const AdmissionApplication = require('../models/AdmissionApplication')(connection);
+
+      // Validate applicationId
+      if (!mongoose.Types.ObjectId.isValid(applicationId)) {
+        return res.status(400).json({ message: 'Invalid application ID' });
+      }
+
+      const application = await AdmissionApplication.findOne({
+        _id: applicationId,
+        school: schoolId,
+      });
+
+      if (!application) {
+        return res.status(404).json({ message: 'Application not found' });
+      }
+
+      // Check if the user has permission (clerk role is already enforced by middleware)
+      if (req.user.role !== 'clerk') {
+        return res.status(403).json({ message: 'Unauthorized access' });
+      }
+
+      // Prepare document data for response
+      const documents = application.documents.map(doc => ({
+        type: doc.type,
+        documentUrl: doc.documentUrl, // URL to view the document
+        public_id: doc.public_id,    // Cloudinary public ID
+        verified: doc.verified,      // Verification status
+        uploadedAt: application.createdAt, // Assuming uploaded at the time of application creation
+      }));
+
+      res.json({
+        status: 'success',
+        applicationId: application._id,
+        trackingId: application.trackingId,
+        studentName: application.studentDetails.name,
+        admissionType: application.admissionType,
+        documentCount: documents.length,
+        documents,
+      });
     } catch (error) {
       res.status(500).json({ error: error.message });
     }
@@ -360,6 +321,86 @@ const clerkController = {
     }
   },
 
+  // enrollStudent: async (req, res) => {
+  //   try {
+  //     const { applicationId } = req.params;
+  //     const { classId, grNumber, password } = req.body;
+  //     const schoolId = req.school._id.toString();
+  //     const connection = req.connection;
+  //     const AdmissionApplication = require('../models/AdmissionApplication')(connection);
+  //     const Class = require('../models/Class')(connection);
+  //     const User = require('../models/User')(connection);
+
+  //     if (!password) {
+  //       return res.status(400).json({ message: 'Password is required' });
+  //     }
+
+  //     const application = await AdmissionApplication.findOne({ _id: applicationId, school: schoolId });
+  //     if (!application) {
+  //       return res.status(404).json({ message: 'Application not found' });
+  //     }
+
+  //     if (application.status !== 'approved') {
+  //       return res.status(400).json({ message: 'Only approved applications can be enrolled' });
+  //     }
+
+  //     const existingGR = await User.findOne({ 'studentDetails.grNumber': grNumber, school: schoolId });
+  //     if (existingGR) {
+  //       return res.status(400).json({ message: 'GR number already exists' });
+  //     }
+
+  //     const selectedClass = await Class.findOne({ _id: classId, school: schoolId });
+  //     if (!selectedClass) {
+  //       return res.status(404).json({ message: 'Class not found' });
+  //     }
+
+  //     if (selectedClass.students.length >= selectedClass.capacity) {
+  //       return res.status(400).json({ message: 'Class is at full capacity' });
+  //     }
+
+  //     const hashedPassword = await bcrypt.hash(password, 10);
+
+  //     const student = new User({
+  //       school: schoolId,
+  //       name: application.studentDetails.name,
+  //       email: application.studentDetails.email,
+  //       password: hashedPassword,
+  //       role: 'student',
+  //       status: 'active',
+  //       studentDetails: {
+  //         grNumber,
+  //         class: classId,
+  //         admissionType: application.admissionType,
+  //         parentDetails: application.parentDetails,
+  //         dob: application.studentDetails.dob,
+  //         gender: application.studentDetails.gender,
+  //       },
+  //     });
+
+  //     await student.save();
+
+  //     await Class.findByIdAndUpdate(classId, { $push: { students: student._id } });
+
+  //     application.status = 'enrolled';
+  //     application.grNumber = grNumber;
+  //     application.assignedClass = classId;
+  //     await application.save();
+
+  //     res.json({
+  //       message: 'Student enrolled successfully',
+  //       studentDetails: {
+  //         id: student._id,
+  //         name: student.name,
+  //         email: student.email,
+  //         grNumber,
+  //         class: { name: selectedClass.name, division: selectedClass.division },
+  //       },
+  //     });
+  //   } catch (error) {
+  //     res.status(500).json({ error: error.message });
+  //   }
+  // },
+
   enrollStudent: async (req, res) => {
     try {
       const { applicationId } = req.params;
@@ -425,6 +466,19 @@ const clerkController = {
       application.assignedClass = classId;
       await application.save();
 
+      // Send notification to student's email and mobile
+      const notificationResult = await sendAdmissionNotification(
+        student.email,
+        application.studentDetails.mobile, // Assuming mobile is in studentDetails
+        student.name,
+        password // Plaintext password to send in notification
+      );
+
+      if (!notificationResult.emailSent || !notificationResult.smsSent) {
+        console.warn('Notification partially failed:', notificationResult.error);
+        // Optionally, you could rollback the enrollment here if notifications are critical
+      }
+
       res.json({
         message: 'Student enrolled successfully',
         studentDetails: {
@@ -433,6 +487,10 @@ const clerkController = {
           email: student.email,
           grNumber,
           class: { name: selectedClass.name, division: selectedClass.division },
+        },
+        notificationStatus: {
+          emailSent: notificationResult.emailSent,
+          smsSent: notificationResult.smsSent,
         },
       });
     } catch (error) {

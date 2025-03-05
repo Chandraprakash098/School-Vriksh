@@ -1,63 +1,69 @@
 const nodemailer = require('nodemailer');
-const config = require('../config/config');
+const twilio = require('twilio');
 
-const transporter = nodemailer.createTransport(config.emailConfig);
-
-const notifications = {
-  // Send email notification
-  sendEmail: async (to, subject, html) => {
-    try {
-      await transporter.sendMail({
-        from: config.emailConfig.auth.user,
-        to,
-        subject,
-        html
-      });
-    } catch (error) {
-      console.error('Email notification error:', error);
-    }
+// Email transporter setup
+const transporter = nodemailer.createTransport({
+  host: process.env.EMAIL_HOST,
+  port: process.env.EMAIL_PORT,
+  secure: false, // Use TLS
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS,
   },
+});
 
-  // Notify absent students' parents
-  notifyAbsentStudents: async (absentRecords) => {
-    try {
-      for (const record of absentRecords) {
-        const student = await User.findById(record.user)
-          .populate('profile.parentId', 'email');
+// Twilio client setup
+const twilioClient = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
 
-        await notifications.sendEmail(
-          student.profile.parentId.email,
-          'Student Absence Notification',
-          `Your ward ${student.name} was marked absent today.`
-        );
-      }
-    } catch (error) {
-      console.error('Absent notification error:', error);
-    }
-  },
-
-  // Notify homework assigned
-  notifyHomeworkAssigned: async (homework) => {
-    try {
-      const students = await User.find({
-        'profile.class': homework.class,
-        role: 'student'
-      })
-      .populate('profile.parentId', 'email');
-
-      const notifications = students.map(student => 
-        notifications.sendEmail(
-          student.profile.parentId.email,
-          'New Homework Assigned',
-          `New homework assigned for ${homework.subject}: ${homework.title}`
-        )
-      );
-
-      await Promise.all(notifications);
-    } catch (error) {
-      console.error('Homework notification error:', error);
-    }
+// Send email notification
+const sendEmail = async (to, subject, text) => {
+  try {
+    const mailOptions = {
+      from: process.env.EMAIL_USER,
+      to,
+      subject,
+      text,
+    };
+    await transporter.sendMail(mailOptions);
+    console.log(`Email sent to ${to}`);
+  } catch (error) {
+    console.error(`Failed to send email to ${to}:`, error);
+    throw new Error('Email notification failed');
   }
 };
 
-module.exports = notifications;
+// Send SMS notification
+const sendSMS = async (to, body) => {
+  try {
+    await twilioClient.messages.create({
+      body,
+      from: process.env.TWILIO_PHONE_NUMBER,
+      to,
+    });
+    console.log(`SMS sent to ${to}`);
+  } catch (error) {
+    console.error(`Failed to send SMS to ${to}:`, error);
+    throw new Error('SMS notification failed');
+  }
+};
+
+// Combined notification function
+const sendAdmissionNotification = async (studentEmail, studentMobile, studentName, password) => {
+  const subject = 'Admission Confirmed - Login Credentials';
+  const message = `Dear ${studentName},\n\nYour admission has been confirmed!\n\nLogin Credentials:\nEmail: ${studentEmail}\nPassword: ${password}\n\nPlease log in to the portal to access your details.\n\nRegards,\nSchool Administration`;
+
+  try {
+    // Send email
+    await sendEmail(studentEmail, subject, message);
+
+    // Send SMS (shortened version due to character limits)
+    const smsMessage = `Dear ${studentName}, your admission is confirmed! Login: ${studentEmail}, Password: ${password}`;
+    await sendSMS(studentMobile, smsMessage);
+
+    return { emailSent: true, smsSent: true };
+  } catch (error) {
+    return { emailSent: false, smsSent: false, error: error.message };
+  }
+};
+
+module.exports = { sendAdmissionNotification };
