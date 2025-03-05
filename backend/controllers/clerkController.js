@@ -401,6 +401,105 @@ const clerkController = {
   //   }
   // },
 
+  // enrollStudent: async (req, res) => {
+  //   try {
+  //     const { applicationId } = req.params;
+  //     const { classId, grNumber, password } = req.body;
+  //     const schoolId = req.school._id.toString();
+  //     const connection = req.connection;
+  //     const AdmissionApplication = require('../models/AdmissionApplication')(connection);
+  //     const Class = require('../models/Class')(connection);
+  //     const User = require('../models/User')(connection);
+
+  //     if (!password) {
+  //       return res.status(400).json({ message: 'Password is required' });
+  //     }
+
+  //     const application = await AdmissionApplication.findOne({ _id: applicationId, school: schoolId });
+  //     if (!application) {
+  //       return res.status(404).json({ message: 'Application not found' });
+  //     }
+
+  //     if (application.status !== 'approved') {
+  //       return res.status(400).json({ message: 'Only approved applications can be enrolled' });
+  //     }
+
+  //     const existingGR = await User.findOne({ 'studentDetails.grNumber': grNumber, school: schoolId });
+  //     if (existingGR) {
+  //       return res.status(400).json({ message: 'GR number already exists' });
+  //     }
+
+  //     const selectedClass = await Class.findOne({ _id: classId, school: schoolId });
+  //     if (!selectedClass) {
+  //       return res.status(404).json({ message: 'Class not found' });
+  //     }
+
+  //     if (selectedClass.students.length >= selectedClass.capacity) {
+  //       return res.status(400).json({ message: 'Class is at full capacity' });
+  //     }
+
+  //     const hashedPassword = await bcrypt.hash(password, 10);
+
+  //     const student = new User({
+  //       school: schoolId,
+  //       name: application.studentDetails.name,
+  //       email: application.studentDetails.email,
+  //       password: hashedPassword,
+  //       role: 'student',
+  //       status: 'active',
+  //       studentDetails: {
+  //         grNumber,
+  //         class: classId,
+  //         admissionType: application.admissionType,
+  //         parentDetails: application.parentDetails,
+  //         dob: application.studentDetails.dob,
+  //         gender: application.studentDetails.gender,
+  //       },
+  //     });
+
+  //     await student.save();
+
+  //     await Class.findByIdAndUpdate(classId, { $push: { students: student._id } });
+
+  //     application.status = 'enrolled';
+  //     application.grNumber = grNumber;
+  //     application.assignedClass = classId;
+  //     await application.save();
+
+  //     // Send notification to student's email and mobile
+  //     const notificationResult = await sendAdmissionNotification(
+  //       student.email,
+  //       application.studentDetails.mobile, // Assuming mobile is in studentDetails
+  //       student.name,
+  //       password // Plaintext password to send in notification
+  //     );
+
+  //     if (!notificationResult.emailSent || !notificationResult.smsSent) {
+  //       console.warn('Notification partially failed:', notificationResult.error);
+  //       // Optionally, you could rollback the enrollment here if notifications are critical
+  //     }
+
+  //     res.json({
+  //       message: 'Student enrolled successfully',
+  //       studentDetails: {
+  //         id: student._id,
+  //         name: student.name,
+  //         email: student.email,
+  //         grNumber,
+  //         class: { name: selectedClass.name, division: selectedClass.division },
+  //       },
+  //       notificationStatus: {
+  //         emailSent: notificationResult.emailSent,
+  //         smsSent: notificationResult.smsSent,
+  //       },
+  //     });
+  //   } catch (error) {
+  //     res.status(500).json({ error: error.message });
+  //   }
+  // },
+
+
+
   enrollStudent: async (req, res) => {
     try {
       const { applicationId } = req.params;
@@ -410,6 +509,7 @@ const clerkController = {
       const AdmissionApplication = require('../models/AdmissionApplication')(connection);
       const Class = require('../models/Class')(connection);
       const User = require('../models/User')(connection);
+      const School = require('../models/School')(require('../config/database').getOwnerConnection()); // Access School model from owner DB
 
       if (!password) {
         return res.status(400).json({ message: 'Password is required' });
@@ -436,6 +536,12 @@ const clerkController = {
 
       if (selectedClass.students.length >= selectedClass.capacity) {
         return res.status(400).json({ message: 'Class is at full capacity' });
+      }
+
+      // Fetch school name from the School model
+      const school = await School.findById(schoolId).select('name');
+      if (!school) {
+        return res.status(404).json({ message: 'School not found' });
       }
 
       const hashedPassword = await bcrypt.hash(password, 10);
@@ -466,17 +572,22 @@ const clerkController = {
       application.assignedClass = classId;
       await application.save();
 
-      // Send notification to student's email and mobile
+      // Prepare class name (e.g., "5th A" using name and division)
+      const className = `${selectedClass.name}${selectedClass.division ? ' ' + selectedClass.division : ''}`;
+
+      // Send notification with school name and class
       const notificationResult = await sendAdmissionNotification(
         student.email,
-        application.studentDetails.mobile, // Assuming mobile is in studentDetails
+        application.studentDetails.mobile,
         student.name,
-        password // Plaintext password to send in notification
+        password,
+        school.name, // School name
+        className    // Class name
       );
 
       if (!notificationResult.emailSent || !notificationResult.smsSent) {
         console.warn('Notification partially failed:', notificationResult.error);
-        // Optionally, you could rollback the enrollment here if notifications are critical
+        // Optionally rollback if notifications are critical (see previous example)
       }
 
       res.json({
