@@ -86,6 +86,18 @@ router.put(
   [auth, roleCheck(['admin'])],
   adminController.reviewLeaveRequest
 );
+
+router.get(
+  '/leave-requests/history',
+  [auth, roleCheck(['admin'])],
+  adminController.getLeaveRequestHistory
+);
+
+router.delete(
+  '/leave-requests/:leaveId',
+  [auth, roleCheck(['admin'])],
+  adminController.deleteLeaveRequest
+);
 // Trustee Management
 router.put('/trustees/:trusteeId', auth, roleCheck(['admin']), adminController.manageTrustee);
 

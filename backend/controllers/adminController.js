@@ -1504,6 +1504,78 @@ const adminController = {
     }
   },
 
+  getLeaveRequestHistory: async (req, res) => {
+    try {
+      const schoolId = req.school._id.toString();
+      const connection = req.connection;
+      const Leave = getModel('Leave', connection);
+  
+      // Find all reviewed leaves (both approved and rejected)
+      const reviewedLeaves = await Leave.find({ 
+        school: schoolId, 
+        status: { $in: ['approved', 'rejected'] } 
+      })
+        .populate('user', 'name role')
+        .populate('reviewedBy', 'name')
+        .sort({ reviewedAt: -1 })
+        .lean();
+  
+      res.json({
+        status: 'success',
+        count: reviewedLeaves.length,
+        leaves: reviewedLeaves.map(leave => ({
+          id: leave._id,
+          user: {
+            id: leave.user._id,
+            name: leave.user.name,
+            role: leave.user.role,
+          },
+          reason: leave.reason,
+          startDate: leave.startDate,
+          endDate: leave.endDate,
+          type: leave.type,
+          status: leave.status,
+          appliedOn: leave.appliedOn,
+          reviewedBy: leave.reviewedBy ? {
+            id: leave.reviewedBy._id,
+            name: leave.reviewedBy.name
+          } : null,
+          reviewedAt: leave.reviewedAt,
+          comments: leave.comments || '',
+        })),
+      });
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  },
+  
+  deleteLeaveRequest: async (req, res) => {
+    try {
+      const { leaveId } = req.params;
+      const schoolId = req.school._id.toString();
+      const connection = req.connection;
+      const Leave = getModel('Leave', connection);
+  
+      // Find the leave request
+      const leave = await Leave.findOne({ _id: leaveId, school: schoolId });
+      
+      if (!leave) {
+        return res.status(404).json({ message: 'Leave request not found' });
+      }
+  
+      // Delete the leave request
+      await Leave.deleteOne({ _id: leaveId });
+  
+      res.json({
+        status: 'success',
+        message: 'Leave request deleted successfully',
+        leaveId: leaveId
+      });
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  },
+
   manageTrustee: async (req, res) => {
     try {
       const { trusteeId } = req.params;
@@ -2458,6 +2530,7 @@ createExamSchedule: async (req, res) => {
 // },
 
 // In adminController
+
 getExamSchedules: async (req, res) => {
   try {
     const schoolId = req.school._id;
