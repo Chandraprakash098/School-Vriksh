@@ -1823,6 +1823,87 @@ const adminController = {
 // },
 
 
+// createExamSchedule: async (req, res) => {
+//   const { name, examType, startDate, endDate, classes, subjects, availableRooms } = req.body;
+//   const schoolId = req.school._id;
+//   const connection = req.connection;
+//   const Exam = getModel('Exam', connection);
+//   const User = getModel('User', connection);
+
+//   const session = await connection.startSession();
+//   let transactionCommitted = false;
+
+//   try {
+//       session.startTransaction();
+
+//       const exams = [];
+//       const seatingArrangements = {};
+
+//       const examsByDate = {};
+//       for (const classId of classes) {
+//           for (const subject of subjects) {
+//               if (subject.classes.includes(classId)) {
+//                   const examEntry = new Exam({
+//                       school: schoolId,
+//                       name,
+//                       examType,
+//                       startDate,
+//                       endDate,
+//                       class: classId,
+//                       subject: subject.id,
+//                       date: subject.date,
+//                       duration: (new Date(`1970-01-01T${subject.endTime}Z`) - new Date(`1970-01-01T${subject.startTime}Z`)) / 60000,
+//                       totalMarks: subject.totalMarks,
+//                       seatingArrangement: [],
+//                   });
+//                   await examEntry.save({ session });
+//                   exams.push(examEntry);
+
+//                   if (!examsByDate[subject.date]) examsByDate[subject.date] = [];
+//                   examsByDate[subject.date].push(examEntry);
+//               }
+//           }
+//       }
+
+//       const uniqueDates = [...new Set(subjects.map(s => s.date))];
+//       for (const date of uniqueDates) {
+//           const classesOnThisDate = classes.filter(c => subjects.some(s => s.date === date && s.classes.includes(c)));
+//           const students = await User.find({ 
+//               role: 'student', 
+//               'studentDetails.class': { $in: classesOnThisDate }, 
+//               school: schoolId 
+//           }).lean();
+
+//           console.log(`Students for ${date}:`, students.length);
+
+//           seatingArrangements[date] = adminController.generateSeatingArrangement(students, availableRooms, students.length);
+
+//           for (const exam of examsByDate[date]) {
+//               const relevantStudents = students.filter(student => 
+//                   student.studentDetails && student.studentDetails.class.toString() === exam.class.toString()
+//               );
+//               const examSeating = adminController.generateSeatingArrangement(relevantStudents, availableRooms, relevantStudents.length);
+//               exam.seatingArrangement = examSeating; // Use full structure
+//               await Exam.findByIdAndUpdate(exam._id, { seatingArrangement: examSeating }, { session });
+//           }
+//       }
+
+//       await session.commitTransaction();
+//       transactionCommitted = true;
+
+//       res.status(201).json({ exams, seatingArrangements });
+
+//   } catch (error) {
+//       if (!transactionCommitted) {
+//           await session.abortTransaction();
+//       }
+//       console.error('Error in createExamSchedule:', error);
+//       res.status(500).json({ error: error.message });
+//   } finally {
+//       session.endSession();
+//   }
+// },
+
 createExamSchedule: async (req, res) => {
   const { name, examType, startDate, endDate, classes, subjects, availableRooms } = req.body;
   const schoolId = req.school._id;
@@ -1878,13 +1959,16 @@ createExamSchedule: async (req, res) => {
 
           seatingArrangements[date] = adminController.generateSeatingArrangement(students, availableRooms, students.length);
 
-          for (const exam of examsByDate[date]) {
-              const relevantStudents = students.filter(student => 
-                  student.studentDetails && student.studentDetails.class.toString() === exam.class.toString()
-              );
-              const examSeating = adminController.generateSeatingArrangement(relevantStudents, availableRooms, relevantStudents.length);
-              exam.seatingArrangement = examSeating; // Use full structure
-              await Exam.findByIdAndUpdate(exam._id, { seatingArrangement: examSeating }, { session });
+          // Added check to prevent error when examsByDate[date] is undefined
+          if (examsByDate[date]) {
+              for (const exam of examsByDate[date]) {
+                  const relevantStudents = students.filter(student => 
+                      student.studentDetails && student.studentDetails.class.toString() === exam.class.toString()
+                  );
+                  const examSeating = adminController.generateSeatingArrangement(relevantStudents, availableRooms, relevantStudents.length);
+                  exam.seatingArrangement = examSeating; // Use full structure
+                  await Exam.findByIdAndUpdate(exam._id, { seatingArrangement: examSeating }, { session });
+              }
           }
       }
 
