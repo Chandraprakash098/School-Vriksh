@@ -1686,142 +1686,6 @@ const adminController = {
     }
   },
 
-  // createExamSchedule: async (req, res) => {
-  //   try {
-  //     const { name, examType, startDate, endDate, classes, subjects, availableRooms } = req.body;
-  //     const schoolId = req.school._id;
-  //     const connection = req.connection;
-  //     const Exam = getModel('Exam', connection);
-  //     const SubjectMarks = getModel('SubjectMarks', connection);
-  //     const User = getModel('User', connection);
-
-  //     // const totalStudents = await User.countDocuments({ role: 'student', class: { $in: classes }, school: schoolId });
-  //     // if (totalStudents === 0) return res.status(400).json({ error: 'No students found' });
-
-  //     const session = await connection.startSession();
-  //     session.startTransaction();
-
-  //     try {
-  //       const examSchedule = new Exam({
-  //         school: schoolId,
-  //         name,
-  //         examType,
-  //         startDate,
-  //         endDate,
-  //         classes: classes.map(classId => ({
-  //           class: classId,
-  //           subjects: subjects.filter(s => s.classes.includes(classId)).map(subject => ({
-  //             subject: subject.id,
-  //             date: subject.date,
-  //             startTime: subject.startTime,
-  //             endTime: subject.endTime,
-  //             totalMarks: subject.totalMarks,
-  //           })),
-  //         })),
-  //       });
-
-  //       await examSchedule.save({ session });
-
-  //       const seatingArrangements = {};
-  //       const uniqueDates = [...new Set(subjects.map(s => s.date))];
-  //       for (const date of uniqueDates) {
-  //         const classesOnThisDate = classes.filter(c => subjects.some(s => s.date === date && s.classes.includes(c)));
-  //         const totalStudentsOnDate = await User.countDocuments({ role: 'student', class: { $in: classesOnThisDate }, school: schoolId });
-  //         seatingArrangements[date] = adminController.generateSeatingArrangement(totalStudentsOnDate, availableRooms, totalStudentsOnDate);
-  //       }
-
-  //       examSchedule.seatingArrangement = seatingArrangements;
-  //       await examSchedule.save({ session });
-
-  //       for (const classObj of classes) {
-  //         for (const subject of subjects) {
-  //           if (subject.classes.includes(classObj)) {
-  //             const subjectExam = new SubjectMarks({
-  //               exam: examSchedule._id,
-  //               class: classObj,
-  //               subject: subject.id,
-  //               totalMarks: subject.totalMarks,
-  //               status: 'pending',
-  //             });
-  //             await subjectExam.save({ session });
-  //           }
-  //         }
-  //       }
-
-  //       await session.commitTransaction();
-  //       res.status(201).json({ examSchedule, seatingArrangements });
-  //     } catch (error) {
-  //       await session.abortTransaction();
-  //       throw error;
-  //     } finally {
-  //       session.endSession();
-  //     }
-  //   } catch (error) {
-  //     res.status(500).json({ error: error.message });
-  //   }
-  // },
-
-
-//   createExamSchedule: async (req, res) => {
-//     try {
-//         const { name, examType, startDate, endDate, classes, subjects, availableRooms } = req.body;
-//         const schoolId = req.school._id;
-//         const connection = req.connection;
-//         const Exam = getModel('Exam', connection);
-//         const SubjectMarks = getModel('SubjectMarks', connection);
-//         const User = getModel('User', connection);
-
-//         const session = await connection.startSession();
-//         session.startTransaction();
-
-//         try {
-//             const exams = [];
-
-//             for (const classId of classes) {
-//                 for (const subject of subjects) {
-//                     if (subject.classes.includes(classId)) {
-//                         const examEntry = new Exam({
-//                             school: schoolId,
-//                             name,
-//                             examType,
-//                             startDate,
-//                             endDate,
-//                             class: classId,
-//                             subject: subject.id,
-//                             date: subject.date,
-//                             duration: (new Date(`1970-01-01T${subject.endTime}Z`) - new Date(`1970-01-01T${subject.startTime}Z`)) / 60000, // Convert to minutes
-//                             totalMarks: subject.totalMarks,
-//                         });
-
-//                         await examEntry.save({ session });
-//                         exams.push(examEntry);
-//                     }
-//                 }
-//             }
-
-//             // Generate seating arrangement
-//             const seatingArrangements = {};
-//             const uniqueDates = [...new Set(subjects.map(s => s.date))];
-//             for (const date of uniqueDates) {
-//                 const classesOnThisDate = classes.filter(c => subjects.some(s => s.date === date && s.classes.includes(c)));
-//                 const totalStudentsOnDate = await User.countDocuments({ role: 'student', class: { $in: classesOnThisDate }, school: schoolId });
-//                 seatingArrangements[date] = adminController.generateSeatingArrangement(totalStudentsOnDate, availableRooms, totalStudentsOnDate);
-//             }
-
-//             await session.commitTransaction();
-//             res.status(201).json({ exams, seatingArrangements });
-
-//         } catch (error) {
-//             await session.abortTransaction();
-//             throw error;
-//         } finally {
-//             session.endSession();
-//         }
-//     } catch (error) {
-//         res.status(500).json({ error: error.message });
-//     }
-// },
-
 
 // createExamSchedule: async (req, res) => {
 //   const { name, examType, startDate, endDate, classes, subjects, availableRooms } = req.body;
@@ -1878,13 +1742,16 @@ const adminController = {
 
 //           seatingArrangements[date] = adminController.generateSeatingArrangement(students, availableRooms, students.length);
 
-//           for (const exam of examsByDate[date]) {
-//               const relevantStudents = students.filter(student => 
-//                   student.studentDetails && student.studentDetails.class.toString() === exam.class.toString()
-//               );
-//               const examSeating = adminController.generateSeatingArrangement(relevantStudents, availableRooms, relevantStudents.length);
-//               exam.seatingArrangement = examSeating; // Use full structure
-//               await Exam.findByIdAndUpdate(exam._id, { seatingArrangement: examSeating }, { session });
+//           // Added check to prevent error when examsByDate[date] is undefined
+//           if (examsByDate[date]) {
+//               for (const exam of examsByDate[date]) {
+//                   const relevantStudents = students.filter(student => 
+//                       student.studentDetails && student.studentDetails.class.toString() === exam.class.toString()
+//                   );
+//                   const examSeating = adminController.generateSeatingArrangement(relevantStudents, availableRooms, relevantStudents.length);
+//                   exam.seatingArrangement = examSeating; // Use full structure
+//                   await Exam.findByIdAndUpdate(exam._id, { seatingArrangement: examSeating }, { session });
+//               }
 //           }
 //       }
 
@@ -1904,134 +1771,217 @@ const adminController = {
 //   }
 // },
 
+// getExamSchedules: async (req, res) => {
+//   try {
+//       const schoolId = req.school._id;
+//       const connection = req.connection;
+//       const Exam = getModel('Exam', connection);
+//       const Class = getModel('Class', connection);
+//       const Subject = getModel('Subject', connection);
+//       const User = getModel('User', connection);
+
+//       // Fetch all exams for the school
+//       const exams = await Exam.find({ school: schoolId })
+//           .populate('class', 'name division', Class)
+//           .populate('subject', 'name', Subject)
+//           .lean();
+
+//       if (!exams.length) {
+//           return res.status(404).json({ message: 'No exam schedules found for this school' });
+//       }
+
+//       // Generate seating arrangements for response consistency
+//       const seatingArrangements = {};
+//       const uniqueDates = [...new Set(exams.map(exam => exam.date.toISOString().split('T')[0]))];
+
+//       for (const date of uniqueDates) {
+//           const examsOnThisDate = exams.filter(exam => exam.date.toISOString().split('T')[0] === date);
+//           const classesOnThisDate = [...new Set(examsOnThisDate.map(exam => exam.class._id.toString()))];
+//           const students = await User.find({
+//               role: 'student',
+//               'studentDetails.class': { $in: classesOnThisDate },
+//               school: schoolId
+//           }).lean();
+
+//           const availableRooms = examsOnThisDate[0].seatingArrangement.map(seat => seat.classroom); // Assume rooms are consistent
+//           seatingArrangements[date] = adminController.generateSeatingArrangement(students, availableRooms, students.length);
+//       }
+
+//       res.status(200).json({
+//           exams,
+//           seatingArrangements,
+//           message: 'Exam schedules retrieved successfully'
+//       });
+//   } catch (error) {
+//       console.error('Error in getExamSchedules:', error);
+//       res.status(500).json({ error: error.message });
+//   }
+// },
+
 createExamSchedule: async (req, res) => {
-  const { name, examType, startDate, endDate, classes, subjects, availableRooms } = req.body;
+  const { 
+    name, 
+    examType, 
+    startDate, 
+    endDate, 
+    classId, 
+    subjects, // Array of { subjectId, totalMarks, durationHours }
+    maxExamsPerDay = 2, 
+    availableRooms 
+  } = req.body;
   const schoolId = req.school._id;
   const connection = req.connection;
   const Exam = getModel('Exam', connection);
+  const Class = getModel('Class', connection);
+  const Subject = getModel('Subject', connection);
   const User = getModel('User', connection);
 
   const session = await connection.startSession();
   let transactionCommitted = false;
 
   try {
-      session.startTransaction();
+    session.startTransaction();
 
-      const exams = [];
-      const seatingArrangements = {};
+    // Validate inputs
+    const classData = await Class.findById(classId).lean();
+    if (!classData) throw new Error('Class not found');
 
-      const examsByDate = {};
-      for (const classId of classes) {
-          for (const subject of subjects) {
-              if (subject.classes.includes(classId)) {
-                  const examEntry = new Exam({
-                      school: schoolId,
-                      name,
-                      examType,
-                      startDate,
-                      endDate,
-                      class: classId,
-                      subject: subject.id,
-                      date: subject.date,
-                      duration: (new Date(`1970-01-01T${subject.endTime}Z`) - new Date(`1970-01-01T${subject.startTime}Z`)) / 60000,
-                      totalMarks: subject.totalMarks,
-                      seatingArrangement: [],
-                  });
-                  await examEntry.save({ session });
-                  exams.push(examEntry);
+    const validSubjects = await Subject.find({ 
+      _id: { $in: subjects.map(s => s.subjectId) }, 
+      class: classId, 
+      school: schoolId 
+    }).lean();
+    if (validSubjects.length !== subjects.length) {
+      throw new Error('Invalid subjects selected');
+    }
 
-                  if (!examsByDate[subject.date]) examsByDate[subject.date] = [];
-                  examsByDate[subject.date].push(examEntry);
-              }
-          }
+    // Calculate available exam slots
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    const daysAvailable = Math.ceil((end - start) / (1000 * 60 * 60 * 24)) + 1;
+    const totalSlots = daysAvailable * maxExamsPerDay;
+    if (subjects.length > totalSlots) {
+      throw new Error('Not enough days to schedule all exams');
+    }
+
+    // Generate exam schedule
+    const students = await User.find({ 
+      role: 'student', 
+      'studentDetails.class': classId, 
+      school: schoolId 
+    }).lean();
+
+    const examSchedule = [];
+    let currentDate = new Date(start);
+    let examsToday = 0;
+    const morningTime = { start: "09:00", end: "11:00" };
+    const afternoonTime = { start: "13:00", end: "15:00" };
+
+    for (const subject of subjects) {
+      if (examsToday >= maxExamsPerDay) {
+        currentDate.setDate(currentDate.getDate() + 1);
+        examsToday = 0;
       }
 
-      const uniqueDates = [...new Set(subjects.map(s => s.date))];
-      for (const date of uniqueDates) {
-          const classesOnThisDate = classes.filter(c => subjects.some(s => s.date === date && s.classes.includes(c)));
-          const students = await User.find({ 
-              role: 'student', 
-              'studentDetails.class': { $in: classesOnThisDate }, 
-              school: schoolId 
-          }).lean();
+      const timeSlot = examsToday === 0 ? morningTime : afternoonTime;
+      const durationMinutes = subject.durationHours * 60;
 
-          console.log(`Students for ${date}:`, students.length);
+      const seating = adminController.generateSeatingArrangement(
+        students,
+        availableRooms,
+        students.length
+      );
 
-          seatingArrangements[date] = adminController.generateSeatingArrangement(students, availableRooms, students.length);
+      const exam = new Exam({
+        school: schoolId,
+        name,
+        examType,
+        startDate,
+        endDate,
+        class: classId,
+        subject: subject.subjectId,
+        examDate: new Date(currentDate),
+        startTime: timeSlot.start,
+        endTime: timeSlot.end,
+        totalMarks: subject.totalMarks,
+        duration: durationMinutes,
+        seatingArrangement: seating
+      });
 
-          // Added check to prevent error when examsByDate[date] is undefined
-          if (examsByDate[date]) {
-              for (const exam of examsByDate[date]) {
-                  const relevantStudents = students.filter(student => 
-                      student.studentDetails && student.studentDetails.class.toString() === exam.class.toString()
-                  );
-                  const examSeating = adminController.generateSeatingArrangement(relevantStudents, availableRooms, relevantStudents.length);
-                  exam.seatingArrangement = examSeating; // Use full structure
-                  await Exam.findByIdAndUpdate(exam._id, { seatingArrangement: examSeating }, { session });
-              }
-          }
-      }
+      await exam.save({ session });
+      examSchedule.push(exam);
+      examsToday++;
+    }
 
-      await session.commitTransaction();
-      transactionCommitted = true;
+    await session.commitTransaction();
+    transactionCommitted = true;
 
-      res.status(201).json({ exams, seatingArrangements });
+    // Populate the response
+    const populatedSchedule = await Exam.find({ _id: { $in: examSchedule.map(e => e._id) } })
+      .populate('subject', 'name')
+      .populate('class', 'name division')
+      .lean();
+
+    res.status(201).json({
+      success: true,
+      schedule: populatedSchedule,
+      message: 'Exam schedule created successfully'
+    });
 
   } catch (error) {
-      if (!transactionCommitted) {
-          await session.abortTransaction();
-      }
-      console.error('Error in createExamSchedule:', error);
-      res.status(500).json({ error: error.message });
+    if (!transactionCommitted) {
+      await session.abortTransaction();
+    }
+    console.error('Error in createExamSchedule:', error);
+    res.status(500).json({ 
+      success: false,
+      error: error.message,
+      message: 'Failed to create exam schedule'
+    });
   } finally {
-      session.endSession();
+    session.endSession();
   }
 },
 
+// Updated getExamSchedules to work with new structure
 getExamSchedules: async (req, res) => {
   try {
-      const schoolId = req.school._id;
-      const connection = req.connection;
-      const Exam = getModel('Exam', connection);
-      const Class = getModel('Class', connection);
-      const Subject = getModel('Subject', connection);
-      const User = getModel('User', connection);
+    const schoolId = req.school._id;
+    const connection = req.connection;
+    const Exam = getModel('Exam', connection);
+    const Class = getModel('Class', connection);
+    const Subject = getModel('Subject', connection);
 
-      // Fetch all exams for the school
-      const exams = await Exam.find({ school: schoolId })
-          .populate('class', 'name division', Class)
-          .populate('subject', 'name', Subject)
-          .lean();
+    const exams = await Exam.find({ school: schoolId })
+      .populate('class', 'name division', Class)
+      .populate('subject', 'name', Subject)
+      .sort({ examDate: 1, startTime: 1 })
+      .lean();
 
-      if (!exams.length) {
-          return res.status(404).json({ message: 'No exam schedules found for this school' });
-      }
+    if (!exams.length) {
+      return res.status(404).json({ message: 'No exam schedules found' });
+    }
 
-      // Generate seating arrangements for response consistency
-      const seatingArrangements = {};
-      const uniqueDates = [...new Set(exams.map(exam => exam.date.toISOString().split('T')[0]))];
+    // Group exams by date
+    const scheduleByDate = exams.reduce((acc, exam) => {
+      const dateKey = exam.examDate.toISOString().split('T')[0];
+      if (!acc[dateKey]) acc[dateKey] = [];
+      acc[dateKey].push(exam);
+      return acc;
+    }, {});
 
-      for (const date of uniqueDates) {
-          const examsOnThisDate = exams.filter(exam => exam.date.toISOString().split('T')[0] === date);
-          const classesOnThisDate = [...new Set(examsOnThisDate.map(exam => exam.class._id.toString()))];
-          const students = await User.find({
-              role: 'student',
-              'studentDetails.class': { $in: classesOnThisDate },
-              school: schoolId
-          }).lean();
-
-          const availableRooms = examsOnThisDate[0].seatingArrangement.map(seat => seat.classroom); // Assume rooms are consistent
-          seatingArrangements[date] = adminController.generateSeatingArrangement(students, availableRooms, students.length);
-      }
-
-      res.status(200).json({
-          exams,
-          seatingArrangements,
-          message: 'Exam schedules retrieved successfully'
-      });
+    res.status(200).json({
+      success: true,
+      schedule: scheduleByDate,
+      totalExams: exams.length,
+      message: 'Exam schedules retrieved successfully'
+    });
   } catch (error) {
-      console.error('Error in getExamSchedules:', error);
-      res.status(500).json({ error: error.message });
+    console.error('Error in getExamSchedules:', error);
+    res.status(500).json({ 
+      success: false,
+      error: error.message 
+    });
   }
 },
 
