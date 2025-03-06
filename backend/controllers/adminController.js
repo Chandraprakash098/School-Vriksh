@@ -2398,6 +2398,66 @@ createExamSchedule: async (req, res) => {
 //   }
 // },
 
+// getExamSchedules: async (req, res) => {
+//   try {
+//     const schoolId = req.school._id;
+//     const connection = req.connection;
+//     const Exam = getModel('Exam', connection);
+//     const Class = getModel('Class', connection);
+//     const Subject = getModel('Subject', connection);
+
+//     const exams = await Exam.find({ school: schoolId })
+//       .populate('class', 'name division', Class)
+//       .populate('subject', 'name', Subject)
+//       .sort({ examDate: 1, startTime: 1 })
+//       .lean();
+
+//     if (!exams.length) {
+//       return res.status(404).json({ message: 'No exam schedules found' });
+//     }
+
+//     const scheduleByDate = exams.reduce((acc, exam) => {
+//       if (!exam.examDate || !(exam.examDate instanceof Date) || isNaN(exam.examDate.getTime())) {
+//         console.warn(`Invalid examDate for exam ${exam._id}: ${exam.examDate}`);
+//         const fallbackDate = new Date().toISOString().split('T')[0];
+//         acc[fallbackDate] = acc[fallbackDate] || [];
+//         acc[fallbackDate].push({ ...exam, examDate: new Date(fallbackDate) });
+//         return acc;
+//       }
+
+//       const dateKey = exam.examDate.toISOString().split('T')[0];
+//       acc[dateKey] = acc[dateKey] || [];
+//       acc[dateKey].push({
+//         ...exam,
+//         displayExamType: exam.examType === 'Other' ? exam.customExamType : exam.examType
+//       });
+//       return acc;
+//     }, {});
+
+//     Object.keys(scheduleByDate).forEach(date => {
+//       scheduleByDate[date].sort((a, b) => {
+//         if (!a.startTime || !b.startTime) return 0;
+//         return a.startTime.localeCompare(b.startTime);
+//       });
+//     });
+
+//     res.status(200).json({
+//       success: true,
+//       schedule: scheduleByDate,
+//       totalExams: exams.length,
+//       message: 'Exam schedules retrieved successfully'
+//     });
+//   } catch (error) {
+//     console.error('Error in getExamSchedules:', error);
+//     res.status(500).json({ 
+//       success: false,
+//       error: error.message,
+//       message: 'Failed to retrieve exam schedules'
+//     });
+//   }
+// },
+
+// In adminController
 getExamSchedules: async (req, res) => {
   try {
     const schoolId = req.school._id;
@@ -2405,10 +2465,17 @@ getExamSchedules: async (req, res) => {
     const Exam = getModel('Exam', connection);
     const Class = getModel('Class', connection);
     const Subject = getModel('Subject', connection);
+    const User = getModel('User', connection);
 
+    // Fetch exams with populated fields
     const exams = await Exam.find({ school: schoolId })
       .populate('class', 'name division', Class)
       .populate('subject', 'name', Subject)
+      .populate({
+        path: 'seatingArrangement.arrangement.students.student',
+        model: User,
+        select: 'name' // Only fetch the student's name
+      })
       .sort({ examDate: 1, startTime: 1 })
       .lean();
 
@@ -2416,12 +2483,17 @@ getExamSchedules: async (req, res) => {
       return res.status(404).json({ message: 'No exam schedules found' });
     }
 
+    // Group exams by date with proper date validation
     const scheduleByDate = exams.reduce((acc, exam) => {
       if (!exam.examDate || !(exam.examDate instanceof Date) || isNaN(exam.examDate.getTime())) {
         console.warn(`Invalid examDate for exam ${exam._id}: ${exam.examDate}`);
         const fallbackDate = new Date().toISOString().split('T')[0];
         acc[fallbackDate] = acc[fallbackDate] || [];
-        acc[fallbackDate].push({ ...exam, examDate: new Date(fallbackDate) });
+        acc[fallbackDate].push({
+          ...exam,
+          examDate: new Date(fallbackDate),
+          displayExamType: exam.examType === 'Other' ? exam.customExamType : exam.examType
+        });
         return acc;
       }
 
@@ -2434,6 +2506,7 @@ getExamSchedules: async (req, res) => {
       return acc;
     }, {});
 
+    // Sort exams within each date by startTime
     Object.keys(scheduleByDate).forEach(date => {
       scheduleByDate[date].sort((a, b) => {
         if (!a.startTime || !b.startTime) return 0;
