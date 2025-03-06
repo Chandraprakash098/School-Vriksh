@@ -1818,14 +1818,189 @@ const adminController = {
 //   }
 // },
 
+
+// createExamSchedule: async (req, res) => {
+//   const { 
+//     name, 
+//     examType, 
+//     startDate, 
+//     endDate, 
+//     classId, 
+//     subjects, // Array of { subjectId, totalMarks, durationHours (optional), startTime (optional), endTime (optional) }
+//     maxExamsPerDay = 2, 
+//     availableRooms 
+//   } = req.body;
+//   const schoolId = req.school._id;
+//   const connection = req.connection;
+//   const Exam = getModel('Exam', connection);
+//   const Class = getModel('Class', connection);
+//   const Subject = getModel('Subject', connection);
+//   const User = getModel('User', connection);
+
+//   const session = await connection.startSession();
+//   let transactionCommitted = false;
+
+//   try {
+//     session.startTransaction();
+
+//     // Validate class
+//     const classData = await Class.findById(classId).lean();
+//     if (!classData) throw new Error('Class not found');
+
+//     // Validate subjects belong to the selected class
+//     const subjectIds = subjects.map(s => s.subjectId);
+//     const validSubjects = await Subject.find({ 
+//       _id: { $in: subjectIds }, 
+//       class: classId, 
+//       school: schoolId 
+//     }).lean();
+
+//     if (validSubjects.length !== subjects.length) {
+//       const invalidSubjects = subjectIds.filter(id => !validSubjects.some(s => s._id.toString() === id));
+//       throw new Error(`Invalid subjects for class ${classData.name}: ${invalidSubjects.join(', ')}`);
+//     }
+
+//     // Map subjects to include their names for later use
+//     const subjectMap = validSubjects.reduce((acc, subj) => {
+//       acc[subj._id.toString()] = subj.name;
+//       return acc;
+//     }, {});
+
+//     // Calculate available exam slots
+//     const start = new Date(startDate);
+//     const end = new Date(endDate);
+//     const daysAvailable = Math.ceil((end - start) / (1000 * 60 * 60 * 24)) + 1;
+//     const totalSlots = daysAvailable * maxExamsPerDay;
+//     if (subjects.length > totalSlots) {
+//       throw new Error('Not enough days to schedule all exams');
+//     }
+
+//     // Default durations based on exam type (in hours)
+//     const defaultDurations = {
+//       'Midterm': 2,
+//       'Final': 3,
+//       'Unit Test': 1,
+//       'Practical': 2
+//     };
+
+//     // Default time slots if not provided
+//     const defaultTimeSlots = {
+//       morning: { start: "09:00", end: "11:00" }, // 2 hours default
+//       afternoon: { start: "13:00", end: "15:00" } // 2 hours default
+//     };
+
+//     // Generate exam schedule
+//     const students = await User.find({ 
+//       role: 'student', 
+//       'studentDetails.class': classId, 
+//       school: schoolId 
+//     }).lean();
+
+//     const examSchedule = [];
+//     let currentDate = new Date(start);
+//     let examsToday = 0;
+
+//     for (const subject of subjects) {
+//       if (examsToday >= maxExamsPerDay) {
+//         currentDate.setDate(currentDate.getDate() + 1);
+//         examsToday = 0;
+//       }
+
+//       // Determine duration and times
+//       const defaultDuration = defaultDurations[examType] || 2;
+//       const durationHours = subject.durationHours || defaultDuration;
+//       const durationMinutes = durationHours * 60;
+
+//       const slotKey = examsToday === 0 ? 'morning' : 'afternoon';
+//       let startTime = subject.startTime || defaultTimeSlots[slotKey].start;
+//       let endTime = subject.endTime;
+
+//       // If endTime not provided, calculate it based on duration
+//       if (!endTime) {
+//         endTime = calculateEndTime(startTime, durationMinutes);
+//       } else {
+//         // Validate that provided endTime matches duration
+//         const actualDuration = calculateDuration(startTime, endTime);
+//         if (Math.abs(actualDuration - durationMinutes) > 5) { // Allow 5-minute tolerance
+//           throw new Error(`Duration mismatch for subject ${subjectMap[subject.subjectId]}: specified ${durationHours} hours, but ${startTime}-${endTime} is ${actualDuration/60} hours`);
+//         }
+//       }
+
+//       // Validate time format
+//       if (!isValidTimeFormat(startTime) || !isValidTimeFormat(endTime)) {
+//         throw new Error(`Invalid time format for subject ${subjectMap[subject.subjectId]}: ${startTime}-${endTime}`);
+//       }
+
+//       const seating = adminController.generateSeatingArrangement(
+//         students,
+//         availableRooms,
+//         students.length
+//       );
+
+//       const examDate = new Date(currentDate);
+//       if (isNaN(examDate.getTime())) {
+//         throw new Error(`Invalid date generated for subject ${subjectMap[subject.subjectId]}`);
+//       }
+
+//       const exam = new Exam({
+//         school: schoolId,
+//         name,
+//         examType,
+//         startDate,
+//         endDate,
+//         class: classId,
+//         subject: subject.subjectId,
+//         examDate: examDate,
+//         startTime,
+//         endTime,
+//         duration: durationMinutes,
+//         totalMarks: subject.totalMarks,
+//         seatingArrangement: seating
+//       });
+
+//       await exam.save({ session });
+//       examSchedule.push(exam);
+//       examsToday++;
+//     }
+
+//     await session.commitTransaction();
+//     transactionCommitted = true;
+
+//     const populatedSchedule = await Exam.find({ _id: { $in: examSchedule.map(e => e._id) } })
+//       .populate('subject', 'name')
+//       .populate('class', 'name division')
+//       .lean();
+
+//     res.status(201).json({
+//       success: true,
+//       schedule: populatedSchedule,
+//       message: 'Exam schedule created successfully'
+//     });
+
+//   } catch (error) {
+//     if (!transactionCommitted) {
+//       await session.abortTransaction();
+//     }
+//     console.error('Error in createExamSchedule:', error);
+//     res.status(500).json({ 
+//       success: false,
+//       error: error.message,
+//       message: 'Failed to create exam schedule'
+//     });
+//   } finally {
+//     session.endSession();
+//   }
+// },
+
+
 createExamSchedule: async (req, res) => {
   const { 
-    name, 
     examType, 
+    customExamType, // New field for custom exam type
     startDate, 
     endDate, 
     classId, 
-    subjects, // Array of { subjectId, totalMarks, durationHours }
+    subjects, // Array of { subjectId, totalMarks, durationHours (optional), startTime (optional), endTime (optional) }
     maxExamsPerDay = 2, 
     availableRooms 
   } = req.body;
@@ -1842,17 +2017,35 @@ createExamSchedule: async (req, res) => {
   try {
     session.startTransaction();
 
-    // Validate inputs
+    // Validate class
     const classData = await Class.findById(classId).lean();
     if (!classData) throw new Error('Class not found');
 
+    // Validate subjects belong to the selected class
+    const subjectIds = subjects.map(s => s.subjectId);
     const validSubjects = await Subject.find({ 
-      _id: { $in: subjects.map(s => s.subjectId) }, 
+      _id: { $in: subjectIds }, 
       class: classId, 
       school: schoolId 
     }).lean();
+
     if (validSubjects.length !== subjects.length) {
-      throw new Error('Invalid subjects selected');
+      const invalidSubjects = subjectIds.filter(id => !validSubjects.some(s => s._id.toString() === id));
+      throw new Error(`Invalid subjects for class ${classData.name}: ${invalidSubjects.join(', ')}`);
+    }
+
+    const subjectMap = validSubjects.reduce((acc, subj) => {
+      acc[subj._id.toString()] = subj.name;
+      return acc;
+    }, {});
+
+    // Validate examType and customExamType
+    const validExamTypes = ['Unit Test', 'Midterm', 'Final', 'Practical', 'Other'];
+    if (!validExamTypes.includes(examType)) {
+      throw new Error('Invalid exam type');
+    }
+    if (examType === 'Other' && (!customExamType || customExamType.trim() === '')) {
+      throw new Error('Custom exam type is required when selecting "Other"');
     }
 
     // Calculate available exam slots
@@ -1864,6 +2057,20 @@ createExamSchedule: async (req, res) => {
       throw new Error('Not enough days to schedule all exams');
     }
 
+    // Default durations based on exam type (in hours)
+    const defaultDurations = {
+      'Midterm': 2,
+      'Final': 3,
+      'Unit Test': 1,
+      'Practical': 2,
+      'Other': 2 // Default for custom type
+    };
+
+    const defaultTimeSlots = {
+      morning: { start: "09:00", end: "11:00" },
+      afternoon: { start: "13:00", end: "15:00" }
+    };
+
     // Generate exam schedule
     const students = await User.find({ 
       role: 'student', 
@@ -1874,10 +2081,6 @@ createExamSchedule: async (req, res) => {
     const examSchedule = [];
     let currentDate = new Date(start);
     let examsToday = 0;
-    const timeSlots = {
-      morning: { start: "09:00", baseEnd: "11:00" },
-      afternoon: { start: "13:00", baseEnd: "15:00" }
-    };
 
     for (const subject of subjects) {
       if (examsToday >= maxExamsPerDay) {
@@ -1885,16 +2088,25 @@ createExamSchedule: async (req, res) => {
         examsToday = 0;
       }
 
-      const defaultDuration = defaultDurations[examType] || 2; // Fallback to 2 hours
+      const defaultDuration = defaultDurations[examType] || 2;
       const durationHours = subject.durationHours || defaultDuration;
       const durationMinutes = durationHours * 60;
 
-      const slot = examsToday === 0 ? timeSlots.morning : timeSlots.afternoon;
-      const endTime = calculateEndTime(slot.start, durationMinutes);
-      
-      const examDate = new Date(currentDate);
-      if (isNaN(examDate.getTime())) {
-        throw new Error(`Invalid date generated for subject ${subject.subjectId}`);
+      const slotKey = examsToday === 0 ? 'morning' : 'afternoon';
+      let startTime = subject.startTime || defaultTimeSlots[slotKey].start;
+      let endTime = subject.endTime;
+
+      if (!endTime) {
+        endTime = calculateEndTime(startTime, durationMinutes);
+      } else {
+        const actualDuration = calculateDuration(startTime, endTime);
+        if (Math.abs(actualDuration - durationMinutes) > 5) {
+          throw new Error(`Duration mismatch for subject ${subjectMap[subject.subjectId]}: specified ${durationHours} hours, but ${startTime}-${endTime} is ${actualDuration/60} hours`);
+        }
+      }
+
+      if (!isValidTimeFormat(startTime) || !isValidTimeFormat(endTime)) {
+        throw new Error(`Invalid time format for subject ${subjectMap[subject.subjectId]}: ${startTime}-${endTime}`);
       }
 
       const seating = adminController.generateSeatingArrangement(
@@ -1903,19 +2115,24 @@ createExamSchedule: async (req, res) => {
         students.length
       );
 
+      const examDate = new Date(currentDate);
+      if (isNaN(examDate.getTime())) {
+        throw new Error(`Invalid date generated for subject ${subjectMap[subject.subjectId]}`);
+      }
+
       const exam = new Exam({
         school: schoolId,
-        name,
         examType,
+        customExamType: examType === 'Other' ? customExamType : undefined,
         startDate,
         endDate,
         class: classId,
         subject: subject.subjectId,
-        examDate: new Date(currentDate),
-        startTime: timeSlot.start,
-        endTime: timeSlot.end,
-        totalMarks: subject.totalMarks,
+        examDate: examDate,
+        startTime,
+        endTime,
         duration: durationMinutes,
+        totalMarks: subject.totalMarks,
         seatingArrangement: seating
       });
 
@@ -1927,7 +2144,6 @@ createExamSchedule: async (req, res) => {
     await session.commitTransaction();
     transactionCommitted = true;
 
-    // Populate the response
     const populatedSchedule = await Exam.find({ _id: { $in: examSchedule.map(e => e._id) } })
       .populate('subject', 'name')
       .populate('class', 'name division')
@@ -1953,9 +2169,68 @@ createExamSchedule: async (req, res) => {
     session.endSession();
   }
 },
-
 // Updated getExamSchedules to work with new structure
 // In adminController
+// getExamSchedules: async (req, res) => {
+//   try {
+//     const schoolId = req.school._id;
+//     const connection = req.connection;
+//     const Exam = getModel('Exam', connection);
+//     const Class = getModel('Class', connection);
+//     const Subject = getModel('Subject', connection);
+
+//     const exams = await Exam.find({ school: schoolId })
+//       .populate('class', 'name division', Class)
+//       .populate('subject', 'name', Subject)
+//       .sort({ examDate: 1, startTime: 1 })
+//       .lean();
+
+//     if (!exams.length) {
+//       return res.status(404).json({ message: 'No exam schedules found' });
+//     }
+
+//     // Group exams by date with proper date validation
+//     const scheduleByDate = exams.reduce((acc, exam) => {
+//       // Check if examDate exists and is valid
+//       if (!exam.examDate || !(exam.examDate instanceof Date) || isNaN(exam.examDate.getTime())) {
+//         console.warn(`Invalid examDate for exam ${exam._id}: ${exam.examDate}`);
+//         // Use a fallback date or skip this exam
+//         const fallbackDate = new Date().toISOString().split('T')[0]; // Current date as fallback
+//         acc[fallbackDate] = acc[fallbackDate] || [];
+//         acc[fallbackDate].push({ ...exam, examDate: new Date(fallbackDate) });
+//         return acc;
+//       }
+
+//       const dateKey = exam.examDate.toISOString().split('T')[0];
+//       acc[dateKey] = acc[dateKey] || [];
+//       acc[dateKey].push(exam);
+//       return acc;
+//     }, {});
+
+//     // Sort exams within each date by startTime
+//     Object.keys(scheduleByDate).forEach(date => {
+//       scheduleByDate[date].sort((a, b) => {
+//         if (!a.startTime || !b.startTime) return 0;
+//         return a.startTime.localeCompare(b.startTime);
+//       });
+//     });
+
+//     res.status(200).json({
+//       success: true,
+//       schedule: scheduleByDate,
+//       totalExams: exams.length,
+//       message: 'Exam schedules retrieved successfully'
+//     });
+//   } catch (error) {
+//     console.error('Error in getExamSchedules:', error);
+//     res.status(500).json({ 
+//       success: false,
+//       error: error.message,
+//       message: 'Failed to retrieve exam schedules'
+//     });
+//   }
+// },
+
 getExamSchedules: async (req, res) => {
   try {
     const schoolId = req.school._id;
@@ -1974,13 +2249,10 @@ getExamSchedules: async (req, res) => {
       return res.status(404).json({ message: 'No exam schedules found' });
     }
 
-    // Group exams by date with proper date validation
     const scheduleByDate = exams.reduce((acc, exam) => {
-      // Check if examDate exists and is valid
       if (!exam.examDate || !(exam.examDate instanceof Date) || isNaN(exam.examDate.getTime())) {
         console.warn(`Invalid examDate for exam ${exam._id}: ${exam.examDate}`);
-        // Use a fallback date or skip this exam
-        const fallbackDate = new Date().toISOString().split('T')[0]; // Current date as fallback
+        const fallbackDate = new Date().toISOString().split('T')[0];
         acc[fallbackDate] = acc[fallbackDate] || [];
         acc[fallbackDate].push({ ...exam, examDate: new Date(fallbackDate) });
         return acc;
@@ -1988,11 +2260,13 @@ getExamSchedules: async (req, res) => {
 
       const dateKey = exam.examDate.toISOString().split('T')[0];
       acc[dateKey] = acc[dateKey] || [];
-      acc[dateKey].push(exam);
+      acc[dateKey].push({
+        ...exam,
+        displayExamType: exam.examType === 'Other' ? exam.customExamType : exam.examType
+      });
       return acc;
     }, {});
 
-    // Sort exams within each date by startTime
     Object.keys(scheduleByDate).forEach(date => {
       scheduleByDate[date].sort((a, b) => {
         if (!a.startTime || !b.startTime) return 0;
@@ -2403,10 +2677,30 @@ const calculateEndTime = (startTime, durationMinutes) => {
   const startMinutes = hours * 60 + minutes;
   const endMinutes = startMinutes + durationMinutes;
   
-  const endHours = Math.floor(endMinutes / 60);
+  const endHours = Math.floor(endMinutes / 60) % 24;
   const endMins = endMinutes % 60;
   
   return `${String(endHours).padStart(2, '0')}:${String(endMins).padStart(2, '0')}`;
+};
+
+const calculateDuration = (startTime, endTime) => {
+  const [startHours, startMinutes] = startTime.split(':').map(Number);
+  const [endHours, endMinutes] = endTime.split(':').map(Number);
+  
+  const startTotal = startHours * 60 + startMinutes;
+  let endTotal = endHours * 60 + endMinutes;
+  
+  // Handle case where end time crosses midnight
+  if (endTotal < startTotal) {
+    endTotal += 24 * 60;
+  }
+  
+  return endTotal - startTotal;
+};
+
+const isValidTimeFormat = (time) => {
+  const timeRegex = /^([01]?[0-9]|2[0-3]):[0-5][0-9]$/;
+  return timeRegex.test(time);
 };
 
 const calculateClassStatistics = results => {

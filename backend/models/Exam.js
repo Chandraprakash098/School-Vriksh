@@ -53,15 +53,26 @@
 
 
 // In your exam model file
+
 const mongoose = require('mongoose');
 
 const examSchema = new mongoose.Schema({
   school: { type: mongoose.Schema.Types.ObjectId, ref: 'School', required: true },
-  name: { type: String, required: true },
+  // name: { type: String, required: true },
+  // examType: { 
+  //   type: String, 
+  //   enum: ['Unit Test', 'Midterm', 'Final', 'Practical'],
+  //   required: true 
+  // },
+
   examType: { 
     type: String, 
-    enum: ['Unit Test', 'Midterm', 'Final', 'Practical'],
+    enum: ['Unit Test', 'Midterm', 'Final', 'Practical', 'Other'],
     required: true 
+  },
+  customExamType: { 
+    type: String,
+    required: function() { return this.examType === 'Other'; } // Required only if examType is 'Other'
   },
   startDate: { type: Date, required: true },
   endDate: { type: Date, required: true },
