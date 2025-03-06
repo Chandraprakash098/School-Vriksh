@@ -611,40 +611,89 @@ const teacherController = {
   assignHomework: async (req, res) => {
     try {
       const schoolId = req.school._id.toString();
+      const { classId } = req.params; // Use classId from params
+      const homeworkData = req.body;
       const connection = req.connection;
       const Homework = require('../models/Homework')(connection);
 
-      const homeworkData = req.body;
-
       const homework = new Homework({
         school: schoolId,
-        class: homeworkData.classId, // Expect classId in req.body instead of req.school
+        class: classId, // Use classId instead of homeworkData.classId
         ...homeworkData,
         assignedBy: req.user._id,
       });
 
       await homework.save();
-
-      // Notify students and parents (implement notifyHomeworkAssigned if needed)
-      // await notifyHomeworkAssigned(homework);
-
       res.status(201).json(homework);
     } catch (error) {
       res.status(500).json({ error: error.message });
     }
   },
 
+  // markAttendance: async (req, res) => {
+  //   try {
+  //     const { classId } = req.params; // Removed schoolId from params, use req.school
+  //     const { date, attendanceData } = req.body;
+  //     const teacherId = req.user._id;
+  //     const schoolId = req.school._id.toString();
+  //     const connection = req.connection;
+  //     const User = require('../models/User')(connection);
+  //     const Attendance = require('../models/Attendance')(connection);
+
+  //     // Verify if the teacher has permission to take attendance for this class
+  //     const teacher = await User.findById(teacherId);
+  //     if (!teacher || !teacher.permissions.canTakeAttendance.some(id => id.toString() === classId)) {
+  //       return res.status(403).json({
+  //         message: 'You do not have permission to mark attendance for this class. Only assigned class teachers can mark attendance.',
+  //       });
+  //     }
+
+  //     const session = await mongoose.startSession();
+  //     session.startTransaction();
+
+  //     try {
+  //       const attendancePromises = attendanceData.map(async (student) => {
+  //         const attendance = new Attendance({
+  //           school: schoolId,
+  //           class: classId,
+  //           user: student.userId,
+  //           date,
+  //           status: student.status,
+  //           type: 'student',
+  //           markedBy: teacherId,
+  //         });
+  //         return attendance.save({ session });
+  //       });
+
+  //       const attendanceRecords = await Promise.all(attendancePromises);
+
+  //       // Notify parents of absent students (implement notifyAbsentStudents if needed)
+  //       const absentStudents = attendanceRecords.filter(record => record.status === 'absent');
+  //       // await notifyAbsentStudents(absentStudents);
+
+  //       await session.commitTransaction();
+  //       res.json(attendanceRecords);
+  //     } catch (error) {
+  //       await session.abortTransaction();
+  //       throw error;
+  //     } finally {
+  //       session.endSession();
+  //     }
+  //   } catch (error) {
+  //     res.status(500).json({ error: error.message });
+  //   }
+  // },
+
   markAttendance: async (req, res) => {
     try {
-      const { classId } = req.params; // Removed schoolId from params, use req.school
+      const { classId } = req.params; // Removed schoolId from params
       const { date, attendanceData } = req.body;
       const teacherId = req.user._id;
-      const schoolId = req.school._id.toString();
+      const schoolId = req.school._id.toString(); // Use req.school
       const connection = req.connection;
       const User = require('../models/User')(connection);
       const Attendance = require('../models/Attendance')(connection);
 
-      // Verify if the teacher has permission to take attendance for this class
       const teacher = await User.findById(teacherId);
       if (!teacher || !teacher.permissions.canTakeAttendance.some(id => id.toString() === classId)) {
         return res.status(403).json({
@@ -670,10 +719,6 @@ const teacherController = {
         });
 
         const attendanceRecords = await Promise.all(attendancePromises);
-
-        // Notify parents of absent students (implement notifyAbsentStudents if needed)
-        const absentStudents = attendanceRecords.filter(record => record.status === 'absent');
-        // await notifyAbsentStudents(absentStudents);
 
         await session.commitTransaction();
         res.json(attendanceRecords);
@@ -908,9 +953,39 @@ const teacherController = {
     }
   },
 
+  // requestLeave: async (req, res) => {
+  //   try {
+  //     const schoolId = req.school._id.toString(); // Use req.school instead of req.params
+  //     const { reason, startDate, endDate, type } = req.body;
+  //     const teacherId = req.user._id;
+  //     const connection = req.connection;
+  //     const Leave = require('../models/Leave')(connection);
+
+  //     const leave = new Leave({
+  //       school: schoolId,
+  //       user: teacherId,
+  //       reason,
+  //       startDate,
+  //       endDate,
+  //       type, // 'sick', 'casual', 'vacation'
+  //       status: 'pending',
+  //       appliedOn: new Date(),
+  //     });
+
+  //     await leave.save();
+
+  //     // Notify admin about leave request (implement notifyLeaveRequest if needed)
+  //     // await notifyLeaveRequest(leave);
+
+  //     res.status(201).json(leave);
+  //   } catch (error) {
+  //     res.status(500).json({ error: error.message });
+  //   }
+  // },
+
   requestLeave: async (req, res) => {
     try {
-      const schoolId = req.school._id.toString(); // Use req.school instead of req.params
+      const schoolId = req.school._id.toString();
       const { reason, startDate, endDate, type } = req.body;
       const teacherId = req.user._id;
       const connection = req.connection;
@@ -922,17 +997,45 @@ const teacherController = {
         reason,
         startDate,
         endDate,
-        type, // 'sick', 'casual', 'vacation'
+        type,
         status: 'pending',
         appliedOn: new Date(),
       });
 
       await leave.save();
-
-      // Notify admin about leave request (implement notifyLeaveRequest if needed)
-      // await notifyLeaveRequest(leave);
-
       res.status(201).json(leave);
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  },
+
+  getLeaveStatus: async (req, res) => {
+    try {
+      const schoolId = req.school._id.toString();
+      const teacherId = req.user._id;
+      const connection = req.connection;
+      const Leave = require('../models/Leave')(connection);
+
+      const leaves = await Leave.find({ school: schoolId, user: teacherId })
+        .sort({ appliedOn: -1 })
+        .lean();
+
+      res.json({
+        status: 'success',
+        count: leaves.length,
+        leaves: leaves.map(leave => ({
+          id: leave._id,
+          reason: leave.reason,
+          startDate: leave.startDate,
+          endDate: leave.endDate,
+          type: leave.type,
+          status: leave.status,
+          appliedOn: leave.appliedOn,
+          reviewedBy: leave.reviewedBy,
+          reviewedAt: leave.reviewedAt,
+          comments: leave.comments,
+        })),
+      });
     } catch (error) {
       res.status(500).json({ error: error.message });
     }

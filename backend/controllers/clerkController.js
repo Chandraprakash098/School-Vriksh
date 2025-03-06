@@ -321,182 +321,7 @@ const clerkController = {
     }
   },
 
-  // enrollStudent: async (req, res) => {
-  //   try {
-  //     const { applicationId } = req.params;
-  //     const { classId, grNumber, password } = req.body;
-  //     const schoolId = req.school._id.toString();
-  //     const connection = req.connection;
-  //     const AdmissionApplication = require('../models/AdmissionApplication')(connection);
-  //     const Class = require('../models/Class')(connection);
-  //     const User = require('../models/User')(connection);
-
-  //     if (!password) {
-  //       return res.status(400).json({ message: 'Password is required' });
-  //     }
-
-  //     const application = await AdmissionApplication.findOne({ _id: applicationId, school: schoolId });
-  //     if (!application) {
-  //       return res.status(404).json({ message: 'Application not found' });
-  //     }
-
-  //     if (application.status !== 'approved') {
-  //       return res.status(400).json({ message: 'Only approved applications can be enrolled' });
-  //     }
-
-  //     const existingGR = await User.findOne({ 'studentDetails.grNumber': grNumber, school: schoolId });
-  //     if (existingGR) {
-  //       return res.status(400).json({ message: 'GR number already exists' });
-  //     }
-
-  //     const selectedClass = await Class.findOne({ _id: classId, school: schoolId });
-  //     if (!selectedClass) {
-  //       return res.status(404).json({ message: 'Class not found' });
-  //     }
-
-  //     if (selectedClass.students.length >= selectedClass.capacity) {
-  //       return res.status(400).json({ message: 'Class is at full capacity' });
-  //     }
-
-  //     const hashedPassword = await bcrypt.hash(password, 10);
-
-  //     const student = new User({
-  //       school: schoolId,
-  //       name: application.studentDetails.name,
-  //       email: application.studentDetails.email,
-  //       password: hashedPassword,
-  //       role: 'student',
-  //       status: 'active',
-  //       studentDetails: {
-  //         grNumber,
-  //         class: classId,
-  //         admissionType: application.admissionType,
-  //         parentDetails: application.parentDetails,
-  //         dob: application.studentDetails.dob,
-  //         gender: application.studentDetails.gender,
-  //       },
-  //     });
-
-  //     await student.save();
-
-  //     await Class.findByIdAndUpdate(classId, { $push: { students: student._id } });
-
-  //     application.status = 'enrolled';
-  //     application.grNumber = grNumber;
-  //     application.assignedClass = classId;
-  //     await application.save();
-
-  //     res.json({
-  //       message: 'Student enrolled successfully',
-  //       studentDetails: {
-  //         id: student._id,
-  //         name: student.name,
-  //         email: student.email,
-  //         grNumber,
-  //         class: { name: selectedClass.name, division: selectedClass.division },
-  //       },
-  //     });
-  //   } catch (error) {
-  //     res.status(500).json({ error: error.message });
-  //   }
-  // },
-
-  // enrollStudent: async (req, res) => {
-  //   try {
-  //     const { applicationId } = req.params;
-  //     const { classId, grNumber, password } = req.body;
-  //     const schoolId = req.school._id.toString();
-  //     const connection = req.connection;
-  //     const AdmissionApplication = require('../models/AdmissionApplication')(connection);
-  //     const Class = require('../models/Class')(connection);
-  //     const User = require('../models/User')(connection);
-
-  //     if (!password) {
-  //       return res.status(400).json({ message: 'Password is required' });
-  //     }
-
-  //     const application = await AdmissionApplication.findOne({ _id: applicationId, school: schoolId });
-  //     if (!application) {
-  //       return res.status(404).json({ message: 'Application not found' });
-  //     }
-
-  //     if (application.status !== 'approved') {
-  //       return res.status(400).json({ message: 'Only approved applications can be enrolled' });
-  //     }
-
-  //     const existingGR = await User.findOne({ 'studentDetails.grNumber': grNumber, school: schoolId });
-  //     if (existingGR) {
-  //       return res.status(400).json({ message: 'GR number already exists' });
-  //     }
-
-  //     const selectedClass = await Class.findOne({ _id: classId, school: schoolId });
-  //     if (!selectedClass) {
-  //       return res.status(404).json({ message: 'Class not found' });
-  //     }
-
-  //     if (selectedClass.students.length >= selectedClass.capacity) {
-  //       return res.status(400).json({ message: 'Class is at full capacity' });
-  //     }
-
-  //     const hashedPassword = await bcrypt.hash(password, 10);
-
-  //     const student = new User({
-  //       school: schoolId,
-  //       name: application.studentDetails.name,
-  //       email: application.studentDetails.email,
-  //       password: hashedPassword,
-  //       role: 'student',
-  //       status: 'active',
-  //       studentDetails: {
-  //         grNumber,
-  //         class: classId,
-  //         admissionType: application.admissionType,
-  //         parentDetails: application.parentDetails,
-  //         dob: application.studentDetails.dob,
-  //         gender: application.studentDetails.gender,
-  //       },
-  //     });
-
-  //     await student.save();
-
-  //     await Class.findByIdAndUpdate(classId, { $push: { students: student._id } });
-
-  //     application.status = 'enrolled';
-  //     application.grNumber = grNumber;
-  //     application.assignedClass = classId;
-  //     await application.save();
-
-  //     // Send notification to student's email and mobile
-  //     const notificationResult = await sendAdmissionNotification(
-  //       student.email,
-  //       application.studentDetails.mobile, // Assuming mobile is in studentDetails
-  //       student.name,
-  //       password // Plaintext password to send in notification
-  //     );
-
-  //     if (!notificationResult.emailSent || !notificationResult.smsSent) {
-  //       console.warn('Notification partially failed:', notificationResult.error);
-  //       // Optionally, you could rollback the enrollment here if notifications are critical
-  //     }
-
-  //     res.json({
-  //       message: 'Student enrolled successfully',
-  //       studentDetails: {
-  //         id: student._id,
-  //         name: student.name,
-  //         email: student.email,
-  //         grNumber,
-  //         class: { name: selectedClass.name, division: selectedClass.division },
-  //       },
-  //       notificationStatus: {
-  //         emailSent: notificationResult.emailSent,
-  //         smsSent: notificationResult.smsSent,
-  //       },
-  //     });
-  //   } catch (error) {
-  //     res.status(500).json({ error: error.message });
-  //   }
-  // },
+  
 
 
 
@@ -663,45 +488,64 @@ const clerkController = {
     }
   },
 
-  // confirmAdmission: async (req, res) => {
-  //   try {
-  //     const { studentId } = req.params; // Changed from req.school to req.params
-  //     const { classSection } = req.body;
-  //     const schoolId = req.school._id.toString();
-  //     const connection = req.connection;
-  //     const User = require('../models/User')(connection);
-  //     const Fee = require('../models/Fee')(connection);
+  requestLeave: async (req, res) => {
+    try {
+      const schoolId = req.school._id.toString();
+      const { reason, startDate, endDate, type } = req.body;
+      const clerkId = req.user._id;
+      const connection = req.connection;
+      const Leave = require('../models/Leave')(connection);
 
-  //     const student = await User.findOne({ _id: studentId, school: schoolId });
-  //     if (!student) {
-  //       return res.status(404).json({ message: 'Student not found' });
-  //     }
+      const leave = new Leave({
+        school: schoolId,
+        user: clerkId,
+        reason,
+        startDate,
+        endDate,
+        type,
+        status: 'pending',
+        appliedOn: new Date(),
+      });
 
-  //     // Placeholder: Check document verification (implement if Document model exists)
-  //     const allVerified = true; // Adjust with actual logic
-  //     if (!allVerified) {
-  //       return res.status(400).json({ message: 'All documents must be verified first' });
-  //     }
+      await leave.save();
+      res.status(201).json(leave);
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  },
 
-  //     if (!student.studentDetails.isRTE) { // Adjusted to studentDetails.isRTE
-  //       const pendingFees = await Fee.findOne({ student: studentId, status: 'pending', school: schoolId });
-  //       if (pendingFees) {
-  //         return res.status(400).json({ message: 'All fees must be paid first' });
-  //       }
-  //     }
+  getLeaveStatus: async (req, res) => {
+    try {
+      const schoolId = req.school._id.toString();
+      const clerkId = req.user._id;
+      const connection = req.connection;
+      const Leave = require('../models/Leave')(connection);
 
-  //     student.studentDetails.status = 'confirmed';
-  //     student.studentDetails.classSection = classSection;
-  //     await student.save();
+      const leaves = await Leave.find({ school: schoolId, user: clerkId })
+        .sort({ appliedOn: -1 })
+        .lean();
 
-  //     // Notify parent (implement if needed)
-  //     // await notifyParent(student);
+      res.json({
+        status: 'success',
+        count: leaves.length,
+        leaves: leaves.map(leave => ({
+          id: leave._id,
+          reason: leave.reason,
+          startDate: leave.startDate,
+          endDate: leave.endDate,
+          type: leave.type,
+          status: leave.status,
+          appliedOn: leave.appliedOn,
+          reviewedBy: leave.reviewedBy,
+          reviewedAt: leave.reviewedAt,
+          comments: leave.comments,
+        })),
+      });
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  },
 
-  //     res.json({ message: 'Admission confirmed successfully' });
-  //   } catch (error) {
-  //     res.status(500).json({ error: error.message });
-  //   }
-  // },
 
   generateCertificate: async (req, res) => {
     try {

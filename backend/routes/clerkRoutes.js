@@ -21,6 +21,16 @@ router.put('/verify-documents/:studentId', clerkController.verifyDocuments);
 
 router.get('/students/class/:classId', clerkController.getStudentsByClass);
 
+router.post(
+    '/leave-requests',
+    clerkController.requestLeave
+  );
+  
+  router.get(
+    '/leave-status',
+    clerkController.getLeaveStatus
+  );
+
 // Certificate routes
 router.post('/certificate/:studentId', clerkController.generateCertificate);
 

@@ -75,6 +75,17 @@ router.get('/subjects/:subjectId/syllabus', auth, roleCheck(['admin', 'teacher']
 router.post('/meetings', auth, roleCheck(['admin', 'trustee']), adminController.scheduleMeeting);
 router.post('/meetings/:meetingId/minutes', auth, roleCheck(['admin', 'trustee']), adminController.recordMeetingMinutes);
 
+router.get(
+  '/leave-requests/pending',
+  [auth, roleCheck(['admin'])],
+  adminController.getPendingLeaveRequests
+);
+
+router.put(
+  '/leave-requests/:leaveId/review',
+  [auth, roleCheck(['admin'])],
+  adminController.reviewLeaveRequest
+);
 // Trustee Management
 router.put('/trustees/:trusteeId', auth, roleCheck(['admin']), adminController.manageTrustee);
 
@@ -86,6 +97,8 @@ router.post(
   [auth, roleCheck(['admin']), ],
   adminController.createExamSchedule
 );
+
+router.get('/schedules', auth, roleCheck(['admin']), adminController.getExamSchedules);
 
 router.post(
   '/results/:examId/:classId',

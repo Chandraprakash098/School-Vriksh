@@ -31,6 +31,7 @@ const models = {
   TeacherAssignment: require('../models/TeacherAssignment'),
   Timetable: require('../models/Timetable'),
   Attendance: require('../models/Attendance'),
+  Leave: require('../models/Leave'),
   Exam: require('../models/Exam'),
   Result: require('../models/Results'),
   Announcement: require('../models/Announcement'),
