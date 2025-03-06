@@ -1874,8 +1874,10 @@ createExamSchedule: async (req, res) => {
     const examSchedule = [];
     let currentDate = new Date(start);
     let examsToday = 0;
-    const morningTime = { start: "09:00", end: "11:00" };
-    const afternoonTime = { start: "13:00", end: "15:00" };
+    const timeSlots = {
+      morning: { start: "09:00", baseEnd: "11:00" },
+      afternoon: { start: "13:00", baseEnd: "15:00" }
+    };
 
     for (const subject of subjects) {
       if (examsToday >= maxExamsPerDay) {
@@ -1883,8 +1885,17 @@ createExamSchedule: async (req, res) => {
         examsToday = 0;
       }
 
-      const timeSlot = examsToday === 0 ? morningTime : afternoonTime;
-      const durationMinutes = subject.durationHours * 60;
+      const defaultDuration = defaultDurations[examType] || 2; // Fallback to 2 hours
+      const durationHours = subject.durationHours || defaultDuration;
+      const durationMinutes = durationHours * 60;
+
+      const slot = examsToday === 0 ? timeSlots.morning : timeSlots.afternoon;
+      const endTime = calculateEndTime(slot.start, durationMinutes);
+      
+      const examDate = new Date(currentDate);
+      if (isNaN(examDate.getTime())) {
+        throw new Error(`Invalid date generated for subject ${subject.subjectId}`);
+      }
 
       const seating = adminController.generateSeatingArrangement(
         students,
@@ -1944,6 +1955,7 @@ createExamSchedule: async (req, res) => {
 },
 
 // Updated getExamSchedules to work with new structure
+// In adminController
 getExamSchedules: async (req, res) => {
   try {
     const schoolId = req.school._id;
@@ -1962,13 +1974,31 @@ getExamSchedules: async (req, res) => {
       return res.status(404).json({ message: 'No exam schedules found' });
     }
 
-    // Group exams by date
+    // Group exams by date with proper date validation
     const scheduleByDate = exams.reduce((acc, exam) => {
+      // Check if examDate exists and is valid
+      if (!exam.examDate || !(exam.examDate instanceof Date) || isNaN(exam.examDate.getTime())) {
+        console.warn(`Invalid examDate for exam ${exam._id}: ${exam.examDate}`);
+        // Use a fallback date or skip this exam
+        const fallbackDate = new Date().toISOString().split('T')[0]; // Current date as fallback
+        acc[fallbackDate] = acc[fallbackDate] || [];
+        acc[fallbackDate].push({ ...exam, examDate: new Date(fallbackDate) });
+        return acc;
+      }
+
       const dateKey = exam.examDate.toISOString().split('T')[0];
-      if (!acc[dateKey]) acc[dateKey] = [];
+      acc[dateKey] = acc[dateKey] || [];
       acc[dateKey].push(exam);
       return acc;
     }, {});
+
+    // Sort exams within each date by startTime
+    Object.keys(scheduleByDate).forEach(date => {
+      scheduleByDate[date].sort((a, b) => {
+        if (!a.startTime || !b.startTime) return 0;
+        return a.startTime.localeCompare(b.startTime);
+      });
+    });
 
     res.status(200).json({
       success: true,
@@ -1980,7 +2010,8 @@ getExamSchedules: async (req, res) => {
     console.error('Error in getExamSchedules:', error);
     res.status(500).json({ 
       success: false,
-      error: error.message 
+      error: error.message,
+      message: 'Failed to retrieve exam schedules'
     });
   }
 },
@@ -2366,6 +2397,16 @@ const calculatePercentage = subjects => {
 const determineStatus = subjects => {
   const allMarked = subjects.every(subject => typeof subject.marks === 'number');
   return allMarked ? 'completed' : 'pending';
+};
+const calculateEndTime = (startTime, durationMinutes) => {
+  const [hours, minutes] = startTime.split(':').map(Number);
+  const startMinutes = hours * 60 + minutes;
+  const endMinutes = startMinutes + durationMinutes;
+  
+  const endHours = Math.floor(endMinutes / 60);
+  const endMins = endMinutes % 60;
+  
+  return `${String(endHours).padStart(2, '0')}:${String(endMins).padStart(2, '0')}`;
 };
 
 const calculateClassStatistics = results => {

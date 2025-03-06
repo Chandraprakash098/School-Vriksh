@@ -67,7 +67,17 @@ const examSchema = new mongoose.Schema({
   endDate: { type: Date, required: true },
   class: { type: mongoose.Schema.Types.ObjectId, ref: 'Class', required: true },
   subject: { type: mongoose.Schema.Types.ObjectId, ref: 'Subject', required: true },
-  examDate: { type: Date, required: true },  // Specific date for this subject exam
+  // examDate: { type: Date, required: true },  // Specific date for this subject exam
+  examDate: { 
+    type: Date, 
+    required: true,
+    validate: {
+      validator: function(v) {
+        return v instanceof Date && !isNaN(v.getTime());
+      },
+      message: 'examDate must be a valid date'
+    }
+  },
   startTime: { type: String, required: true }, // e.g., "09:00"
   endTime: { type: String, required: true },   // e.g., "11:00"
   totalMarks: { type: Number, required: true },
