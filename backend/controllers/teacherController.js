@@ -1303,6 +1303,60 @@ const teacherController = {
   //   }
   // },
 
+  // submitResultsToAdmin: async (req, res) => {
+  //   try {
+  //     const { classId, examId } = req.params;
+  //     const teacherId = req.user._id;
+  //     const schoolId = req.school._id.toString();
+  //     const connection = req.connection;
+  //     const Exam = require('../models/Exam')(connection);
+  //     const Class = require('../models/Class')(connection);
+
+  //     const classInfo = await Class.findOne({ _id: classId, school: schoolId });
+  //     if (!classInfo || classInfo.classTeacher.toString() !== teacherId.toString()) {
+  //       return res.status(403).json({ message: 'Not authorized as class teacher' });
+  //     }
+
+  //     const exams = await Exam.find({
+  //       school: schoolId,
+  //       class: classId,
+  //       examDate: examId ? { $eq: new Date(examId) } : { $exists: true },
+  //       status: 'submittedToClassTeacher'
+  //     });
+
+  //     if (!exams.length) {
+  //       return res.status(404).json({ message: 'No submitted marks found for this class and exam' });
+  //     }
+
+  //     // Verify all subjects have submitted marks
+  //     const subjects = await require('../models/Subject')(connection).find({ class: classId });
+  //     if (exams.length !== subjects.length) {
+  //       return res.status(400).json({ message: 'Not all subjects have submitted marks' });
+  //     }
+
+  //     const session = await connection.startSession();
+  //     session.startTransaction();
+
+  //     try {
+  //       for (const exam of exams) {
+  //         exam.status = 'submittedToAdmin';
+  //         exam.submittedToAdminAt = new Date();
+  //         await exam.save({ session });
+  //       }
+
+  //       await session.commitTransaction();
+  //       res.json({ message: 'Results submitted to admin successfully' });
+  //     } catch (error) {
+  //       await session.abortTransaction();
+  //       throw error;
+  //     } finally {
+  //       session.endSession();
+  //     }
+  //   } catch (error) {
+  //     res.status(500).json({ error: error.message });
+  //   }
+  // },
+
   submitResultsToAdmin: async (req, res) => {
     try {
       const { classId, examId } = req.params;
@@ -1311,39 +1365,47 @@ const teacherController = {
       const connection = req.connection;
       const Exam = require('../models/Exam')(connection);
       const Class = require('../models/Class')(connection);
-
+      const Subject = require('../models/Subject')(connection); // Load Subject model explicitly
+  
       const classInfo = await Class.findOne({ _id: classId, school: schoolId });
       if (!classInfo || classInfo.classTeacher.toString() !== teacherId.toString()) {
         return res.status(403).json({ message: 'Not authorized as class teacher' });
       }
-
-      const exams = await Exam.find({
+  
+      // Modified query: Use _id instead of examDate when examId is provided
+      const query = {
         school: schoolId,
         class: classId,
-        examDate: examId ? { $eq: new Date(examId) } : { $exists: true },
         status: 'submittedToClassTeacher'
-      });
-
+      };
+  
+      // If examId is provided, filter by _id
+      if (examId) {
+        query._id = examId;
+      }
+  
+      const exams = await Exam.find(query);
+  
       if (!exams.length) {
         return res.status(404).json({ message: 'No submitted marks found for this class and exam' });
       }
-
+  
       // Verify all subjects have submitted marks
-      const subjects = await require('../models/Subject')(connection).find({ class: classId });
+      const subjects = await Subject.find({ class: classId });
       if (exams.length !== subjects.length) {
         return res.status(400).json({ message: 'Not all subjects have submitted marks' });
       }
-
+  
       const session = await connection.startSession();
       session.startTransaction();
-
+  
       try {
         for (const exam of exams) {
           exam.status = 'submittedToAdmin';
           exam.submittedToAdminAt = new Date();
           await exam.save({ session });
         }
-
+  
         await session.commitTransaction();
         res.json({ message: 'Results submitted to admin successfully' });
       } catch (error) {
