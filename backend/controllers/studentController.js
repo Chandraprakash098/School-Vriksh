@@ -859,6 +859,38 @@ const studentController = {
     }
   },
 
+  // requestCertificate: async (req, res) => {
+  //   try {
+  //     const { studentId } = req.params;
+  //     const { type, purpose, urgency } = req.body;
+  //     const schoolId = req.school._id.toString();
+  //     const connection = req.connection;
+  //     const Certificate = require('../models/Certificate')(connection);
+
+  //     const certificate = new Certificate({
+  //       school: schoolId, // Add school field
+  //       student: studentId,
+  //       type,
+  //       purpose,
+  //       urgency: urgency || 'normal',
+  //       status: 'pending',
+  //       requestDate: new Date(),
+  //     });
+
+  //     await certificate.save();
+
+  //     // Notify admin (implement notifyCertificateRequest if needed)
+  //     // await notifyCertificateRequest(certificate);
+
+  //     res.status(201).json({
+  //       certificate,
+  //       message: `Your ${type} certificate request has been submitted. You will be notified when it's ready.`,
+  //     });
+  //   } catch (error) {
+  //     res.status(500).json({ error: error.message });
+  //   }
+  // },
+
   requestCertificate: async (req, res) => {
     try {
       const { studentId } = req.params;
@@ -867,8 +899,27 @@ const studentController = {
       const connection = req.connection;
       const Certificate = require('../models/Certificate')(connection);
 
+      // Validate certificate type
+      const validTypes = ['bonafide', 'leaving', 'transfer'];
+      if (!validTypes.includes(type)) {
+        return res.status(400).json({ message: 'Invalid certificate type' });
+      }
+
+      // Check if student has pending fees for leaving/transfer certificates
+      if (['leaving', 'transfer'].includes(type)) {
+        const Fee = require('../models/Fee')(connection);
+        const hasPendingFees = await Fee.findOne({ 
+          student: studentId, 
+          status: 'pending', 
+          school: schoolId 
+        });
+        if (hasPendingFees) {
+          return res.status(400).json({ message: 'Clear all pending fees first' });
+        }
+      }
+
       const certificate = new Certificate({
-        school: schoolId, // Add school field
+        school: schoolId,
         student: studentId,
         type,
         purpose,
@@ -878,9 +929,6 @@ const studentController = {
       });
 
       await certificate.save();
-
-      // Notify admin (implement notifyCertificateRequest if needed)
-      // await notifyCertificateRequest(certificate);
 
       res.status(201).json({
         certificate,

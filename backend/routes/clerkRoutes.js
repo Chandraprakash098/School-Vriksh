@@ -31,8 +31,11 @@ router.post(
     clerkController.getLeaveStatus
   );
 
+  router.get('/certificates/pending', clerkController.getPendingCertificates);
+
 // Certificate routes
-router.post('/certificate/:studentId', clerkController.generateCertificate);
+// router.post('/certificate/:studentId', clerkController.generateCertificate);
+router.post('/certificates/:certificateId/generate', clerkController.generateCertificate);
 
 // RTE report routes
 router.post('/rte-report/:schoolId', clerkController.generateRTEReport);

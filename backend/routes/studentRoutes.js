@@ -24,6 +24,7 @@ router.post('/fees/:studentId/pay', auth, studentController.payFees);
 router.get('/fees/:studentId/receipts', auth, studentController.getFeeReceipts);
 
 // Certificate requests
+// router.post('/certificates/:studentId/request', auth, studentController.requestCertificate);
 router.post('/certificates/:studentId/request', auth, studentController.requestCertificate);
 
 // Library services

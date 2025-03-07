@@ -184,4 +184,39 @@ const announcementUpload = multer({
   },
 });
 
-module.exports = { upload, announcementUpload, cloudinary };
+const certificateStorage = multer.memoryStorage();
+
+const certificateUpload = multer({
+  storage: certificateStorage,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB for certificates
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype === 'application/pdf') {
+      cb(null, true);
+    } else {
+      cb(new Error('Invalid file type: Only PDFs are allowed for certificates'), false);
+    }
+  },
+});
+
+// Helper function to upload a PDF buffer to Cloudinary
+const uploadCertificateToCloudinary = (buffer, certificateId, certificateType) => {
+  return new Promise((resolve, reject) => {
+    const uploadStream = cloudinary.uploader.upload_stream(
+      {
+        folder: 'certificates',
+        public_id: `certificates/${certificateType}_${certificateId}_${Date.now()}`,
+        resource_type: 'raw', // Use 'raw' for PDFs
+        timeout: 120000,
+      },
+      (error, result) => {
+        if (error) {
+          return reject(error);
+        }
+        resolve(result);
+      }
+    );
+    uploadStream.end(buffer);
+  });
+};
+
+module.exports = { upload, announcementUpload, certificateUpload, cloudinary, uploadCertificateToCloudinary };
