@@ -1288,15 +1288,70 @@ const clerkController = {
     }
   },
 
+  // uploadSignedCertificate: async (req, res) => {
+  //   try {
+  //     const { certificateId } = req.params;
+  //     // const { pdfData } = req.body;
+  //     const file = req.file;
+
+  //     const schoolId = req.school._id.toString();
+  //     const connection = req.connection;
+  //     const Certificate = require('../models/Certificate')(connection);
+
+  //     if (!mongoose.Types.ObjectId.isValid(certificateId)) {
+  //       return res.status(400).json({ message: 'Invalid certificate ID' });
+  //     }
+
+  //     const certificate = await Certificate.findOne({ _id: certificateId, school: schoolId });
+  //     if (!certificate) {
+  //       return res.status(404).json({ message: 'Certificate not found' });
+  //     }
+
+  //     if (certificate.status !== 'generated') {
+  //       return res.status(400).json({ message: 'Certificate must be generated before uploading a signed version' });
+  //     }
+
+  //     // if (!pdfData) {
+  //     //   return res.status(400).json({ message: 'PDF data is required' });
+  //     // }
+
+  //     if (!file) {
+  //       return res.status(400).json({ message: 'PDF file is required' });
+  //     }
+
+  //     // Convert base64 PDF data to buffer
+  //     // const pdfBuffer = Buffer.from(pdfData, 'base64');
+
+  //     // Upload the signed PDF to Cloudinary
+  //     // const cloudinaryResult = await uploadCertificateToCloudinary(pdfBuffer, `${certificate._id}_signed`, certificate.type);
+  //     const cloudinaryResult = await uploadCertificateToCloudinary(file.buffer, `${certificate._id}_signed`, certificate.type);
+  //     const signedDocumentUrl = cloudinaryResult.secure_url;
+
+  //     // Update certificate with the signed document URL
+  //     certificate.signedDocumentUrl = signedDocumentUrl;
+  //     await certificate.save();
+
+  //     res.json({
+  //       message: 'Signed certificate uploaded successfully',
+  //       certificate,
+  //     });
+  //   } catch (error) {
+  //     console.error('Error in uploadSignedCertificate:', error);
+  //     res.status(500).json({ error: error.message });
+  //   }
+  // },
+
+ 
+
   uploadSignedCertificate: async (req, res) => {
     try {
       const { certificateId } = req.params;
-      // const { pdfData } = req.body;
       const file = req.file;
 
       const schoolId = req.school._id.toString();
       const connection = req.connection;
       const Certificate = require('../models/Certificate')(connection);
+      const User = require('../models/User')(connection);
 
       if (!mongoose.Types.ObjectId.isValid(certificateId)) {
         return res.status(400).json({ message: 'Invalid certificate ID' });
@@ -1311,29 +1366,43 @@ const clerkController = {
         return res.status(400).json({ message: 'Certificate must be generated before uploading a signed version' });
       }
 
-      // if (!pdfData) {
-      //   return res.status(400).json({ message: 'PDF data is required' });
-      // }
-
       if (!file) {
         return res.status(400).json({ message: 'PDF file is required' });
       }
 
-      // Convert base64 PDF data to buffer
-      // const pdfBuffer = Buffer.from(pdfData, 'base64');
-
       // Upload the signed PDF to Cloudinary
-      // const cloudinaryResult = await uploadCertificateToCloudinary(pdfBuffer, `${certificate._id}_signed`, certificate.type);
       const cloudinaryResult = await uploadCertificateToCloudinary(file.buffer, `${certificate._id}_signed`, certificate.type);
       const signedDocumentUrl = cloudinaryResult.secure_url;
 
       // Update certificate with the signed document URL
       certificate.signedDocumentUrl = signedDocumentUrl;
+
+      // Mark the certificate as sent to the student
+      certificate.isSentToStudent = true;
       await certificate.save();
 
+      // Fetch student details for notification
+      const student = await User.findById(certificate.student).select('name email studentDetails');
+      if (!student) {
+        return res.status(404).json({ message: 'Student not found' });
+      }
+
+      // Send notification to student
+      const notificationResult = await sendCertificateNotification(
+        student.email,
+        student.studentDetails?.mobile,
+        student.name,
+        certificate.type,
+        certificate.signedDocumentUrl
+      );
+
       res.json({
-        message: 'Signed certificate uploaded successfully',
+        message: 'Signed certificate uploaded and sent to student successfully',
         certificate,
+        notificationStatus: {
+          emailSent: notificationResult.emailSent,
+          smsSent: notificationResult.smsSent,
+        },
       });
     } catch (error) {
       console.error('Error in uploadSignedCertificate:', error);
