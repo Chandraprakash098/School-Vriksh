@@ -32,6 +32,7 @@ router.post(
   );
 
   router.get('/certificates/pending', clerkController.getPendingCertificates);
+  router.get('/certificates/history', clerkController.getCertificateHistory);
 
 // Certificate routes
 // router.post('/certificate/:studentId', clerkController.generateCertificate);

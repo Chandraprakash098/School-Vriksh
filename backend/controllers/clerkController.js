@@ -959,6 +959,42 @@ const clerkController = {
       res.status(500).json({ error: error.message });
     }
   },
+  
+  getCertificateHistory: async (req, res) => {
+    try {
+      const schoolId = req.school._id.toString();
+      const connection = req.connection;
+      const Certificate = require('../models/Certificate')(connection);
+      const User = require('../models/User')(connection);
+
+      const certificates = await Certificate.find({ school: schoolId })
+        .populate('student', 'name email studentDetails', User)
+        .populate('generatedBy', 'name email', User)
+        .sort({ requestDate: -1 });
+
+      res.json({
+        status: 'success',
+        count: certificates.length,
+        certificates: certificates.map(cert => ({
+          id: cert._id,
+          studentName: cert.student.name,
+          studentEmail: cert.student.email,
+          type: cert.type,
+          purpose: cert.purpose,
+          urgency: cert.urgency,
+          requestDate: cert.requestDate,
+          status: cert.status,
+          documentUrl: cert.documentUrl || null,
+          issuedDate: cert.issuedDate || null,
+          generatedBy: cert.generatedBy ? cert.generatedBy.name : null,
+          comments: cert.comments || null,
+        })),
+      });
+    } catch (error) {
+      console.error('Error in getCertificateHistory:', error);
+      res.status(500).json({ error: error.message });
+    }
+  },
 
   generateCertificate: async (req, res) => {
     try {
