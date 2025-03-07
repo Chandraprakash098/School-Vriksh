@@ -1239,6 +1239,7 @@ const teacherController = {
       const connection = req.connection;
       const Exam = require('../models/Exam')(connection);
       const Class = require('../models/Class')(connection);
+      const Subject = require('../models/Subject')(connection);
   
       const classInfo = await Class.findOne({ _id: classId, school: schoolId });
       if (!classInfo || classInfo.classTeacher.toString() !== teacherId.toString()) {
