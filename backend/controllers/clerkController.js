@@ -952,6 +952,21 @@ const clerkController = {
           urgency: cert.urgency,
           requestDate: cert.requestDate,
           status: cert.status,
+
+          grNumber: cert.student?.studentDetails?.grNumber || 'N/A',
+          parentName: cert.student?.studentDetails?.parentDetails?.name || 'N/A',
+          admissionDate: cert.student?.studentDetails?.admissionDate
+            ? new Date(cert.student.studentDetails.admissionDate).toISOString().split('T')[0]
+            : 'N/A',
+          dob: cert.student?.studentDetails?.dob
+            ? new Date(cert.student.studentDetails.dob).toISOString().split('T')[0]
+            : 'N/A',
+          className: cert.student?.studentDetails?.class
+            ? `${cert.student.studentDetails.class.name}${cert.student.studentDetails.class.division ? ' ' + cert.student.studentDetails.class.division : ''}`
+            : 'N/A',
+          // Include school details from req.school
+          schoolName: req.school?.name || 'N/A',
+          schoolAddress: req.school?.address || 'N/A',
         })),
       });
     } catch (error) {
@@ -988,6 +1003,22 @@ const clerkController = {
           issuedDate: cert.issuedDate || null,
           generatedBy: cert.generatedBy ? cert.generatedBy.name : null,
           comments: cert.comments || null,
+
+          // Extract nested student details
+          grNumber: cert.student?.studentDetails?.grNumber || 'N/A',
+          parentName: cert.student?.studentDetails?.parentDetails?.name || 'N/A',
+          admissionDate: cert.student?.studentDetails?.admissionDate
+            ? new Date(cert.student.studentDetails.admissionDate).toISOString().split('T')[0]
+            : 'N/A',
+          dob: cert.student?.studentDetails?.dob
+            ? new Date(cert.student.studentDetails.dob).toISOString().split('T')[0]
+            : 'N/A',
+          className: cert.student?.studentDetails?.class
+            ? `${cert.student.studentDetails.class.name}${cert.student.studentDetails.class.division ? ' ' + cert.student.studentDetails.class.division : ''}`
+            : 'N/A',
+          // Include school details from req.school
+          schoolName: req.school?.name || 'N/A',
+          schoolAddress: req.school?.address || 'N/A',
         })),
       });
     } catch (error) {
