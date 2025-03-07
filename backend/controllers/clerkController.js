@@ -5,13 +5,14 @@ const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 const { sendAdmissionNotification } = require('../utils/notifications');
 const PDFDocument = require('pdfkit');
-const { uploadCertificateToCloudinary } = require('../config/cloudinary');
+// const { uploadCertificateToCloudinary } = require('../config/cloudinary');
+const { upload, announcementUpload, certificateUpload, uploadCertificateToCloudinary } = require('../config/cloudinary');
 
 const multer = require('multer');
 
 // Configure multer for temporary file storage
 const storage = multer.memoryStorage(); // Store files in memory (we'll upload directly to Cloudinary)
-const upload = multer({ storage: storage });
+// const upload = multer({ storage: storage });
 
 const clerkController = {
   
@@ -1319,7 +1320,7 @@ const clerkController = {
       }
 
       // Convert base64 PDF data to buffer
-      const pdfBuffer = Buffer.from(pdfData, 'base64');
+      // const pdfBuffer = Buffer.from(pdfData, 'base64');
 
       // Upload the signed PDF to Cloudinary
       // const cloudinaryResult = await uploadCertificateToCloudinary(pdfBuffer, `${certificate._id}_signed`, certificate.type);

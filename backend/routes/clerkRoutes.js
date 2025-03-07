@@ -1,7 +1,8 @@
 const express = require('express');
 const router = express.Router();
 // const clerkController = require('../controllers/clerkController');
-const { clerkController, upload } = require('../controllers/clerkController');
+const { clerkController} = require('../controllers/clerkController');
+const {upload,announcementUpload, certificateUpload, uploadCertificateToCloudinary } = require('../config/cloudinary');
 const auth = require('../middleware/auth');
 const roleCheck = require('../middleware/roleCheck');
 
@@ -38,7 +39,8 @@ router.post(
 // Certificate routes
 // router.post('/certificate/:studentId', clerkController.generateCertificate);
 router.post('/certificates/:certificateId/generate', clerkController.generateCertificate);
-router.post('/certificates/:certificateId/upload-signed', upload.single('file'), clerkController.uploadSignedCertificate);
+// router.post('/certificates/:certificateId/upload-signed', upload.single('file'), clerkController.uploadSignedCertificate);
+router.post('/certificates/:certificateId/upload-signed', certificateUpload.single('file'), clerkController.uploadSignedCertificate);
 router.post('/certificates/:certificateId/send-to-student', clerkController.sendCertificateToStudent);
 
 
