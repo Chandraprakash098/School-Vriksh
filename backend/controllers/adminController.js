@@ -1124,60 +1124,157 @@ const adminController = {
     }
   },
 
+  // reviewClassResults: async (req, res) => {
+  //   try {
+  //     const { examId } = req.params;
+  //     const schoolId = req.school._id;
+  //     const connection = req.connection;
+  //     const ClassResult = getModel('ClassResult', connection);
+  //     const Class = getModel('Class', connection);
+  //     const User = getModel('User', connection);
+  //     const SubjectMarks = getModel('SubjectMarks', connection);
+  //     const Subject = getModel('Subject', connection);
+
+  //     const classResults = await ClassResult.find({ exam: examId, school: schoolId, status: 'submitted' })
+  //       .populate('class', '', Class)
+  //       .populate('classTeacher', '', User)
+  //       .populate({
+  //         path: 'subjectMarks',
+  //         model: SubjectMarks,
+  //         populate: [
+  //           { path: 'subject', model: Subject },
+  //           { path: 'teacher', model: User },
+  //           { path: 'students.student', model: User },
+  //         ],
+  //       })
+  //       .lean();
+
+  //     res.json(classResults);
+  //   } catch (error) {
+  //     res.status(500).json({ error: error.message });
+  //   }
+  // },
+
   reviewClassResults: async (req, res) => {
     try {
-      const { examId } = req.params;
+      const { examId, classId } = req.params;
       const schoolId = req.school._id;
       const connection = req.connection;
-      const ClassResult = getModel('ClassResult', connection);
+      const Exam = getModel('Exam', connection);
       const Class = getModel('Class', connection);
       const User = getModel('User', connection);
-      const SubjectMarks = getModel('SubjectMarks', connection);
       const Subject = getModel('Subject', connection);
 
-      const classResults = await ClassResult.find({ exam: examId, school: schoolId, status: 'submitted' })
-        .populate('class', '', Class)
-        .populate('classTeacher', '', User)
-        .populate({
-          path: 'subjectMarks',
-          model: SubjectMarks,
-          populate: [
-            { path: 'subject', model: Subject },
-            { path: 'teacher', model: User },
-            { path: 'students.student', model: User },
-          ],
-        })
+      const exams = await Exam.find({
+        school: schoolId,
+        class: classId,
+        examDate: examId ? { $eq: new Date(examId) } : { $exists: true },
+        status: 'submittedToAdmin'
+      })
+        .populate('class', 'name division', Class)
+        .populate('subject', 'name', Subject)
+        .populate('results.student', 'name', User)
         .lean();
 
-      res.json(classResults);
+      if (!exams.length) {
+        return res.status(404).json({ message: 'No submitted results found for review' });
+      }
+
+      res.json(exams);
     } catch (error) {
       res.status(500).json({ error: error.message });
     }
   },
 
+  // publishResults: async (req, res) => {
+  //   try {
+  //     const { examId } = req.params;
+  //     const adminId = req.user._id;
+  //     const schoolId = req.school._id;
+  //     const connection = req.connection;
+  //     const ClassResult = getModel('ClassResult', connection);
+  //     const Result = getModel('Result', connection);
+  //     const SubjectMarks = getModel('SubjectMarks', connection);
+
+  //     const session = await connection.startSession();
+  //     session.startTransaction();
+
+  //     try {
+  //       const classResults = await ClassResult.find({ exam: examId, school: schoolId, status: 'submitted' })
+  //         .populate('subjectMarks', '', SubjectMarks)
+  //         .lean();
+
+  //       for (const classResult of classResults) {
+  //         const reportCards = await generateStudentReportCards(classResult);
+  //         await Result.insertMany(reportCards, { session });
+  //         await ClassResult.findByIdAndUpdate(classResult._id, { status: 'published', publishedAt: new Date(), publishedBy: adminId }, { session });
+  //       }
+
+  //       await session.commitTransaction();
+  //       res.json({ message: 'Results published successfully' });
+  //     } catch (error) {
+  //       await session.abortTransaction();
+  //       throw error;
+  //     } finally {
+  //       session.endSession();
+  //     }
+  //   } catch (error) {
+  //     res.status(500).json({ error: error.message });
+  //   }
+  // },
+
   publishResults: async (req, res) => {
     try {
-      const { examId } = req.params;
+      const { examId, classId } = req.params;
       const adminId = req.user._id;
       const schoolId = req.school._id;
       const connection = req.connection;
-      const ClassResult = getModel('ClassResult', connection);
+      const Exam = getModel('Exam', connection);
       const Result = getModel('Result', connection);
-      const SubjectMarks = getModel('SubjectMarks', connection);
 
       const session = await connection.startSession();
       session.startTransaction();
 
       try {
-        const classResults = await ClassResult.find({ exam: examId, school: schoolId, status: 'submitted' })
-          .populate('subjectMarks', '', SubjectMarks)
-          .lean();
+        const exams = await Exam.find({
+          school: schoolId,
+          class: classId,
+          examDate: examId ? { $eq: new Date(examId) } : { $exists: true },
+          status: 'submittedToAdmin'
+        }).lean();
 
-        for (const classResult of classResults) {
-          const reportCards = await generateStudentReportCards(classResult);
-          await Result.insertMany(reportCards, { session });
-          await ClassResult.findByIdAndUpdate(classResult._id, { status: 'published', publishedAt: new Date(), publishedBy: adminId }, { session });
+        if (!exams.length) {
+          return res.status(404).json({ message: 'No results to publish' });
         }
+
+        const results = [];
+        exams.forEach(exam => {
+          exam.results.forEach(result => {
+            results.push({
+              school: schoolId,
+              student: result.student,
+              exam: exam._id,
+              class: exam.class,
+              subject: exam.subject,
+              marksObtained: result.marksObtained,
+              totalMarks: exam.totalMarks,
+              remarks: result.remarks,
+              status: 'published',
+              publishedBy: adminId,
+              publishedAt: new Date()
+            });
+          });
+          exam.status = 'published';
+          exam.publishedAt = new Date();
+          exam.publishedBy = adminId;
+        });
+
+        await Result.insertMany(results, { session });
+        await Promise.all(exams.map(exam => Exam.findByIdAndUpdate(exam._id, {
+          status: 'published',
+          publishedAt: new Date(),
+          publishedBy: adminId
+        }, { session })));
 
         await session.commitTransaction();
         res.json({ message: 'Results published successfully' });
@@ -1191,40 +1288,6 @@ const adminController = {
       res.status(500).json({ error: error.message });
     }
   },
-
-  // createAnnouncement: async (req, res) => {
-  //   try {
-  //     const { title, content, targetGroups, priority, validFrom, validUntil } = req.body;
-  //     const schoolId = req.school._id;
-  //     const connection = req.connection;
-  //     const Announcement = getModel('Announcement', connection);
-
-  //     const attachments = req.files?.map(file => ({
-  //       fileName: file.originalname,
-  //       fileUrl: file.path,
-  //       fileType: file.mimetype,
-  //       fileSize: file.size,
-  //       publicId: file.filename,
-  //     })) || [];
-
-  //     const announcement = new Announcement({
-  //       school: schoolId,
-  //       title,
-  //       content,
-  //       targetGroups: JSON.parse(targetGroups),
-  //       priority,
-  //       validFrom,
-  //       validUntil,
-  //       attachments,
-  //       createdBy: req.user._id,
-  //     });
-
-  //     await announcement.save();
-  //     res.status(201).json(announcement);
-  //   } catch (error) {
-  //     res.status(500).json({ error: error.message });
-  //   }
-  // },
 
   createAnnouncement: async (req, res) => {
     try {
@@ -1292,11 +1355,6 @@ const adminController = {
       res.status(500).json({ error: 'Failed to create announcement', details: error.message });
     }
   },
-
-
- 
-
-  
 
   updateAnnouncement: async (req, res) => {
     try {
@@ -1759,488 +1817,6 @@ const adminController = {
   },
 
 
-// createExamSchedule: async (req, res) => {
-//   const { name, examType, startDate, endDate, classes, subjects, availableRooms } = req.body;
-//   const schoolId = req.school._id;
-//   const connection = req.connection;
-//   const Exam = getModel('Exam', connection);
-//   const User = getModel('User', connection);
-
-//   const session = await connection.startSession();
-//   let transactionCommitted = false;
-
-//   try {
-//       session.startTransaction();
-
-//       const exams = [];
-//       const seatingArrangements = {};
-
-//       const examsByDate = {};
-//       for (const classId of classes) {
-//           for (const subject of subjects) {
-//               if (subject.classes.includes(classId)) {
-//                   const examEntry = new Exam({
-//                       school: schoolId,
-//                       name,
-//                       examType,
-//                       startDate,
-//                       endDate,
-//                       class: classId,
-//                       subject: subject.id,
-//                       date: subject.date,
-//                       duration: (new Date(`1970-01-01T${subject.endTime}Z`) - new Date(`1970-01-01T${subject.startTime}Z`)) / 60000,
-//                       totalMarks: subject.totalMarks,
-//                       seatingArrangement: [],
-//                   });
-//                   await examEntry.save({ session });
-//                   exams.push(examEntry);
-
-//                   if (!examsByDate[subject.date]) examsByDate[subject.date] = [];
-//                   examsByDate[subject.date].push(examEntry);
-//               }
-//           }
-//       }
-
-//       const uniqueDates = [...new Set(subjects.map(s => s.date))];
-//       for (const date of uniqueDates) {
-//           const classesOnThisDate = classes.filter(c => subjects.some(s => s.date === date && s.classes.includes(c)));
-//           const students = await User.find({ 
-//               role: 'student', 
-//               'studentDetails.class': { $in: classesOnThisDate }, 
-//               school: schoolId 
-//           }).lean();
-
-//           console.log(`Students for ${date}:`, students.length);
-
-//           seatingArrangements[date] = adminController.generateSeatingArrangement(students, availableRooms, students.length);
-
-//           // Added check to prevent error when examsByDate[date] is undefined
-//           if (examsByDate[date]) {
-//               for (const exam of examsByDate[date]) {
-//                   const relevantStudents = students.filter(student => 
-//                       student.studentDetails && student.studentDetails.class.toString() === exam.class.toString()
-//                   );
-//                   const examSeating = adminController.generateSeatingArrangement(relevantStudents, availableRooms, relevantStudents.length);
-//                   exam.seatingArrangement = examSeating; // Use full structure
-//                   await Exam.findByIdAndUpdate(exam._id, { seatingArrangement: examSeating }, { session });
-//               }
-//           }
-//       }
-
-//       await session.commitTransaction();
-//       transactionCommitted = true;
-
-//       res.status(201).json({ exams, seatingArrangements });
-
-//   } catch (error) {
-//       if (!transactionCommitted) {
-//           await session.abortTransaction();
-//       }
-//       console.error('Error in createExamSchedule:', error);
-//       res.status(500).json({ error: error.message });
-//   } finally {
-//       session.endSession();
-//   }
-// },
-
-// getExamSchedules: async (req, res) => {
-//   try {
-//       const schoolId = req.school._id;
-//       const connection = req.connection;
-//       const Exam = getModel('Exam', connection);
-//       const Class = getModel('Class', connection);
-//       const Subject = getModel('Subject', connection);
-//       const User = getModel('User', connection);
-
-//       // Fetch all exams for the school
-//       const exams = await Exam.find({ school: schoolId })
-//           .populate('class', 'name division', Class)
-//           .populate('subject', 'name', Subject)
-//           .lean();
-
-//       if (!exams.length) {
-//           return res.status(404).json({ message: 'No exam schedules found for this school' });
-//       }
-
-//       // Generate seating arrangements for response consistency
-//       const seatingArrangements = {};
-//       const uniqueDates = [...new Set(exams.map(exam => exam.date.toISOString().split('T')[0]))];
-
-//       for (const date of uniqueDates) {
-//           const examsOnThisDate = exams.filter(exam => exam.date.toISOString().split('T')[0] === date);
-//           const classesOnThisDate = [...new Set(examsOnThisDate.map(exam => exam.class._id.toString()))];
-//           const students = await User.find({
-//               role: 'student',
-//               'studentDetails.class': { $in: classesOnThisDate },
-//               school: schoolId
-//           }).lean();
-
-//           const availableRooms = examsOnThisDate[0].seatingArrangement.map(seat => seat.classroom); // Assume rooms are consistent
-//           seatingArrangements[date] = adminController.generateSeatingArrangement(students, availableRooms, students.length);
-//       }
-
-//       res.status(200).json({
-//           exams,
-//           seatingArrangements,
-//           message: 'Exam schedules retrieved successfully'
-//       });
-//   } catch (error) {
-//       console.error('Error in getExamSchedules:', error);
-//       res.status(500).json({ error: error.message });
-//   }
-// },
-
-
-// createExamSchedule: async (req, res) => {
-//   const { 
-//     name, 
-//     examType, 
-//     startDate, 
-//     endDate, 
-//     classId, 
-//     subjects, // Array of { subjectId, totalMarks, durationHours (optional), startTime (optional), endTime (optional) }
-//     maxExamsPerDay = 2, 
-//     availableRooms 
-//   } = req.body;
-//   const schoolId = req.school._id;
-//   const connection = req.connection;
-//   const Exam = getModel('Exam', connection);
-//   const Class = getModel('Class', connection);
-//   const Subject = getModel('Subject', connection);
-//   const User = getModel('User', connection);
-
-//   const session = await connection.startSession();
-//   let transactionCommitted = false;
-
-//   try {
-//     session.startTransaction();
-
-//     // Validate class
-//     const classData = await Class.findById(classId).lean();
-//     if (!classData) throw new Error('Class not found');
-
-//     // Validate subjects belong to the selected class
-//     const subjectIds = subjects.map(s => s.subjectId);
-//     const validSubjects = await Subject.find({ 
-//       _id: { $in: subjectIds }, 
-//       class: classId, 
-//       school: schoolId 
-//     }).lean();
-
-//     if (validSubjects.length !== subjects.length) {
-//       const invalidSubjects = subjectIds.filter(id => !validSubjects.some(s => s._id.toString() === id));
-//       throw new Error(`Invalid subjects for class ${classData.name}: ${invalidSubjects.join(', ')}`);
-//     }
-
-//     // Map subjects to include their names for later use
-//     const subjectMap = validSubjects.reduce((acc, subj) => {
-//       acc[subj._id.toString()] = subj.name;
-//       return acc;
-//     }, {});
-
-//     // Calculate available exam slots
-//     const start = new Date(startDate);
-//     const end = new Date(endDate);
-//     const daysAvailable = Math.ceil((end - start) / (1000 * 60 * 60 * 24)) + 1;
-//     const totalSlots = daysAvailable * maxExamsPerDay;
-//     if (subjects.length > totalSlots) {
-//       throw new Error('Not enough days to schedule all exams');
-//     }
-
-//     // Default durations based on exam type (in hours)
-//     const defaultDurations = {
-//       'Midterm': 2,
-//       'Final': 3,
-//       'Unit Test': 1,
-//       'Practical': 2
-//     };
-
-//     // Default time slots if not provided
-//     const defaultTimeSlots = {
-//       morning: { start: "09:00", end: "11:00" }, // 2 hours default
-//       afternoon: { start: "13:00", end: "15:00" } // 2 hours default
-//     };
-
-//     // Generate exam schedule
-//     const students = await User.find({ 
-//       role: 'student', 
-//       'studentDetails.class': classId, 
-//       school: schoolId 
-//     }).lean();
-
-//     const examSchedule = [];
-//     let currentDate = new Date(start);
-//     let examsToday = 0;
-
-//     for (const subject of subjects) {
-//       if (examsToday >= maxExamsPerDay) {
-//         currentDate.setDate(currentDate.getDate() + 1);
-//         examsToday = 0;
-//       }
-
-//       // Determine duration and times
-//       const defaultDuration = defaultDurations[examType] || 2;
-//       const durationHours = subject.durationHours || defaultDuration;
-//       const durationMinutes = durationHours * 60;
-
-//       const slotKey = examsToday === 0 ? 'morning' : 'afternoon';
-//       let startTime = subject.startTime || defaultTimeSlots[slotKey].start;
-//       let endTime = subject.endTime;
-
-//       // If endTime not provided, calculate it based on duration
-//       if (!endTime) {
-//         endTime = calculateEndTime(startTime, durationMinutes);
-//       } else {
-//         // Validate that provided endTime matches duration
-//         const actualDuration = calculateDuration(startTime, endTime);
-//         if (Math.abs(actualDuration - durationMinutes) > 5) { // Allow 5-minute tolerance
-//           throw new Error(`Duration mismatch for subject ${subjectMap[subject.subjectId]}: specified ${durationHours} hours, but ${startTime}-${endTime} is ${actualDuration/60} hours`);
-//         }
-//       }
-
-//       // Validate time format
-//       if (!isValidTimeFormat(startTime) || !isValidTimeFormat(endTime)) {
-//         throw new Error(`Invalid time format for subject ${subjectMap[subject.subjectId]}: ${startTime}-${endTime}`);
-//       }
-
-//       const seating = adminController.generateSeatingArrangement(
-//         students,
-//         availableRooms,
-//         students.length
-//       );
-
-//       const examDate = new Date(currentDate);
-//       if (isNaN(examDate.getTime())) {
-//         throw new Error(`Invalid date generated for subject ${subjectMap[subject.subjectId]}`);
-//       }
-
-//       const exam = new Exam({
-//         school: schoolId,
-//         name,
-//         examType,
-//         startDate,
-//         endDate,
-//         class: classId,
-//         subject: subject.subjectId,
-//         examDate: examDate,
-//         startTime,
-//         endTime,
-//         duration: durationMinutes,
-//         totalMarks: subject.totalMarks,
-//         seatingArrangement: seating
-//       });
-
-//       await exam.save({ session });
-//       examSchedule.push(exam);
-//       examsToday++;
-//     }
-
-//     await session.commitTransaction();
-//     transactionCommitted = true;
-
-//     const populatedSchedule = await Exam.find({ _id: { $in: examSchedule.map(e => e._id) } })
-//       .populate('subject', 'name')
-//       .populate('class', 'name division')
-//       .lean();
-
-//     res.status(201).json({
-//       success: true,
-//       schedule: populatedSchedule,
-//       message: 'Exam schedule created successfully'
-//     });
-
-//   } catch (error) {
-//     if (!transactionCommitted) {
-//       await session.abortTransaction();
-//     }
-//     console.error('Error in createExamSchedule:', error);
-//     res.status(500).json({ 
-//       success: false,
-//       error: error.message,
-//       message: 'Failed to create exam schedule'
-//     });
-//   } finally {
-//     session.endSession();
-//   }
-// },
-
-
-// createExamSchedule: async (req, res) => {
-//   const { 
-//     examType, 
-//     customExamType, // New field for custom exam type
-//     startDate, 
-//     endDate, 
-//     classId, 
-//     subjects, // Array of { subjectId, totalMarks, durationHours (optional), startTime (optional), endTime (optional) }
-//     maxExamsPerDay = 2, 
-//     availableRooms 
-//   } = req.body;
-//   const schoolId = req.school._id;
-//   const connection = req.connection;
-//   const Exam = getModel('Exam', connection);
-//   const Class = getModel('Class', connection);
-//   const Subject = getModel('Subject', connection);
-//   const User = getModel('User', connection);
-
-//   const session = await connection.startSession();
-//   let transactionCommitted = false;
-
-//   try {
-//     session.startTransaction();
-
-//     // Validate class
-//     const classData = await Class.findById(classId).lean();
-//     if (!classData) throw new Error('Class not found');
-
-//     // Validate subjects belong to the selected class
-//     const subjectIds = subjects.map(s => s.subjectId);
-//     const validSubjects = await Subject.find({ 
-//       _id: { $in: subjectIds }, 
-//       class: classId, 
-//       school: schoolId 
-//     }).lean();
-
-//     if (validSubjects.length !== subjects.length) {
-//       const invalidSubjects = subjectIds.filter(id => !validSubjects.some(s => s._id.toString() === id));
-//       throw new Error(`Invalid subjects for class ${classData.name}: ${invalidSubjects.join(', ')}`);
-//     }
-
-//     const subjectMap = validSubjects.reduce((acc, subj) => {
-//       acc[subj._id.toString()] = subj.name;
-//       return acc;
-//     }, {});
-
-//     // Validate examType and customExamType
-//     const validExamTypes = ['Unit Test', 'Midterm', 'Final', 'Practical', 'Other'];
-//     if (!validExamTypes.includes(examType)) {
-//       throw new Error('Invalid exam type');
-//     }
-//     if (examType === 'Other' && (!customExamType || customExamType.trim() === '')) {
-//       throw new Error('Custom exam type is required when selecting "Other"');
-//     }
-
-//     // Calculate available exam slots
-//     const start = new Date(startDate);
-//     const end = new Date(endDate);
-//     const daysAvailable = Math.ceil((end - start) / (1000 * 60 * 60 * 24)) + 1;
-//     const totalSlots = daysAvailable * maxExamsPerDay;
-//     if (subjects.length > totalSlots) {
-//       throw new Error('Not enough days to schedule all exams');
-//     }
-
-//     // Default durations based on exam type (in hours)
-//     const defaultDurations = {
-//       'Midterm': 2,
-//       'Final': 3,
-//       'Unit Test': 1,
-//       'Practical': 2,
-//       'Other': 2 // Default for custom type
-//     };
-
-//     const defaultTimeSlots = {
-//       morning: { start: "09:00", end: "11:00" },
-//       afternoon: { start: "13:00", end: "15:00" }
-//     };
-
-//     // Generate exam schedule
-//     const students = await User.find({ 
-//       role: 'student', 
-//       'studentDetails.class': classId, 
-//       school: schoolId 
-//     }).lean();
-
-//     const examSchedule = [];
-//     let currentDate = new Date(start);
-//     let examsToday = 0;
-
-//     for (const subject of subjects) {
-//       if (examsToday >= maxExamsPerDay) {
-//         currentDate.setDate(currentDate.getDate() + 1);
-//         examsToday = 0;
-//       }
-
-//       const defaultDuration = defaultDurations[examType] || 2;
-//       const durationHours = subject.durationHours || defaultDuration;
-//       const durationMinutes = durationHours * 60;
-
-//       const slotKey = examsToday === 0 ? 'morning' : 'afternoon';
-//       let startTime = subject.startTime || defaultTimeSlots[slotKey].start;
-//       let endTime = subject.endTime;
-
-//       if (!endTime) {
-//         endTime = calculateEndTime(startTime, durationMinutes);
-//       } else {
-//         const actualDuration = calculateDuration(startTime, endTime);
-//         if (Math.abs(actualDuration - durationMinutes) > 5) {
-//           throw new Error(`Duration mismatch for subject ${subjectMap[subject.subjectId]}: specified ${durationHours} hours, but ${startTime}-${endTime} is ${actualDuration/60} hours`);
-//         }
-//       }
-
-//       if (!isValidTimeFormat(startTime) || !isValidTimeFormat(endTime)) {
-//         throw new Error(`Invalid time format for subject ${subjectMap[subject.subjectId]}: ${startTime}-${endTime}`);
-//       }
-
-//       const seating = adminController.generateSeatingArrangement(
-//         students,
-//         availableRooms,
-//         students.length
-//       );
-
-//       const examDate = new Date(currentDate);
-//       if (isNaN(examDate.getTime())) {
-//         throw new Error(`Invalid date generated for subject ${subjectMap[subject.subjectId]}`);
-//       }
-
-//       const exam = new Exam({
-//         school: schoolId,
-//         examType,
-//         customExamType: examType === 'Other' ? customExamType : undefined,
-//         startDate,
-//         endDate,
-//         class: classId,
-//         subject: subject.subjectId,
-//         examDate: examDate,
-//         startTime,
-//         endTime,
-//         duration: durationMinutes,
-//         totalMarks: subject.totalMarks,
-//         seatingArrangement: seating
-//       });
-
-//       await exam.save({ session });
-//       examSchedule.push(exam);
-//       examsToday++;
-//     }
-
-//     await session.commitTransaction();
-//     transactionCommitted = true;
-
-//     const populatedSchedule = await Exam.find({ _id: { $in: examSchedule.map(e => e._id) } })
-//       .populate('subject', 'name')
-//       .populate('class', 'name division')
-//       .lean();
-
-//     res.status(201).json({
-//       success: true,
-//       schedule: populatedSchedule,
-//       message: 'Exam schedule created successfully'
-//     });
-
-//   } catch (error) {
-//     if (!transactionCommitted) {
-//       await session.abortTransaction();
-//     }
-//     console.error('Error in createExamSchedule:', error);
-//     res.status(500).json({ 
-//       success: false,
-//       error: error.message,
-//       message: 'Failed to create exam schedule'
-//     });
-//   } finally {
-//     session.endSession();
-//   }
-// },
 
 createExamSchedule: async (req, res) => {
   const { 
@@ -2408,128 +1984,6 @@ createExamSchedule: async (req, res) => {
     session.endSession();
   }
 },
-// Updated getExamSchedules to work with new structure
-// In adminController
-// getExamSchedules: async (req, res) => {
-//   try {
-//     const schoolId = req.school._id;
-//     const connection = req.connection;
-//     const Exam = getModel('Exam', connection);
-//     const Class = getModel('Class', connection);
-//     const Subject = getModel('Subject', connection);
-
-//     const exams = await Exam.find({ school: schoolId })
-//       .populate('class', 'name division', Class)
-//       .populate('subject', 'name', Subject)
-//       .sort({ examDate: 1, startTime: 1 })
-//       .lean();
-
-//     if (!exams.length) {
-//       return res.status(404).json({ message: 'No exam schedules found' });
-//     }
-
-//     // Group exams by date with proper date validation
-//     const scheduleByDate = exams.reduce((acc, exam) => {
-//       // Check if examDate exists and is valid
-//       if (!exam.examDate || !(exam.examDate instanceof Date) || isNaN(exam.examDate.getTime())) {
-//         console.warn(`Invalid examDate for exam ${exam._id}: ${exam.examDate}`);
-//         // Use a fallback date or skip this exam
-//         const fallbackDate = new Date().toISOString().split('T')[0]; // Current date as fallback
-//         acc[fallbackDate] = acc[fallbackDate] || [];
-//         acc[fallbackDate].push({ ...exam, examDate: new Date(fallbackDate) });
-//         return acc;
-//       }
-
-//       const dateKey = exam.examDate.toISOString().split('T')[0];
-//       acc[dateKey] = acc[dateKey] || [];
-//       acc[dateKey].push(exam);
-//       return acc;
-//     }, {});
-
-//     // Sort exams within each date by startTime
-//     Object.keys(scheduleByDate).forEach(date => {
-//       scheduleByDate[date].sort((a, b) => {
-//         if (!a.startTime || !b.startTime) return 0;
-//         return a.startTime.localeCompare(b.startTime);
-//       });
-//     });
-
-//     res.status(200).json({
-//       success: true,
-//       schedule: scheduleByDate,
-//       totalExams: exams.length,
-//       message: 'Exam schedules retrieved successfully'
-//     });
-//   } catch (error) {
-//     console.error('Error in getExamSchedules:', error);
-//     res.status(500).json({ 
-//       success: false,
-//       error: error.message,
-//       message: 'Failed to retrieve exam schedules'
-//     });
-//   }
-// },
-
-// getExamSchedules: async (req, res) => {
-//   try {
-//     const schoolId = req.school._id;
-//     const connection = req.connection;
-//     const Exam = getModel('Exam', connection);
-//     const Class = getModel('Class', connection);
-//     const Subject = getModel('Subject', connection);
-
-//     const exams = await Exam.find({ school: schoolId })
-//       .populate('class', 'name division', Class)
-//       .populate('subject', 'name', Subject)
-//       .sort({ examDate: 1, startTime: 1 })
-//       .lean();
-
-//     if (!exams.length) {
-//       return res.status(404).json({ message: 'No exam schedules found' });
-//     }
-
-//     const scheduleByDate = exams.reduce((acc, exam) => {
-//       if (!exam.examDate || !(exam.examDate instanceof Date) || isNaN(exam.examDate.getTime())) {
-//         console.warn(`Invalid examDate for exam ${exam._id}: ${exam.examDate}`);
-//         const fallbackDate = new Date().toISOString().split('T')[0];
-//         acc[fallbackDate] = acc[fallbackDate] || [];
-//         acc[fallbackDate].push({ ...exam, examDate: new Date(fallbackDate) });
-//         return acc;
-//       }
-
-//       const dateKey = exam.examDate.toISOString().split('T')[0];
-//       acc[dateKey] = acc[dateKey] || [];
-//       acc[dateKey].push({
-//         ...exam,
-//         displayExamType: exam.examType === 'Other' ? exam.customExamType : exam.examType
-//       });
-//       return acc;
-//     }, {});
-
-//     Object.keys(scheduleByDate).forEach(date => {
-//       scheduleByDate[date].sort((a, b) => {
-//         if (!a.startTime || !b.startTime) return 0;
-//         return a.startTime.localeCompare(b.startTime);
-//       });
-//     });
-
-//     res.status(200).json({
-//       success: true,
-//       schedule: scheduleByDate,
-//       totalExams: exams.length,
-//       message: 'Exam schedules retrieved successfully'
-//     });
-//   } catch (error) {
-//     console.error('Error in getExamSchedules:', error);
-//     res.status(500).json({ 
-//       success: false,
-//       error: error.message,
-//       message: 'Failed to retrieve exam schedules'
-//     });
-//   }
-// },
-
-// In adminController
 
 getExamSchedules: async (req, res) => {
   try {
@@ -2649,6 +2103,29 @@ getExamSchedules: async (req, res) => {
     }
   },
 
+  // generateReportCards: async (req, res) => {
+  //   try {
+  //     const { examId, classId } = req.params;
+  //     const schoolId = req.school._id;
+  //     const connection = req.connection;
+  //     const Result = getModel('Result', connection);
+  //     const Exam = getModel('Exam', connection);
+  //     const User = getModel('User', connection);
+
+  //     const results = await Result.find({ exam: examId, class: classId, school: schoolId })
+  //       .populate('student', 'name profile', User)
+  //       .populate('exam', 'examType academicYear', Exam)
+  //       .lean();
+
+  //     const classStats = calculateClassStatistics(results);
+  //     const reportCards = results.map(result => generateReportCard(result, classStats));
+
+  //     res.json(reportCards);
+  //   } catch (error) {
+  //     res.status(500).json({ error: error.message });
+  //   }
+  // },
+
   generateReportCards: async (req, res) => {
     try {
       const { examId, classId } = req.params;
@@ -2657,16 +2134,123 @@ getExamSchedules: async (req, res) => {
       const Result = getModel('Result', connection);
       const Exam = getModel('Exam', connection);
       const User = getModel('User', connection);
+      const Subject = getModel('Subject', connection);
 
-      const results = await Result.find({ exam: examId, class: classId, school: schoolId })
+      const results = await Result.find({ 
+        school: schoolId,
+        class: classId,
+        exam: { $in: await Exam.find({ class: classId, examDate: new Date(examId) }).distinct('_id') }
+      })
         .populate('student', 'name profile', User)
-        .populate('exam', 'examType academicYear', Exam)
+        .populate('exam', 'examType', Exam)
+        .populate('subject', 'name', Subject)
         .lean();
 
       const classStats = calculateClassStatistics(results);
-      const reportCards = results.map(result => generateReportCard(result, classStats));
+      const reportCards = results.reduce((acc, result) => {
+        let card = acc.find(c => c.student.id.toString() === result.student._id.toString());
+        if (!card) {
+          card = {
+            student: { id: result.student._id, name: result.student.name, profile: result.student.profile },
+            exam: { id: result.exam._id, type: result.exam.examType },
+            class: result.class,
+            subjects: [],
+            totalMarks: 0,
+            percentage: 0,
+            grade: ''
+          };
+          acc.push(card);
+        }
+        card.subjects.push({
+          subjectId: result.subject._id,
+          subjectName: result.subject.name,
+          marks: result.marksObtained,
+          totalMarks: result.totalMarks,
+          remarks: result.remarks
+        });
+        return acc;
+      }, []).map(card => {
+        card.totalMarks = calculateTotalMarks(card.subjects);
+        card.percentage = calculatePercentage(card.subjects);
+        card.grade = calculateGrade(card.subjects);
+        card.classRank = classStats.totalStudents
+          ? Math.floor((classStats.highestPercentage - card.percentage) / (classStats.highestPercentage - classStats.lowestPercentage) * (classStats.totalStudents - 1)) + 1
+          : 1;
+        card.classAverage = classStats.averagePercentage;
+        return card;
+      });
 
       res.json(reportCards);
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  },
+
+  trackPerformanceMetrics: async (req, res) => {
+    try {
+      const { classId, examId } = req.params;
+      const schoolId = req.school._id;
+      const connection = req.connection;
+      const Result = getModel('Result', connection);
+      const Exam = getModel('Exam', connection);
+      const Subject = getModel('Subject', connection);
+
+      const results = await Result.find({ 
+        school: schoolId,
+        class: classId,
+        exam: { $in: await Exam.find({ class: classId, examDate: new Date(examId) }).distinct('_id') }
+      })
+        .populate('exam', 'examType', Exam)
+        .populate('subject', 'name', Subject)
+        .lean();
+
+      const metrics = {
+        byStudent: new Map(),
+        bySubject: new Map(),
+        overall: { average: 0, highest: 0, lowest: Infinity, passRate: 0 }
+      };
+
+      results.forEach(result => {
+        const percentage = (result.marksObtained / result.totalMarks) * 100;
+
+        // Student metrics
+        if (!metrics.byStudent.has(result.student.toString())) {
+          metrics.byStudent.set(result.student.toString(), { total: 0, count: 0, subjects: [] });
+        }
+        const studentStats = metrics.byStudent.get(result.student.toString());
+        studentStats.total += percentage;
+        studentStats.count++;
+        studentStats.subjects.push({ subject: result.subject.name, percentage });
+
+        // Subject metrics
+        if (!metrics.bySubject.has(result.subject._id.toString())) {
+          metrics.bySubject.set(result.subject._id.toString(), { total: 0, count: 0, name: result.subject.name });
+        }
+        const subjectStats = metrics.bySubject.get(result.subject._id.toString());
+        subjectStats.total += percentage;
+        subjectStats.count++;
+
+        // Overall metrics
+        metrics.overall.average = (metrics.overall.average * (metrics.overall.count || 0) + percentage) / ((metrics.overall.count || 0) + 1);
+        metrics.overall.highest = Math.max(metrics.overall.highest, percentage);
+        metrics.overall.lowest = Math.min(metrics.overall.lowest, percentage);
+        metrics.overall.count = (metrics.overall.count || 0) + 1;
+        if (percentage >= 40) metrics.overall.passRate++;
+      });
+
+      metrics.overall.passRate = (metrics.overall.passRate / metrics.overall.count) * 100;
+      metrics.byStudent = Array.from(metrics.byStudent, ([studentId, stats]) => ({
+        studentId,
+        average: stats.total / stats.count,
+        subjects: stats.subjects
+      }));
+      metrics.bySubject = Array.from(metrics.bySubject, ([subjectId, stats]) => ({
+        subjectId,
+        name: stats.name,
+        average: stats.total / stats.count
+      }));
+
+      res.json(metrics);
     } catch (error) {
       res.status(500).json({ error: error.message });
     }
@@ -2971,9 +2555,11 @@ const generateStudentReportCards = classResult => {
   return reportCards;
 };
 
-const calculateTotalMarks = subjects => {
-  return subjects.reduce((sum, subject) => sum + (subject.marks || 0), 0);
-};
+// const calculateTotalMarks = subjects => {
+//   return subjects.reduce((sum, subject) => sum + (subject.marks || 0), 0);
+// };
+
+const calculateTotalMarks = subjects => subjects.reduce((sum, subject) => sum + (subject.marks || subject.marksObtained || 0), 0);
 
 const calculatePercentage = subjects => {
   const totalObtained = calculateTotalMarks(subjects);
@@ -3033,38 +2619,78 @@ const isValidTimeFormat = (time) => {
   return timeRegex.test(time);
 };
 
+// const calculateClassStatistics = results => {
+//   const stats = {
+//     totalStudents: results.length,
+//     averagePercentage: 0,
+//     highestPercentage: 0,
+//     lowestPercentage: Infinity,
+//     subjectAverages: new Map(),
+//   };
+
 const calculateClassStatistics = results => {
   const stats = {
-    totalStudents: results.length,
+    totalStudents: new Set(results.map(r => r.student.toString())).size,
     averagePercentage: 0,
     highestPercentage: 0,
     lowestPercentage: Infinity,
-    subjectAverages: new Map(),
+    subjectAverages: new Map()
   };
 
   if (!results.length) return stats;
 
-  let totalPercentage = 0;
+  const studentPercentages = new Map();
   results.forEach(result => {
-    const percentage = calculatePercentage(result.subjects);
-    totalPercentage += percentage;
-    stats.highestPercentage = Math.max(stats.highestPercentage, percentage);
-    stats.lowestPercentage = Math.min(stats.lowestPercentage, percentage);
+    const studentId = result.student.toString();
+    const percentage = (result.marksObtained / result.totalMarks) * 100;
+    if (!studentPercentages.has(studentId)) studentPercentages.set(studentId, []);
+    studentPercentages.get(studentId).push(percentage);
 
-    result.subjects.forEach(subject => {
-      if (!stats.subjectAverages.has(subject.subject.toString())) {
-        stats.subjectAverages.set(subject.subject.toString(), { total: 0, count: 0 });
-      }
-      const subjectStats = stats.subjectAverages.get(subject.subject.toString());
-      subjectStats.total += subject.marks;
-      subjectStats.count++;
-    });
+    if (!stats.subjectAverages.has(result.subject._id.toString())) {
+      stats.subjectAverages.set(result.subject._id.toString(), { total: 0, count: 0 });
+    }
+    const subjectStats = stats.subjectAverages.get(result.subject._id.toString());
+    subjectStats.total += result.marksObtained;
+    subjectStats.count++;
   });
 
-  stats.averagePercentage = totalPercentage / results.length;
+//   let totalPercentage = 0;
+//   results.forEach(result => {
+//     const percentage = calculatePercentage(result.subjects);
+//     totalPercentage += percentage;
+//     stats.highestPercentage = Math.max(stats.highestPercentage, percentage);
+//     stats.lowestPercentage = Math.min(stats.lowestPercentage, percentage);
+
+//     result.subjects.forEach(subject => {
+//       if (!stats.subjectAverages.has(subject.subject.toString())) {
+//         stats.subjectAverages.set(subject.subject.toString(), { total: 0, count: 0 });
+//       }
+//       const subjectStats = stats.subjectAverages.get(subject.subject.toString());
+//       subjectStats.total += subject.marks;
+//       subjectStats.count++;
+//     });
+
+//   })
+//   stats.averagePercentage = totalPercentage / results.length;
+//   stats.subjectAverages = Array.from(stats.subjectAverages, ([subjectId, { total, count }]) => ({
+//     subjectId,
+//     average: total / count,
+//   }));
+
+//   return stats;
+// };
+
+let totalPercentage = 0;
+  studentPercentages.forEach(percentages => {
+    const avg = percentages.reduce((a, b) => a + b, 0) / percentages.length;
+    totalPercentage += avg;
+    stats.highestPercentage = Math.max(stats.highestPercentage, avg);
+    stats.lowestPercentage = Math.min(stats.lowestPercentage, avg);
+  });
+  stats.averagePercentage = totalPercentage / stats.totalStudents;
   stats.subjectAverages = Array.from(stats.subjectAverages, ([subjectId, { total, count }]) => ({
     subjectId,
-    average: total / count,
+    average: total / count
   }));
 
   return stats;

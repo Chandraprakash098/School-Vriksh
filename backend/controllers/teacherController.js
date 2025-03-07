@@ -630,59 +630,7 @@ const teacherController = {
     }
   },
 
-  // markAttendance: async (req, res) => {
-  //   try {
-  //     const { classId } = req.params; // Removed schoolId from params, use req.school
-  //     const { date, attendanceData } = req.body;
-  //     const teacherId = req.user._id;
-  //     const schoolId = req.school._id.toString();
-  //     const connection = req.connection;
-  //     const User = require('../models/User')(connection);
-  //     const Attendance = require('../models/Attendance')(connection);
 
-  //     // Verify if the teacher has permission to take attendance for this class
-  //     const teacher = await User.findById(teacherId);
-  //     if (!teacher || !teacher.permissions.canTakeAttendance.some(id => id.toString() === classId)) {
-  //       return res.status(403).json({
-  //         message: 'You do not have permission to mark attendance for this class. Only assigned class teachers can mark attendance.',
-  //       });
-  //     }
-
-  //     const session = await mongoose.startSession();
-  //     session.startTransaction();
-
-  //     try {
-  //       const attendancePromises = attendanceData.map(async (student) => {
-  //         const attendance = new Attendance({
-  //           school: schoolId,
-  //           class: classId,
-  //           user: student.userId,
-  //           date,
-  //           status: student.status,
-  //           type: 'student',
-  //           markedBy: teacherId,
-  //         });
-  //         return attendance.save({ session });
-  //       });
-
-  //       const attendanceRecords = await Promise.all(attendancePromises);
-
-  //       // Notify parents of absent students (implement notifyAbsentStudents if needed)
-  //       const absentStudents = attendanceRecords.filter(record => record.status === 'absent');
-  //       // await notifyAbsentStudents(absentStudents);
-
-  //       await session.commitTransaction();
-  //       res.json(attendanceRecords);
-  //     } catch (error) {
-  //       await session.abortTransaction();
-  //       throw error;
-  //     } finally {
-  //       session.endSession();
-  //     }
-  //   } catch (error) {
-  //     res.status(500).json({ error: error.message });
-  //   }
-  // },
 
   markAttendance: async (req, res) => {
     try {
@@ -953,35 +901,6 @@ const teacherController = {
     }
   },
 
-  // requestLeave: async (req, res) => {
-  //   try {
-  //     const schoolId = req.school._id.toString(); // Use req.school instead of req.params
-  //     const { reason, startDate, endDate, type } = req.body;
-  //     const teacherId = req.user._id;
-  //     const connection = req.connection;
-  //     const Leave = require('../models/Leave')(connection);
-
-  //     const leave = new Leave({
-  //       school: schoolId,
-  //       user: teacherId,
-  //       reason,
-  //       startDate,
-  //       endDate,
-  //       type, // 'sick', 'casual', 'vacation'
-  //       status: 'pending',
-  //       appliedOn: new Date(),
-  //     });
-
-  //     await leave.save();
-
-  //     // Notify admin about leave request (implement notifyLeaveRequest if needed)
-  //     // await notifyLeaveRequest(leave);
-
-  //     res.status(201).json(leave);
-  //   } catch (error) {
-  //     res.status(500).json({ error: error.message });
-  //   }
-  // },
 
   requestLeave: async (req, res) => {
     try {
@@ -1079,64 +998,140 @@ const teacherController = {
     }
   },
 
+  // enterSubjectMarks: async (req, res) => {
+  //   try {
+  //     const { examId } = req.params;
+  //     const { studentsMarks } = req.body;
+  //     const teacherId = req.user._id;
+  //     const schoolId = req.school._id.toString();
+  //     const connection = req.connection;
+  //     const Exam = require('../models/Exam')(connection);
+  //     const SubjectMarks = require('../models/SubjectMarks')(connection);
+  //     const User = require('../models/User')(connection);
+
+  //     // Verify exam exists
+  //     const exam = await Exam.findOne({ _id: examId, school: schoolId });
+  //     if (!exam) {
+  //       return res.status(404).json({ message: 'Exam not found' });
+  //     }
+
+  //     // Verify teacher permission for this subject/class
+  //     const teacher = await User.findById(teacherId);
+  //     const hasPermission = teacher.permissions.canEnterMarks.some(
+  //       p => p.class.toString() === exam.class.toString()
+  //     );
+
+  //     if (!hasPermission) {
+  //       return res.status(403).json({ message: 'Not authorized to enter marks for this class' });
+  //     }
+
+  //     // Create or update subject marks
+  //     let subjectMarks = await SubjectMarks.findOne({
+  //       exam: examId,
+  //       teacher: teacherId,
+  //       class: exam.class,
+  //       school: schoolId, // Add school filter
+  //     });
+
+  //     if (!subjectMarks) {
+  //       subjectMarks = new SubjectMarks({
+  //         school: schoolId,
+  //         exam: examId,
+  //         subject: teacher.permissions.canEnterMarks.find(
+  //           p => p.class.toString() === exam.class.toString()
+  //         ).subject,
+  //         class: exam.class,
+  //         teacher: teacherId,
+  //         students: studentsMarks,
+  //       });
+  //     } else {
+  //       subjectMarks.students = studentsMarks;
+  //       subjectMarks.status = 'draft';
+  //     }
+
+  //     await subjectMarks.save();
+
+  //     res.json(subjectMarks);
+  //   } catch (error) {
+  //     res.status(500).json({ error: error.message });
+  //   }
+  // },
+
   enterSubjectMarks: async (req, res) => {
     try {
       const { examId } = req.params;
-      const { studentsMarks } = req.body;
+      const { studentsMarks } = req.body; // [{ studentId, marks, remarks }]
       const teacherId = req.user._id;
       const schoolId = req.school._id.toString();
       const connection = req.connection;
       const Exam = require('../models/Exam')(connection);
-      const SubjectMarks = require('../models/SubjectMarks')(connection);
-      const User = require('../models/User')(connection);
+      const Subject = require('../models/Subject')(connection);
 
-      // Verify exam exists
       const exam = await Exam.findOne({ _id: examId, school: schoolId });
-      if (!exam) {
-        return res.status(404).json({ message: 'Exam not found' });
-      }
+      if (!exam) return res.status(404).json({ message: 'Exam not found' });
 
       // Verify teacher permission for this subject/class
-      const teacher = await User.findById(teacherId);
-      const hasPermission = teacher.permissions.canEnterMarks.some(
-        p => p.class.toString() === exam.class.toString()
-      );
+      const subject = await Subject.findById(exam.subject);
+      const isAuthorized = subject.teachers.some(t => t.teacher.toString() === teacherId.toString());
+      if (!isAuthorized) return res.status(403).json({ message: 'Not authorized to enter marks for this exam' });
 
-      if (!hasPermission) {
-        return res.status(403).json({ message: 'Not authorized to enter marks for this class' });
-      }
+      exam.results = studentsMarks.map(entry => ({
+        student: entry.studentId,
+        marksObtained: entry.marks,
+        remarks: entry.remarks || ''
+      }));
+      exam.marksEnteredBy = teacherId;
+      exam.marksEnteredAt = new Date();
+      exam.status = 'draft';
 
-      // Create or update subject marks
-      let subjectMarks = await SubjectMarks.findOne({
-        exam: examId,
-        teacher: teacherId,
-        class: exam.class,
-        school: schoolId, // Add school filter
-      });
-
-      if (!subjectMarks) {
-        subjectMarks = new SubjectMarks({
-          school: schoolId,
-          exam: examId,
-          subject: teacher.permissions.canEnterMarks.find(
-            p => p.class.toString() === exam.class.toString()
-          ).subject,
-          class: exam.class,
-          teacher: teacherId,
-          students: studentsMarks,
-        });
-      } else {
-        subjectMarks.students = studentsMarks;
-        subjectMarks.status = 'draft';
-      }
-
-      await subjectMarks.save();
-
-      res.json(subjectMarks);
+      await exam.save();
+      res.json({ message: 'Marks entered successfully', exam });
     } catch (error) {
       res.status(500).json({ error: error.message });
     }
   },
+
+  // submitMarksToClassTeacher: async (req, res) => {
+  //   try {
+  //     const { examId } = req.params;
+  //     const teacherId = req.user._id;
+  //     const schoolId = req.school._id.toString();
+  //     const connection = req.connection;
+  //     const SubjectMarks = require('../models/SubjectMarks')(connection);
+  //     const ClassResult = require('../models/ClassResult')(connection);
+  //     const Class = require('../models/Class')(connection);
+
+  //     const subjectMarks = await SubjectMarks.findOne({
+  //       exam: examId,
+  //       teacher: teacherId,
+  //       school: schoolId,
+  //     });
+
+  //     if (!subjectMarks) {
+  //       return res.status(404).json({ message: 'Marks not found' });
+  //     }
+
+  //     subjectMarks.status = 'submitted';
+  //     subjectMarks.submittedAt = new Date();
+  //     await subjectMarks.save();
+
+  //     // Update class result status
+  //     await ClassResult.findOneAndUpdate(
+  //       { exam: examId, class: subjectMarks.class, school: schoolId },
+  //       {
+  //         $addToSet: { subjectMarks: subjectMarks._id },
+  //         $setOnInsert: {
+  //           classTeacher: (await Class.findById(subjectMarks.class)).classTeacher,
+  //         },
+  //       },
+  //       { upsert: true }
+  //     );
+
+  //     res.json({ message: 'Marks submitted to class teacher successfully' });
+  //   } catch (error) {
+  //     res.status(500).json({ error: error.message });
+  //   }
+  // },
 
   submitMarksToClassTeacher: async (req, res) => {
     try {
@@ -1144,107 +1139,218 @@ const teacherController = {
       const teacherId = req.user._id;
       const schoolId = req.school._id.toString();
       const connection = req.connection;
-      const SubjectMarks = require('../models/SubjectMarks')(connection);
-      const ClassResult = require('../models/ClassResult')(connection);
+      const Exam = require('../models/Exam')(connection);
       const Class = require('../models/Class')(connection);
 
-      const subjectMarks = await SubjectMarks.findOne({
-        exam: examId,
-        teacher: teacherId,
-        school: schoolId,
-      });
-
-      if (!subjectMarks) {
-        return res.status(404).json({ message: 'Marks not found' });
+      const exam = await Exam.findOne({ _id: examId, school: schoolId });
+      if (!exam) return res.status(404).json({ message: 'Exam not found' });
+      if (exam.marksEnteredBy.toString() !== teacherId.toString()) {
+        return res.status(403).json({ message: 'Not authorized to submit these marks' });
+      }
+      if (exam.status !== 'draft') {
+        return res.status(400).json({ message: 'Marks already submitted or in invalid state' });
       }
 
-      subjectMarks.status = 'submitted';
-      subjectMarks.submittedAt = new Date();
-      await subjectMarks.save();
+      const classInfo = await Class.findById(exam.class);
+      if (!classInfo.classTeacher) {
+        return res.status(400).json({ message: 'No class teacher assigned to this class' });
+      }
 
-      // Update class result status
-      await ClassResult.findOneAndUpdate(
-        { exam: examId, class: subjectMarks.class, school: schoolId },
-        {
-          $addToSet: { subjectMarks: subjectMarks._id },
-          $setOnInsert: {
-            classTeacher: (await Class.findById(subjectMarks.class)).classTeacher,
-          },
-        },
-        { upsert: true }
-      );
+      exam.status = 'submittedToClassTeacher';
+      exam.submittedToClassTeacherAt = new Date();
+      await exam.save();
 
-      res.json({ message: 'Marks submitted to class teacher successfully' });
+      res.json({ message: 'Marks submitted to class teacher successfully', exam });
     } catch (error) {
       res.status(500).json({ error: error.message });
     }
   },
+
+  // reviewSubjectMarks: async (req, res) => {
+  //   try {
+  //     const { examId } = req.params;
+  //     const teacherId = req.user._id;
+  //     const schoolId = req.school._id.toString();
+  //     const connection = req.connection;
+  //     const ClassResult = require('../models/ClassResult')(connection);
+  //     const SubjectMarks = require('../models/SubjectMarks')(connection);
+  //     const Subject = require('../models/Subject')(connection);
+  //     const User = require('../models/User')(connection);
+
+  //     // Get class result and verify class teacher
+  //     const classResult = await ClassResult.findOne({ exam: examId, school: schoolId })
+  //       .populate('subjectMarks', '', SubjectMarks)
+  //       .populate('class', '', require('../models/Class')(connection));
+
+  //     if (!classResult || classResult.class.classTeacher.toString() !== teacherId) {
+  //       return res.status(403).json({ message: 'Not authorized as class teacher' });
+  //     }
+
+  //     // Get all submitted subject marks
+  //     const subjectMarks = await SubjectMarks.find({
+  //       _id: { $in: classResult.subjectMarks },
+  //       status: 'submitted',
+  //       school: schoolId,
+  //     })
+  //       .populate('subject', '', Subject)
+  //       .populate('students.student', '', User);
+
+  //     res.json(subjectMarks);
+  //   } catch (error) {
+  //     res.status(500).json({ error: error.message });
+  //   }
+  // },
+
+  // reviewSubjectMarks: async (req, res) => {
+  //   try {
+  //     const { classId, examId } = req.params;
+  //     const teacherId = req.user._id;
+  //     const schoolId = req.school._id.toString();
+  //     const connection = req.connection;
+  //     const Exam = require('../models/Exam')(connection);
+  //     const Class = require('../models/Class')(connection);
+
+  //     const classInfo = await Class.findOne({ _id: classId, school: schoolId });
+  //     if (!classInfo || classInfo.classTeacher.toString() !== teacherId.toString()) {
+  //       return res.status(403).json({ message: 'Not authorized as class teacher' });
+  //     }
+
+  //     const exams = await Exam.find({
+  //       school: schoolId,
+  //       class: classId,
+  //       examDate: examId ? { $eq: new Date(examId) } : { $exists: true }, // Filter by examId if provided
+  //       status: 'submittedToClassTeacher'
+  //     })
+  //       .populate('subject', 'name')
+  //       .populate('results.student', 'name')
+  //       .lean();
+
+  //     res.json(exams);
+  //   } catch (error) {
+  //     res.status(500).json({ error: error.message });
+  //   }
+  // },
 
   reviewSubjectMarks: async (req, res) => {
     try {
-      const { examId } = req.params;
+      const { classId, examId } = req.params;
       const teacherId = req.user._id;
       const schoolId = req.school._id.toString();
       const connection = req.connection;
-      const ClassResult = require('../models/ClassResult')(connection);
-      const SubjectMarks = require('../models/SubjectMarks')(connection);
-      const Subject = require('../models/Subject')(connection);
-      const User = require('../models/User')(connection);
-
-      // Get class result and verify class teacher
-      const classResult = await ClassResult.findOne({ exam: examId, school: schoolId })
-        .populate('subjectMarks', '', SubjectMarks)
-        .populate('class', '', require('../models/Class')(connection));
-
-      if (!classResult || classResult.class.classTeacher.toString() !== teacherId) {
+      const Exam = require('../models/Exam')(connection);
+      const Class = require('../models/Class')(connection);
+  
+      const classInfo = await Class.findOne({ _id: classId, school: schoolId });
+      if (!classInfo || classInfo.classTeacher.toString() !== teacherId.toString()) {
         return res.status(403).json({ message: 'Not authorized as class teacher' });
       }
-
-      // Get all submitted subject marks
-      const subjectMarks = await SubjectMarks.find({
-        _id: { $in: classResult.subjectMarks },
-        status: 'submitted',
+  
+      const query = {
         school: schoolId,
-      })
-        .populate('subject', '', Subject)
-        .populate('students.student', '', User);
-
-      res.json(subjectMarks);
+        class: classId,
+        status: 'submittedToClassTeacher'
+      };
+  
+      // If examId is provided, filter by _id instead of examDate
+      if (examId) {
+        query._id = examId;
+      }
+  
+      const exams = await Exam.find(query)
+        .populate('subject', 'name')
+        .populate('results.student', 'name')
+        .lean();
+  
+      res.json(exams);
     } catch (error) {
       res.status(500).json({ error: error.message });
     }
   },
 
+  // submitResultsToAdmin: async (req, res) => {
+  //   try {
+  //     const { examId } = req.params;
+  //     const teacherId = req.user._id;
+  //     const schoolId = req.school._id.toString();
+  //     const connection = req.connection;
+  //     const ClassResult = require('../models/ClassResult')(connection);
+  //     const SubjectMarks = require('../models/SubjectMarks')(connection);
+
+  //     const classResult = await ClassResult.findOne({
+  //       exam: examId,
+  //       classTeacher: teacherId,
+  //       school: schoolId,
+  //     });
+
+  //     if (!classResult) {
+  //       return res.status(404).json({ message: 'Class result not found' });
+  //     }
+
+  //     // Verify all subjects have submitted marks
+  //     const allSubjectsSubmitted = await verifyAllSubjectsSubmitted(examId, classResult.class, connection);
+  //     if (!allSubjectsSubmitted) {
+  //       return res.status(400).json({ message: 'All subject marks not yet submitted' });
+  //     }
+
+  //     classResult.status = 'submitted';
+  //     classResult.submittedAt = new Date();
+  //     await classResult.save();
+
+  //     res.json({ message: 'Results submitted to admin successfully' });
+  //   } catch (error) {
+  //     res.status(500).json({ error: error.message });
+  //   }
+  // },
+
   submitResultsToAdmin: async (req, res) => {
     try {
-      const { examId } = req.params;
+      const { classId, examId } = req.params;
       const teacherId = req.user._id;
       const schoolId = req.school._id.toString();
       const connection = req.connection;
-      const ClassResult = require('../models/ClassResult')(connection);
-      const SubjectMarks = require('../models/SubjectMarks')(connection);
+      const Exam = require('../models/Exam')(connection);
+      const Class = require('../models/Class')(connection);
 
-      const classResult = await ClassResult.findOne({
-        exam: examId,
-        classTeacher: teacherId,
+      const classInfo = await Class.findOne({ _id: classId, school: schoolId });
+      if (!classInfo || classInfo.classTeacher.toString() !== teacherId.toString()) {
+        return res.status(403).json({ message: 'Not authorized as class teacher' });
+      }
+
+      const exams = await Exam.find({
         school: schoolId,
+        class: classId,
+        examDate: examId ? { $eq: new Date(examId) } : { $exists: true },
+        status: 'submittedToClassTeacher'
       });
 
-      if (!classResult) {
-        return res.status(404).json({ message: 'Class result not found' });
+      if (!exams.length) {
+        return res.status(404).json({ message: 'No submitted marks found for this class and exam' });
       }
 
       // Verify all subjects have submitted marks
-      const allSubjectsSubmitted = await verifyAllSubjectsSubmitted(examId, classResult.class, connection);
-      if (!allSubjectsSubmitted) {
-        return res.status(400).json({ message: 'All subject marks not yet submitted' });
+      const subjects = await require('../models/Subject')(connection).find({ class: classId });
+      if (exams.length !== subjects.length) {
+        return res.status(400).json({ message: 'Not all subjects have submitted marks' });
       }
 
-      classResult.status = 'submitted';
-      classResult.submittedAt = new Date();
-      await classResult.save();
+      const session = await connection.startSession();
+      session.startTransaction();
 
-      res.json({ message: 'Results submitted to admin successfully' });
+      try {
+        for (const exam of exams) {
+          exam.status = 'submittedToAdmin';
+          exam.submittedToAdminAt = new Date();
+          await exam.save({ session });
+        }
+
+        await session.commitTransaction();
+        res.json({ message: 'Results submitted to admin successfully' });
+      } catch (error) {
+        await session.abortTransaction();
+        throw error;
+      } finally {
+        session.endSession();
+      }
     } catch (error) {
       res.status(500).json({ error: error.message });
     }
