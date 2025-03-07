@@ -939,6 +939,53 @@ const studentController = {
     }
   },
 
+  getStudentCertificates: async (req, res) => {
+    try {
+      const { studentId } = req.params;
+
+      const schoolId = req.school._id.toString();
+      const connection = req.connection;
+      const Certificate = require('../models/Certificate')(connection);
+
+      if (!mongoose.Types.ObjectId.isValid(studentId)) {
+        return res.status(400).json({ message: 'Invalid student ID' });
+      }
+
+      if (studentId !== req.user._id.toString()) {
+        return res.status(403).json({ message: 'Unauthorized: You can only view your own certificates' });
+      }
+
+      const certificates = await Certificate.find({
+        school: schoolId,
+        student: studentId,
+        isSentToStudent: true, // Only show certificates that have been sent to the student
+      })
+        .populate('generatedBy', 'name email')
+        .sort({ requestDate: -1 });
+
+      res.json({
+        status: 'success',
+        count: certificates.length,
+        certificates: certificates.map(cert => ({
+          id: cert._id,
+          type: cert.type,
+          purpose: cert.purpose,
+          urgency: cert.urgency,
+          requestDate: cert.requestDate,
+          status: cert.status,
+          documentUrl: cert.documentUrl || null,
+          signedDocumentUrl: cert.signedDocumentUrl || null,
+          issuedDate: cert.issuedDate || null,
+          generatedBy: cert.generatedBy ? cert.generatedBy.name : null,
+          comments: cert.comments || null,
+        })),
+      });
+    } catch (error) {
+      console.error('Error in getStudentCertificates:', error);
+      res.status(500).json({ error: error.message });
+    }
+  },
+
   getLibraryServices: async (req, res) => {
     try {
       const { studentId } = req.params;

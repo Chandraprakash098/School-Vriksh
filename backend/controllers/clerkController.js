@@ -7,6 +7,12 @@ const { sendAdmissionNotification } = require('../utils/notifications');
 const PDFDocument = require('pdfkit');
 const { uploadCertificateToCloudinary } = require('../config/cloudinary');
 
+const multer = require('multer');
+
+// Configure multer for temporary file storage
+const storage = multer.memoryStorage(); // Store files in memory (we'll upload directly to Cloudinary)
+const upload = multer({ storage: storage });
+
 const clerkController = {
   
   
@@ -926,139 +932,118 @@ const clerkController = {
   // },
 
 
-  getPendingCertificates: async (req, res) => {
-    try {
-      const schoolId = req.school._id.toString();
-      const connection = req.connection;
-      const Certificate = require('../models/Certificate')(connection);
-      const User = require('../models/User')(connection);
+  // getPendingCertificates: async (req, res) => {
+  //   try {
+  //     const schoolId = req.school._id.toString();
+  //     const connection = req.connection;
+  //     const Certificate = require('../models/Certificate')(connection);
+  //     const User = require('../models/User')(connection);
 
-      const certificates = await Certificate.find({
-        school: schoolId,
-        status: 'pending',
-      })
-        .populate('student', 'name email studentDetails', User)
-        .sort({ requestDate: -1 });
+  //     const certificates = await Certificate.find({
+  //       school: schoolId,
+  //       status: 'pending',
+  //     })
+  //       .populate('student', 'name email studentDetails', User)
+  //       .sort({ requestDate: -1 });
 
-      res.json({
-        status: 'success',
-        count: certificates.length,
-        certificates: certificates.map(cert => ({
-          id: cert._id,
-          studentName: cert.student.name,
-          studentEmail: cert.student.email,
-          type: cert.type,
-          purpose: cert.purpose,
-          urgency: cert.urgency,
-          requestDate: cert.requestDate,
-          status: cert.status,
+  //     res.json({
+  //       status: 'success',
+  //       count: certificates.length,
+  //       certificates: certificates.map(cert => ({
+  //         id: cert._id,
+  //         studentName: cert.student.name,
+  //         studentEmail: cert.student.email,
+  //         type: cert.type,
+  //         purpose: cert.purpose,
+  //         urgency: cert.urgency,
+  //         requestDate: cert.requestDate,
+  //         status: cert.status,
 
-          grNumber: cert.student?.studentDetails?.grNumber || 'N/A',
-          parentName: cert.student?.studentDetails?.parentDetails?.name || 'N/A',
-          admissionDate: cert.student?.studentDetails?.admissionDate
-            ? new Date(cert.student.studentDetails.admissionDate).toISOString().split('T')[0]
-            : 'N/A',
-          dob: cert.student?.studentDetails?.dob
-            ? new Date(cert.student.studentDetails.dob).toISOString().split('T')[0]
-            : 'N/A',
-          className: cert.student?.studentDetails?.class
-            ? `${cert.student.studentDetails.class.name}${cert.student.studentDetails.class.division ? ' ' + cert.student.studentDetails.class.division : ''}`
-            : 'N/A',
-          // Include school details from req.school
-          schoolName: req.school?.name || 'N/A',
-          schoolAddress: req.school?.address || 'N/A',
-        })),
-      });
-    } catch (error) {
-      console.error('Error in getPendingCertificates:', error);
-      res.status(500).json({ error: error.message });
-    }
-  },
+  //         grNumber: cert.student?.studentDetails?.grNumber || 'N/A',
+  //         parentName: cert.student?.studentDetails?.parentDetails?.name || 'N/A',
+  //         admissionDate: cert.student?.studentDetails?.admissionDate
+  //           ? new Date(cert.student.studentDetails.admissionDate).toISOString().split('T')[0]
+  //           : 'N/A',
+  //         dob: cert.student?.studentDetails?.dob
+  //           ? new Date(cert.student.studentDetails.dob).toISOString().split('T')[0]
+  //           : 'N/A',
+  //         className: cert.student?.studentDetails?.class
+  //           ? `${cert.student.studentDetails.class.name}${cert.student.studentDetails.class.division ? ' ' + cert.student.studentDetails.class.division : ''}`
+  //           : 'N/A',
+  //         // Include school details from req.school
+  //         schoolName: req.school?.name || 'N/A',
+  //         schoolAddress: req.school?.address || 'N/A',
+  //       })),
+  //     });
+  //   } catch (error) {
+  //     console.error('Error in getPendingCertificates:', error);
+  //     res.status(500).json({ error: error.message });
+  //   }
+  // },
 
-  getCertificateHistory: async (req, res) => {
-    try {
-      const schoolId = req.school._id.toString();
-      const connection = req.connection;
-      const Certificate = require('../models/Certificate')(connection);
-      const User = require('../models/User')(connection);
+  // getCertificateHistory: async (req, res) => {
+  //   try {
+  //     const schoolId = req.school._id.toString();
+  //     const connection = req.connection;
+  //     const Certificate = require('../models/Certificate')(connection);
+  //     const User = require('../models/User')(connection);
 
-      const certificates = await Certificate.find({ school: schoolId })
-        .populate('student', 'name email studentDetails', User)
-        .populate('generatedBy', 'name email', User)
-        .sort({ requestDate: -1 });
+  //     const certificates = await Certificate.find({ school: schoolId })
+  //       .populate('student', 'name email studentDetails', User)
+  //       .populate('generatedBy', 'name email', User)
+  //       .sort({ requestDate: -1 });
 
-      res.json({
-        status: 'success',
-        count: certificates.length,
-        certificates: certificates.map(cert => ({
-          id: cert._id,
-          studentName: cert.student.name,
-          studentEmail: cert.student.email,
-          type: cert.type,
-          purpose: cert.purpose,
-          urgency: cert.urgency,
-          requestDate: cert.requestDate,
-          status: cert.status,
-          documentUrl: cert.documentUrl || null,
-          issuedDate: cert.issuedDate || null,
-          generatedBy: cert.generatedBy ? cert.generatedBy.name : null,
-          comments: cert.comments || null,
+  //     res.json({
+  //       status: 'success',
+  //       count: certificates.length,
+  //       certificates: certificates.map(cert => ({
+  //         id: cert._id,
+  //         studentName: cert.student.name,
+  //         studentEmail: cert.student.email,
+  //         type: cert.type,
+  //         purpose: cert.purpose,
+  //         urgency: cert.urgency,
+  //         requestDate: cert.requestDate,
+  //         status: cert.status,
+  //         documentUrl: cert.documentUrl || null,
+  //         issuedDate: cert.issuedDate || null,
+  //         generatedBy: cert.generatedBy ? cert.generatedBy.name : null,
+  //         comments: cert.comments || null,
 
-          // Extract nested student details
-          grNumber: cert.student?.studentDetails?.grNumber || 'N/A',
-          parentName: cert.student?.studentDetails?.parentDetails?.name || 'N/A',
-          admissionDate: cert.student?.studentDetails?.admissionDate
-            ? new Date(cert.student.studentDetails.admissionDate).toISOString().split('T')[0]
-            : 'N/A',
-          dob: cert.student?.studentDetails?.dob
-            ? new Date(cert.student.studentDetails.dob).toISOString().split('T')[0]
-            : 'N/A',
-          className: cert.student?.studentDetails?.class
-            ? `${cert.student.studentDetails.class.name}${cert.student.studentDetails.class.division ? ' ' + cert.student.studentDetails.class.division : ''}`
-            : 'N/A',
-          // Include school details from req.school
-          schoolName: req.school?.name || 'N/A',
-          schoolAddress: req.school?.address || 'N/A',
-        })),
-      });
-    } catch (error) {
-      console.error('Error in getCertificateHistory:', error);
-      res.status(500).json({ error: error.message });
-    }
-  },
+  //         // Extract nested student details
+  //         grNumber: cert.student?.studentDetails?.grNumber || 'N/A',
+  //         parentName: cert.student?.studentDetails?.parentDetails?.name || 'N/A',
+  //         admissionDate: cert.student?.studentDetails?.admissionDate
+  //           ? new Date(cert.student.studentDetails.admissionDate).toISOString().split('T')[0]
+  //           : 'N/A',
+  //         dob: cert.student?.studentDetails?.dob
+  //           ? new Date(cert.student.studentDetails.dob).toISOString().split('T')[0]
+  //           : 'N/A',
+  //         className: cert.student?.studentDetails?.class
+  //           ? `${cert.student.studentDetails.class.name}${cert.student.studentDetails.class.division ? ' ' + cert.student.studentDetails.class.division : ''}`
+  //           : 'N/A',
+  //         // Include school details from req.school
+  //         schoolName: req.school?.name || 'N/A',
+  //         schoolAddress: req.school?.address || 'N/A',
+  //       })),
+  //     });
+  //   } catch (error) {
+  //     console.error('Error in getCertificateHistory:', error);
+  //     res.status(500).json({ error: error.message });
+  //   }
+  // },
+
 
   // generateCertificate: async (req, res) => {
   //   try {
   //     const { certificateId } = req.params;
-  //     const {
-  //       status,
-  //       comments,
-  //       nationality, // For School Leaving Certificate
-  //       belongsToScheduleCasteOrTribe, // For School Leaving Certificate
-  //       subjectsStudied, // For School Leaving Certificate (array of subjects)
-  //       qualifiedForPromotion, // For School Leaving Certificate (boolean)
-  //       promotionClass, // For School Leaving Certificate (if qualifiedForPromotion is true)
-  //       monthFeesPaid, // For School Leaving Certificate
-  //       feeConcession, // For School Leaving Certificate
-  //       totalWorkingDays, // For School Leaving Certificate
-  //       totalDaysPresent, // For School Leaving Certificate
-  //       nccOrScoutDetails, // For School Leaving Certificate
-  //       extracurricularActivities, // For School Leaving Certificate
-  //       generalConduct, // For School Leaving Certificate
-  //       dateOfApplication, // For School Leaving Certificate
-  //       dateOfLeaving, // For School Leaving Certificate
-  //       reasonForLeaving, // For School Leaving Certificate
-  //       remarks, // For School Leaving Certificate
-  //     } = req.body;
+  //     const { status, comments, pdfData, certificateType } = req.body;
 
   //     const schoolId = req.school._id.toString();
   //     const connection = req.connection;
   //     const Certificate = require('../models/Certificate')(connection);
   //     const User = require('../models/User')(connection);
-  //     const Class = require('../models/Class')(connection);
-  //     const School = require('../models/School')(require('../config/database').getOwnerConnection());
 
-  //     // Validate certificateId
   //     if (!mongoose.Types.ObjectId.isValid(certificateId)) {
   //       return res.status(400).json({ message: 'Invalid certificate ID' });
   //     }
@@ -1079,215 +1064,169 @@ const clerkController = {
   //       return res.status(400).json({ message: 'Invalid status for generation' });
   //     }
 
-  //     // Fetch student and school details
-  //     const student = await User.findById(certificate.student)
-  //       .populate('studentDetails.class', 'name division', Class)
-  //       .select('name email studentDetails');
-  //     const school = await School.findById(schoolId).select('name address');
-
-  //     if (!student || !school) {
-  //       return res.status(404).json({ message: 'Student or school not found' });
+  //     if (!pdfData || !certificateType) {
+  //       return res.status(400).json({ message: 'PDF data and certificate type are required' });
   //     }
 
-  //     // Prepare data for the certificate
-  //     const currentDate = new Date().toISOString().split('T')[0];
-  //     const grNumber = student.studentDetails.grNumber || 'N/A';
-  //     const className = student.studentDetails.class
-  //       ? `${student.studentDetails.class.name}${student.studentDetails.class.division ? ' ' + student.studentDetails.class.division : ''}`
-  //       : 'N/A';
-  //     const parentName = student.studentDetails.parentDetails?.name || 'N/A';
-  //     const admissionDate = student.studentDetails.admissionDate || 'N/A';
-  //     const dob = student.studentDetails.dob || 'N/A';
+  //     // Convert base64 PDF data to buffer
+  //     const pdfBuffer = Buffer.from(pdfData, 'base64');
 
-  //     // Generate PDF using pdfkit
-  //     const doc = new PDFDocument({ size: 'A4', margin: 50 });
-  //     const buffers = [];
-  //     doc.on('data', buffers.push.bind(buffers));
-  //     doc.on('end', async () => {
-  //       const pdfBuffer = Buffer.concat(buffers);
+  //     // Upload the PDF to Cloudinary
+  //     const cloudinaryResult = await uploadCertificateToCloudinary(pdfBuffer, certificate._id, certificateType);
+  //     const documentUrl = cloudinaryResult.secure_url;
 
-  //       // Upload the PDF to Cloudinary
-  //       try {
-  //         const cloudinaryResult = await uploadCertificateToCloudinary(pdfBuffer, certificate._id, certificate.type);
-  //         const documentUrl = cloudinaryResult.secure_url;
+  //     // Update certificate with the Cloudinary URL
+  //     certificate.documentUrl = documentUrl;
+  //     certificate.status = 'generated';
+  //     certificate.issuedDate = new Date();
+  //     certificate.generatedBy = req.user._id;
+  //     certificate.comments = comments;
+  //     await certificate.save();
 
-  //         // Update certificate with the Cloudinary URL
-  //         certificate.documentUrl = documentUrl;
-  //         certificate.status = 'generated';
-  //         certificate.issuedDate = new Date();
-  //         certificate.generatedBy = req.user._id;
-  //         certificate.comments = comments;
-  //         await certificate.save();
+  //     // Fetch student details for notification
+  //     const student = await User.findById(certificate.student).select('name email studentDetails');
 
-  //         // Send notification to student
-  //         const notificationResult = await sendCertificateNotification(
-  //           student.email,
-  //           student.studentDetails.mobile,
-  //           student.name,
-  //           certificate.type,
-  //           documentUrl
-  //         );
+  //     // Send notification to student
+  //     const notificationResult = await sendCertificateNotification(
+  //       student.email,
+  //       student.studentDetails.mobile,
+  //       student.name,
+  //       certificate.type,
+  //       documentUrl
+  //     );
 
-  //         res.json({
-  //           message: 'Certificate generated successfully',
-  //           certificate,
-  //           notificationStatus: {
-  //             emailSent: notificationResult.emailSent,
-  //             smsSent: notificationResult.smsSent,
-  //           },
-  //         });
-  //       } catch (uploadError) {
-  //         console.error('Error uploading to Cloudinary:', uploadError);
-  //         res.status(500).json({ error: 'Failed to upload certificate to Cloudinary: ' + uploadError.message });
-  //       }
+  //     res.json({
+  //       message: 'Certificate generated successfully',
+  //       certificate,
+  //       notificationStatus: {
+  //         emailSent: notificationResult.emailSent,
+  //         smsSent: notificationResult.smsSent,
+  //       },
   //     });
-
-  //     // Add content to the PDF based on certificate type
-  //     doc.font('Helvetica');
-
-  //     if (certificate.type === 'bonafide') {
-  //       // Bonafide Certificate Layout
-  //       doc
-  //         .fontSize(12)
-  //         .text(`Date: ${currentDate}`, 50, 50, { align: 'left' })
-  //         .moveDown()
-  //         .fontSize(16)
-  //         .font('Helvetica-Bold')
-  //         .text('BONAFIDE CERTIFICATE', { align: 'center' })
-  //         .moveDown(2);
-
-  //       doc
-  //         .fontSize(12)
-  //         .font('Helvetica')
-  //         .text(
-  //           `This is to certify that Mr./Ms. ${student.name}, S/O or D/O of Mr./Ms. ${parentName},`,
-  //           { align: 'justify' }
-  //         )
-  //         .text(
-  //           `bearing roll number ${grNumber} is a student of ${school.name} (year)`,
-  //           { align: 'justify' }
-  //         )
-  //         .text(
-  //           `${className} for the academic year ${new Date().getFullYear()}.`,
-  //           { align: 'justify' }
-  //         )
-  //         .moveDown()
-  //         .text(
-  //           `He/She is reliable, sincere, hardworking and bears a good moral character.`,
-  //           { align: 'justify' }
-  //         )
-  //         .moveDown(2);
-
-  //       doc
-  //         .text(`${school.name}`, { align: 'left' })
-  //         .text(`${school.address || 'N/A'}`, { align: 'left' })
-  //         .text('(Official Seal)', { align: 'left' })
-  //         .moveDown(2)
-  //         .text('________________', { align: 'right' })
-  //         .text('Signature', { align: 'right' })
-  //         .text('Registrar/Principal/Dean', { align: 'right' });
-  //     } else if (certificate.type === 'leaving') {
-  //       // School Leaving Certificate Layout
-  //       doc
-  //         .fontSize(14)
-  //         .font('Helvetica-Bold')
-  //         .text('School Detail', { align: 'center' })
-  //         .moveDown()
-  //         .text('SCHOOL LEAVING CERTIFICATE', { align: 'center' })
-  //         .moveDown()
-  //         .fontSize(12)
-  //         .font('Helvetica')
-  //         .text(`Book No. _________  S No. _________  GR No. ${grNumber}`, { align: 'center' })
-  //         .moveDown(2);
-
-  //       const fields = [
-  //         `1. Name of Pupil: ${student.name}`,
-  //         `2. Father's/Guardian's/Mother's Name: ${parentName}`,
-  //         `3. Nationality: ${nationality || '[N/A]'}`,
-  //         `4. Whether candidate belongs to Schedule Caste/Schedule Tribe: ${belongsToScheduleCasteOrTribe || '[N/A]'}`,
-  //         `5. Date of First admission in the School with class: ${admissionDate} (${className})`,
-  //         `6. Date of Birth (in Christian Era) according to Admission Register: ${dob}`,
-  //         `7. Class in which pupil last studied/figures): ${className}`,
-  //         `8. School/Board Annual examination last taken with result: [N/A]`, // This could be added as a field if needed
-  //         `9. Whether failed, if so once/twice in the same class: [N/A]`, // This could be added as a field if needed
-  //         `10. Subject studied: ${subjectsStudied && subjectsStudied.length > 0 ? subjectsStudied.map((subject, index) => `${index + 1}. ${subject}`).join(' ') : '1. [N/A] 2. [N/A] 3. [N/A]'}`,
-  //         `11. Whether qualified for promotion to higher class if so, to which class: ${qualifiedForPromotion ? `Yes, ${promotionClass || '[N/A]'}` : 'No'}`,
-  //         `12. Month up to which the Pupil has paid School dues: ${monthFeesPaid || '[N/A]'}`,
-  //         `13. Any fee concession available: If so, the nature of such concession: ${feeConcession || '[N/A]'}`,
-  //         `14. Total No. of working days: ${totalWorkingDays || '[N/A]'}`,
-  //         `15. Total Nos. of working days Present: ${totalDaysPresent || '[N/A]'}`,
-  //         `16. Whether NCC Cadet/Scout/details may be given): ${nccOrScoutDetails || '[N/A]'}`,
-  //         `17. Game played or extracurricular activities in which the Pupil usually took part (mention achievement level therein): ${extracurricularActivities || '[N/A]'}`,
-  //         `18. General Conduct: ${generalConduct || 'Good'}`,
-  //         `19. Date of application of Certificate: ${dateOfApplication || currentDate}`,
-  //         `20. Date of leaving the school: ${dateOfLeaving || currentDate}`,
-  //         `21. Reason for leaving the school: ${reasonForLeaving || certificate.purpose}`,
-  //         `22. Any other remarks: ${remarks || '[N/A]'}`,
-  //       ];
-
-  //       fields.forEach((field, index) => {
-  //         doc.text(field, { align: 'left' }).moveDown(0.5);
-  //       });
-
-  //       doc
-  //         .moveDown(2)
-  //         .text('Checked by', { align: 'left' })
-  //         .text('________________', { align: 'left' })
-  //         .text('Signature', { align: 'left' })
-  //         .text('Class Teacher', { align: 'left' })
-  //         .text('(State full name & Designation)', { align: 'left' })
-  //         .moveDown()
-  //         .text('________________', { align: 'right' })
-  //         .text('Signature', { align: 'right' })
-  //         .text('Principal', { align: 'right' });
-  //     } else if (certificate.type === 'transfer') {
-  //       // Transfer Certificate Layout
-  //       doc
-  //         .fontSize(12)
-  //         .text(`Date: ${currentDate}`, 50, 50, { align: 'left' })
-  //         .moveDown()
-  //         .fontSize(16)
-  //         .font('Helvetica-Bold')
-  //         .text('TRANSFER CERTIFICATE', { align: 'center' })
-  //         .moveDown(2);
-
-  //       doc
-  //         .fontSize(12)
-  //         .font('Helvetica')
-  //         .text(
-  //           `This is to certify that Mr./Ms. ${student.name}, S/O or D/O of Mr./Ms. ${parentName},`,
-  //           { align: 'justify' }
-  //         )
-  //         .text(
-  //           `bearing roll number ${grNumber} was a student of ${school.name} in ${className}`,
-  //           { align: 'justify' }
-  //         )
-  //         .text(
-  //           `from ${admissionDate} to ${dateOfLeaving || currentDate}. He/She has completed the required`,
-  //           { align: 'justify' }
-  //         )
-  //         .text(
-  //           `coursework and is eligible for transfer to another institution.`,
-  //           { align: 'justify' }
-  //         )
-  //         .moveDown(2);
-
-  //       doc
-  //         .text(`${school.name}`, { align: 'left' })
-  //         .text(`${school.address || 'N/A'}`, { align: 'left' })
-  //         .text('(Official Seal)', { align: 'left' })
-  //         .moveDown(2)
-  //         .text('________________', { align: 'right' })
-  //         .text('Signature', { align: 'right' })
-  //         .text('Registrar/Principal/Dean', { align: 'right' });
-  //     }
-
-  //     doc.end();
   //   } catch (error) {
   //     console.error('Error in generateCertificate:', error);
   //     res.status(500).json({ error: error.message });
   //   }
   // },
+
+
+
+  getPendingCertificates: async (req, res) => {
+    try {
+      const schoolId = req.school._id.toString();
+      const connection = req.connection;
+      const Certificate = require('../models/Certificate')(connection);
+      const User = require('../models/User')(connection);
+      const Class = require('../models/Class')(connection);
+
+      const certificates = await Certificate.find({
+        school: schoolId,
+        status: 'pending',
+      })
+        .populate({
+          path: 'student',
+          select: 'name email studentDetails',
+          populate: {
+            path: 'studentDetails.class',
+            model: Class,
+            select: 'name division',
+          },
+        })
+        .populate('generatedBy', 'name email', User)
+        .sort({ requestDate: -1 });
+
+      res.json({
+        status: 'success',
+        count: certificates.length,
+        certificates: certificates.map(cert => ({
+          id: cert._id,
+          studentName: cert.student?.name || 'N/A',
+          studentEmail: cert.student?.email || 'N/A',
+          type: cert.type,
+          purpose: cert.purpose,
+          urgency: cert.urgency,
+          requestDate: cert.requestDate,
+          status: cert.status,
+          grNumber: cert.student?.studentDetails?.grNumber || 'N/A',
+          parentName: cert.student?.studentDetails?.parentDetails?.name || 'N/A',
+          admissionDate: cert.student?.studentDetails?.admissionDate
+            ? new Date(cert.student.studentDetails.admissionDate).toISOString().split('T')[0]
+            : 'N/A',
+          dob: cert.student?.studentDetails?.dob
+            ? new Date(cert.student.studentDetails.dob).toISOString().split('T')[0]
+            : 'N/A',
+          className: cert.student?.studentDetails?.class
+            ? `${cert.student.studentDetails.class.name}${cert.student.studentDetails.class.division ? ' ' + cert.student.studentDetails.class.division : ''}`
+            : 'N/A',
+          schoolName: req.school?.name || 'N/A',
+          schoolAddress: req.school?.address || 'N/A',
+        })),
+      });
+    } catch (error) {
+      console.error('Error in getPendingCertificates:', error);
+      res.status(500).json({ error: error.message });
+    }
+  },
+
+  getCertificateHistory: async (req, res) => {
+    try {
+      const schoolId = req.school._id.toString();
+      const connection = req.connection;
+      const Certificate = require('../models/Certificate')(connection);
+      const User = require('../models/User')(connection);
+      const Class = require('../models/Class')(connection);
+
+      const certificates = await Certificate.find({ school: schoolId })
+        .populate({
+          path: 'student',
+          select: 'name email studentDetails',
+          populate: {
+            path: 'studentDetails.class',
+            model: Class,
+            select: 'name division',
+          },
+        })
+        .populate('generatedBy', 'name email', User)
+        .sort({ requestDate: -1 });
+
+      res.json({
+        status: 'success',
+        count: certificates.length,
+        certificates: certificates.map(cert => ({
+          id: cert._id,
+          studentName: cert.student?.name || 'N/A',
+          studentEmail: cert.student?.email || 'N/A',
+          type: cert.type,
+          purpose: cert.purpose,
+          urgency: cert.urgency,
+          requestDate: cert.requestDate,
+          status: cert.status,
+          documentUrl: cert.documentUrl || null,
+          signedDocumentUrl: cert.signedDocumentUrl || null,
+          isSentToStudent: cert.isSentToStudent,
+          issuedDate: cert.issuedDate || null,
+          generatedBy: cert.generatedBy ? cert.generatedBy.name : null,
+          comments: cert.comments || null,
+          grNumber: cert.student?.studentDetails?.grNumber || 'N/A',
+          parentName: cert.student?.studentDetails?.parentDetails?.name || 'N/A',
+          admissionDate: cert.student?.studentDetails?.admissionDate
+            ? new Date(cert.student.studentDetails.admissionDate).toISOString().split('T')[0]
+            : 'N/A',
+          dob: cert.student?.studentDetails?.dob
+            ? new Date(cert.student.studentDetails.dob).toISOString().split('T')[0]
+            : 'N/A',
+          className: cert.student?.studentDetails?.class
+            ? `${cert.student.studentDetails.class.name}${cert.student.studentDetails.class.division ? ' ' + cert.student.studentDetails.class.division : ''}`
+            : 'N/A',
+          schoolName: req.school?.name || 'N/A',
+          schoolAddress: req.school?.address || 'N/A',
+        })),
+      });
+    } catch (error) {
+      console.error('Error in getCertificateHistory:', error);
+      res.status(500).json({ error: error.message });
+    }
+  },
 
   generateCertificate: async (req, res) => {
     try {
@@ -1338,6 +1277,99 @@ const clerkController = {
       certificate.comments = comments;
       await certificate.save();
 
+      res.json({
+        message: 'Certificate generated successfully',
+        certificate,
+      });
+    } catch (error) {
+      console.error('Error in generateCertificate:', error);
+      res.status(500).json({ error: error.message });
+    }
+  },
+
+  uploadSignedCertificate: async (req, res) => {
+    try {
+      const { certificateId } = req.params;
+      // const { pdfData } = req.body;
+      const file = req.file;
+
+      const schoolId = req.school._id.toString();
+      const connection = req.connection;
+      const Certificate = require('../models/Certificate')(connection);
+
+      if (!mongoose.Types.ObjectId.isValid(certificateId)) {
+        return res.status(400).json({ message: 'Invalid certificate ID' });
+      }
+
+      const certificate = await Certificate.findOne({ _id: certificateId, school: schoolId });
+      if (!certificate) {
+        return res.status(404).json({ message: 'Certificate not found' });
+      }
+
+      if (certificate.status !== 'generated') {
+        return res.status(400).json({ message: 'Certificate must be generated before uploading a signed version' });
+      }
+
+      // if (!pdfData) {
+      //   return res.status(400).json({ message: 'PDF data is required' });
+      // }
+
+      if (!file) {
+        return res.status(400).json({ message: 'PDF file is required' });
+      }
+
+      // Convert base64 PDF data to buffer
+      const pdfBuffer = Buffer.from(pdfData, 'base64');
+
+      // Upload the signed PDF to Cloudinary
+      // const cloudinaryResult = await uploadCertificateToCloudinary(pdfBuffer, `${certificate._id}_signed`, certificate.type);
+      const cloudinaryResult = await uploadCertificateToCloudinary(file.buffer, `${certificate._id}_signed`, certificate.type);
+      const signedDocumentUrl = cloudinaryResult.secure_url;
+
+      // Update certificate with the signed document URL
+      certificate.signedDocumentUrl = signedDocumentUrl;
+      await certificate.save();
+
+      res.json({
+        message: 'Signed certificate uploaded successfully',
+        certificate,
+      });
+    } catch (error) {
+      console.error('Error in uploadSignedCertificate:', error);
+      res.status(500).json({ error: error.message });
+    }
+  },
+
+  sendCertificateToStudent: async (req, res) => {
+    try {
+      const { certificateId } = req.params;
+
+      const schoolId = req.school._id.toString();
+      const connection = req.connection;
+      const Certificate = require('../models/Certificate')(connection);
+      const User = require('../models/User')(connection);
+
+      if (!mongoose.Types.ObjectId.isValid(certificateId)) {
+        return res.status(400).json({ message: 'Invalid certificate ID' });
+      }
+
+      const certificate = await Certificate.findOne({ _id: certificateId, school: schoolId });
+      if (!certificate) {
+        return res.status(404).json({ message: 'Certificate not found' });
+      }
+
+      if (!certificate.signedDocumentUrl) {
+        return res.status(400).json({ message: 'Signed certificate must be uploaded before sending to student' });
+      }
+
+      if (certificate.isSentToStudent) {
+        return res.status(400).json({ message: 'Certificate has already been sent to the student' });
+      }
+
+      // Mark the certificate as sent
+      certificate.isSentToStudent = true;
+      await certificate.save();
+
       // Fetch student details for notification
       const student = await User.findById(certificate.student).select('name email studentDetails');
 
@@ -1347,11 +1379,11 @@ const clerkController = {
         student.studentDetails.mobile,
         student.name,
         certificate.type,
-        documentUrl
+        certificate.signedDocumentUrl
       );
 
       res.json({
-        message: 'Certificate generated successfully',
+        message: 'Certificate sent to student successfully',
         certificate,
         notificationStatus: {
           emailSent: notificationResult.emailSent,
@@ -1359,11 +1391,10 @@ const clerkController = {
         },
       });
     } catch (error) {
-      console.error('Error in generateCertificate:', error);
+      console.error('Error in sendCertificateToStudent:', error);
       res.status(500).json({ error: error.message });
     }
   },
-
  
 
   generateRTEReport: async (req, res) => {
@@ -1415,4 +1446,4 @@ const sendCertificateNotification = async (email, mobile, studentName, certifica
 const getFeeAmount = (type, classId) => 1000; // Placeholder
 const getFeeDueDate = (type) => new Date(); // Placeholder
 
-module.exports = clerkController;
+module.exports = {clerkController,upload,};

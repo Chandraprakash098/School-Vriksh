@@ -26,7 +26,7 @@ router.get('/fees/:studentId/receipts', auth, studentController.getFeeReceipts);
 // Certificate requests
 // router.post('/certificates/:studentId/request', auth, studentController.requestCertificate);
 router.post('/certificates/:studentId/request', auth, studentController.requestCertificate);
-
+router.get('/certificates/:studentId', studentController.getStudentCertificates);
 // Library services
 router.get('/library/:studentId', auth, studentController.getLibraryServices);
 
