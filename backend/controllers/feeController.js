@@ -1191,7 +1191,8 @@ const feesController = {
       res.status(500).json({ error: error.message });
     }
   },
-  // View fees by class and month (Fee Manager)
+
+
   // getFeesByClassAndMonth: async (req, res) => {
   //   try {
   //     const { classId, month, year } = req.params;
@@ -1199,30 +1200,58 @@ const feesController = {
   //     const connection = req.connection;
   //     const FeeModel = Fee(connection);
   //     const UserModel = User(connection);
-
+  //     const PaymentModel = Payment(connection);
+  
   //     if (!req.user.permissions.canManageFees) {
   //       return res.status(403).json({ message: 'Unauthorized: Only fee managers can view fees' });
   //     }
-
+  
+  //     // Get all students in the class
   //     const students = await UserModel.find({
   //       'studentDetails.class': classId,
   //       school: schoolId,
   //     }).select('_id name studentDetails.grNumber studentDetails.class');
-
+  
+  //     // Get fee definitions
   //     const feeDefinitions = await FeeModel.find({
   //       school: schoolId,
   //       student: { $exists: false },
   //       month: parseInt(month),
   //       year: parseInt(year),
   //     });
-
+  
+  //     // Get student-specific fee records
   //     const studentFees = await FeeModel.find({
   //       student: { $in: students.map(s => s._id) },
   //       school: schoolId,
   //       month: parseInt(month),
   //       year: parseInt(year),
   //     });
-
+  
+  //     // Also get payment records as a fallback
+  //     const paymentRecords = await PaymentModel.find({
+  //       student: { $in: students.map(s => s._id) },
+  //       school: schoolId,
+  //       status: 'completed',
+  //       'feesPaid.month': parseInt(month),
+  //       'feesPaid.year': parseInt(year)
+  //     });
+  
+  //     // Create a map of paid fees from payment records
+  //     const paidFeesMap = new Map();
+  //     paymentRecords.forEach(payment => {
+  //       payment.feesPaid.forEach(feePaid => {
+  //         if (feePaid.month === parseInt(month) && feePaid.year === parseInt(year)) {
+  //           const key = `${payment.student.toString()}_${feePaid.type}`;
+  //           paidFeesMap.set(key, {
+  //             status: 'paid',
+  //             paymentDate: payment.paymentDate
+  //           });
+  //         }
+  //       });
+  //     });
+  
+  //     // Process student fee data
   //     const feeData = students.map(student => {
   //       const studentSpecificFees = studentFees.filter(fee => 
   //         fee.student && fee.student.toString() === student._id.toString()
@@ -1237,23 +1266,34 @@ const feesController = {
   //         total: 0,
   //         allPaid: true
   //       };
-
+  
   //       feeDefinitions.forEach(def => {
+  //         // Check if there's a specific fee record for this student/fee type
   //         const paidFee = studentSpecificFees.find(f => f.type === def.type);
+          
+  //         // Also check if there's a payment record for this fee (fallback)
+  //         const paymentInfo = paidFeesMap.get(`${student._id.toString()}_${def.type}`);
+          
+  //         // Determine fee status - use fee record if exists, otherwise check payment map
+  //         const status = paidFee ? paidFee.status : (paymentInfo ? paymentInfo.status : 'pending');
+  //         const paidDate = paidFee?.paymentDetails?.paymentDate || (paymentInfo ? paymentInfo.paymentDate : null);
+          
   //         feeSummary.fees[def.type] = {
   //           amount: def.amount,
-  //           status: paidFee ? paidFee.status : 'pending',
-  //           paidDate: paidFee?.paymentDetails?.paymentDate || null
+  //           status: status,
+  //           paidDate: paidDate
   //         };
+          
   //         feeSummary.total += def.amount;
-  //         if (!paidFee || paidFee.status !== 'paid') feeSummary.allPaid = false;
+  //         if (status !== 'paid') feeSummary.allPaid = false;
   //       });
-
+  
   //       return feeSummary;
   //     });
-
+  
   //     res.json(feeData);
   //   } catch (error) {
+  //     console.error('Error in getFeesByClassAndMonth:', error);
   //     res.status(500).json({ error: error.message });
   //   }
   // },
@@ -1266,14 +1306,23 @@ const feesController = {
       const FeeModel = Fee(connection);
       const UserModel = User(connection);
       const PaymentModel = Payment(connection);
+      const mongoose = require('mongoose');
   
       if (!req.user.permissions.canManageFees) {
         return res.status(403).json({ message: 'Unauthorized: Only fee managers can view fees' });
       }
   
+      // Convert classId to ObjectId - this is the key fix
+      let objectIdClassId;
+      try {
+        objectIdClassId = new mongoose.Types.ObjectId(classId);
+      } catch (error) {
+        return res.status(400).json({ message: 'Invalid class ID format' });
+      }
+  
       // Get all students in the class
       const students = await UserModel.find({
-        'studentDetails.class': classId,
+        'studentDetails.class': objectIdClassId,
         school: schoolId,
       }).select('_id name studentDetails.grNumber studentDetails.class');
   
