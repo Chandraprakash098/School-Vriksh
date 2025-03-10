@@ -1654,141 +1654,287 @@ const feesController = {
   //   }
   // },
 
-  payFeesForStudent: async (req, res) => {
-    try {
-      const { grNumber, selectedFees, totalAmount } = req.body;
-      const schoolId = req.school._id.toString();
-      const connection = req.connection;
-      const FeeModel = Fee(connection);
-      const PaymentModel = Payment(connection);
-      const UserModel = User(connection);
+  // payFeesForStudent: async (req, res) => {
+  //   try {
+  //     const { grNumber, selectedFees, totalAmount } = req.body;
+  //     const schoolId = req.school._id.toString();
+  //     const connection = req.connection;
+  //     const FeeModel = Fee(connection);
+  //     const PaymentModel = Payment(connection);
+  //     const UserModel = User(connection);
   
-      // Validate required fields
-      if (!grNumber) {
-        return res.status(400).json({ message: 'GR Number is required' });
-      }
-      if (!selectedFees || !Array.isArray(selectedFees) || selectedFees.length === 0) {
-        return res.status(400).json({ message: 'Selected fees are required and must be an array' });
-      }
-      if (typeof totalAmount !== 'number' || totalAmount <= 0) {
-        return res.status(400).json({ message: 'Valid total amount is required' });
-      }
+  //     // Validate required fields
+  //     if (!grNumber) {
+  //       return res.status(400).json({ message: 'GR Number is required' });
+  //     }
+  //     if (!selectedFees || !Array.isArray(selectedFees) || selectedFees.length === 0) {
+  //       return res.status(400).json({ message: 'Selected fees are required and must be an array' });
+  //     }
+  //     if (typeof totalAmount !== 'number' || totalAmount <= 0) {
+  //       return res.status(400).json({ message: 'Valid total amount is required' });
+  //     }
   
-      // Check permissions
-      if (!req.user.permissions.canManageFees) {
-        return res.status(403).json({ message: 'Unauthorized: Only fee managers can process payments' });
-      }
+  //     // Check permissions
+  //     if (!req.user.permissions.canManageFees) {
+  //       return res.status(403).json({ message: 'Unauthorized: Only fee managers can process payments' });
+  //     }
   
-      // Find the student
-      const student = await UserModel.findOne({
-        'studentDetails.grNumber': grNumber,
-        school: schoolId,
-      });
-      if (!student) return res.status(404).json({ message: 'Student not found' });
+  //     // Find the student
+  //     const student = await UserModel.findOne({
+  //       'studentDetails.grNumber': grNumber,
+  //       school: schoolId,
+  //     });
+  //     if (!student) return res.status(404).json({ message: 'Student not found' });
   
-      if (student.studentDetails.isRTE) return res.status(400).json({ message: 'RTE students are exempted from fees' });
+  //     if (student.studentDetails.isRTE) return res.status(400).json({ message: 'RTE students are exempted from fees' });
   
-      const feesToPay = [];
-      let calculatedTotal = 0;
+  //     const feesToPay = [];
+  //     let calculatedTotal = 0;
   
-      // Process selected fees
-      for (const fee of selectedFees) {
-        const { year, month, types } = fee;
+  //     // Process selected fees
+  //     for (const fee of selectedFees) {
+  //       const { year, month, types } = fee;
   
-        if (!year || !month || !types || !Array.isArray(types)) {
-          return res.status(400).json({ message: 'Invalid fee format: year, month, and types are required' });
-        }
+  //       if (!year || !month || !types || !Array.isArray(types)) {
+  //         return res.status(400).json({ message: 'Invalid fee format: year, month, and types are required' });
+  //       }
   
-        const existingFees = await FeeModel.find({
-          student: student._id,
-          school: schoolId,
-          year: parseInt(year),
-          month: parseInt(month),
-          type: { $in: types },
-        });
+  //       const existingFees = await FeeModel.find({
+  //         student: student._id,
+  //         school: schoolId,
+  //         year: parseInt(year),
+  //         month: parseInt(month),
+  //         type: { $in: types },
+  //       });
   
-        const feeDefinitions = await FeeModel.find({
-          school: schoolId,
-          student: { $exists: false },
-          year: parseInt(year),
-          month: parseInt(month),
-          type: { $in: types },
-        });
+  //       const feeDefinitions = await FeeModel.find({
+  //         school: schoolId,
+  //         student: { $exists: false },
+  //         year: parseInt(year),
+  //         month: parseInt(month),
+  //         type: { $in: types },
+  //       });
   
-        for (const def of feeDefinitions) {
-          const existing = existingFees.find((f) => f.type === def.type);
-          if (!existing) {
-            const newFee = new FeeModel({
-              school: schoolId,
-              student: student._id,
-              grNumber: student.studentDetails.grNumber,
-              type: def.type,
-              amount: def.amount,
-              dueDate: def.dueDate,
-              month: parseInt(month),
-              year: parseInt(year),
-              status: 'pending',
-              description: def.description,
-            });
-            feesToPay.push(newFee);
-            calculatedTotal += def.amount;
-          } else if (existing.status === 'pending') {
-            feesToPay.push(existing);
-            calculatedTotal += existing.amount;
-          }
-        }
-      }
+  //       for (const def of feeDefinitions) {
+  //         const existing = existingFees.find((f) => f.type === def.type);
+  //         if (!existing) {
+  //           const newFee = new FeeModel({
+  //             school: schoolId,
+  //             student: student._id,
+  //             grNumber: student.studentDetails.grNumber,
+  //             type: def.type,
+  //             amount: def.amount,
+  //             dueDate: def.dueDate,
+  //             month: parseInt(month),
+  //             year: parseInt(year),
+  //             status: 'pending',
+  //             description: def.description,
+  //           });
+  //           feesToPay.push(newFee);
+  //           calculatedTotal += def.amount;
+  //         } else if (existing.status === 'pending') {
+  //           feesToPay.push(existing);
+  //           calculatedTotal += existing.amount;
+  //         }
+  //       }
+  //     }
   
-      if (calculatedTotal !== totalAmount) {
-        return res.status(400).json({
-          message: 'Payment amount mismatch',
-          calculatedAmount: calculatedTotal,
-          providedAmount: totalAmount,
-        });
-      }
+  //     if (calculatedTotal !== totalAmount) {
+  //       return res.status(400).json({
+  //         message: 'Payment amount mismatch',
+  //         calculatedAmount: calculatedTotal,
+  //         providedAmount: totalAmount,
+  //       });
+  //     }
   
-      const receiptNumber = `REC-CASH-${Date.now()}`;
-      const payment = new PaymentModel({
-        school: schoolId,
-        student: student._id,
-        amount: totalAmount,
-        feeType: feesToPay.map((f) => f.type).join(','),
-        paymentMethod: 'cash',
-        status: 'completed',
-        paymentDate: new Date(),
-        receiptNumber,
-      });
+  //     const receiptNumber = `REC-CASH-${Date.now()}`;
+  //     const payment = new PaymentModel({
+  //       school: schoolId,
+  //       student: student._id,
+  //       amount: totalAmount,
+  //       feeType: feesToPay.map((f) => f.type).join(','),
+  //       paymentMethod: 'cash',
+  //       status: 'completed',
+  //       paymentDate: new Date(),
+  //       receiptNumber,
+  //     });
   
-      await payment.save();
+  //     await payment.save();
   
-      const updatePromises = feesToPay.map((fee) => {
-        fee.status = 'paid';
-        fee.paymentDetails = {
-          transactionId: receiptNumber,
-          paymentDate: new Date(),
-          paymentMethod: 'cash',
-          receiptNumber,
-        };
-        return fee.save();
-      });
+  //     const updatePromises = feesToPay.map((fee) => {
+  //       fee.status = 'paid';
+  //       fee.paymentDetails = {
+  //         transactionId: receiptNumber,
+  //         paymentDate: new Date(),
+  //         paymentMethod: 'cash',
+  //         receiptNumber,
+  //       };
+  //       return fee.save();
+  //     });
   
-      await Promise.all(updatePromises);
+  //     await Promise.all(updatePromises);
   
-      res.json({
-        message: 'Cash payment processed successfully',
-        payment,
-        paidFees: feesToPay.map((fee) => ({
-          type: fee.type,
-          amount: fee.amount,
-          month: fee.month,
-          year: fee.year,
-        })),
-      });
-    } catch (error) {
-      console.error('Payment processing error:', error);
-      res.status(500).json({ error: error.message || 'Internal server error' });
+  //     res.json({
+  //       message: 'Cash payment processed successfully',
+  //       payment,
+  //       paidFees: feesToPay.map((fee) => ({
+  //         type: fee.type,
+  //         amount: fee.amount,
+  //         month: fee.month,
+  //         year: fee.year,
+  //       })),
+  //     });
+  //   } catch (error) {
+  //     console.error('Payment processing error:', error);
+  //     res.status(500).json({ error: error.message || 'Internal server error' });
+  //   }
+  // },
+
+  // Process cash payment for student (Fee Manager)
+payFeesForStudent: async (req, res) => {
+  try {
+    const { grNumber, selectedFees, totalAmount } = req.body;
+    const schoolId = req.school._id.toString();
+    const connection = req.connection;
+    const FeeModel = Fee(connection);
+    const PaymentModel = Payment(connection);
+    const UserModel = User(connection);
+
+    // Validate required fields
+    if (!grNumber) {
+      return res.status(400).json({ message: 'GR Number is required' });
     }
-  },
+    if (!selectedFees || !Array.isArray(selectedFees) || selectedFees.length === 0) {
+      return res.status(400).json({ message: 'Selected fees are required and must be an array' });
+    }
+    if (typeof totalAmount !== 'number' || totalAmount <= 0) {
+      return res.status(400).json({ message: 'Valid total amount is required' });
+    }
+
+    // Check permissions
+    if (!req.user.permissions.canManageFees) {
+      return res.status(403).json({ message: 'Unauthorized: Only fee managers can process payments' });
+    }
+
+    // Find the student
+    const student = await UserModel.findOne({
+      'studentDetails.grNumber': grNumber,
+      school: schoolId,
+    });
+    if (!student) return res.status(404).json({ message: 'Student not found' });
+
+    if (student.studentDetails.isRTE) return res.status(400).json({ message: 'RTE students are exempted from fees' });
+
+    const feesToPay = [];
+    let calculatedTotal = 0;
+
+    // Process selected fees
+    for (const fee of selectedFees) {
+      const { year, month, types } = fee;
+
+      if (!year || !month || !types || !Array.isArray(types)) {
+        return res.status(400).json({ message: 'Invalid fee format: year, month, and types are required' });
+      }
+
+      const existingFees = await FeeModel.find({
+        student: student._id,
+        school: schoolId,
+        year: parseInt(year),
+        month: parseInt(month),
+        type: { $in: types },
+      });
+
+      const feeDefinitions = await FeeModel.find({
+        school: schoolId,
+        student: { $exists: false },
+        year: parseInt(year),
+        month: parseInt(month),
+        type: { $in: types },
+      });
+
+      for (const def of feeDefinitions) {
+        const existing = existingFees.find((f) => f.type === def.type);
+        if (!existing) {
+          const newFee = new FeeModel({
+            school: schoolId,
+            student: student._id,
+            grNumber: student.studentDetails.grNumber, // Ensure grNumber is set here too
+            type: def.type,
+            amount: def.amount,
+            dueDate: def.dueDate,
+            month: parseInt(month),
+            year: parseInt(year),
+            status: 'pending',
+            description: def.description,
+          });
+          feesToPay.push(newFee);
+          calculatedTotal += def.amount;
+        } else if (existing.status === 'pending') {
+          feesToPay.push(existing);
+          calculatedTotal += existing.amount;
+        }
+      }
+    }
+
+    if (calculatedTotal !== totalAmount) {
+      return res.status(400).json({
+        message: 'Payment amount mismatch',
+        calculatedAmount: calculatedTotal,
+        providedAmount: totalAmount,
+      });
+    }
+
+    const receiptNumber = `REC-CASH-${Date.now()}`;
+    const payment = new PaymentModel({
+      school: schoolId,
+      student: student._id,
+      grNumber: grNumber, // Add grNumber here from req.body
+      amount: totalAmount,
+      feeType: feesToPay.map((f) => f.type).join(','), // Changed to feeType as per your previous logic
+      paymentMethod: 'cash',
+      status: 'completed',
+      paymentDate: new Date(),
+      receiptNumber,
+      // Optionally include feesPaid array if you want to track individual fees in Payment
+      feesPaid: feesToPay.map((fee) => ({
+        feeId: fee._id || null, // Use null if fee is new and doesn't have an _id yet
+        type: fee.type,
+        month: fee.month,
+        year: fee.year,
+        amount: fee.amount,
+      })),
+    });
+
+    await payment.save();
+
+    const updatePromises = feesToPay.map((fee) => {
+      fee.status = 'paid';
+      fee.paymentDetails = {
+        transactionId: receiptNumber,
+        paymentDate: new Date(),
+        paymentMethod: 'cash',
+        receiptNumber,
+      };
+      return fee.save();
+    });
+
+    await Promise.all(updatePromises);
+
+    res.json({
+      message: 'Cash payment processed successfully',
+      payment,
+      paidFees: feesToPay.map((fee) => ({
+        type: fee.type,
+        amount: fee.amount,
+        month: fee.month,
+        year: fee.year,
+      })),
+    });
+  } catch (error) {
+    console.error('Payment processing error:', error);
+    res.status(500).json({ error: error.message || 'Internal server error' });
+  }
+},
 
   verifyPayment: async (req, res) => {
     try {
