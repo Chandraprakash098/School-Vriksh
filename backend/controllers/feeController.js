@@ -1192,111 +1192,35 @@ const feesController = {
     }
   },
 
-
-  // getFeesByClassAndMonth: async (req, res) => {
-  //   try {
-  //     const { classId, month, year } = req.params;
-  //     const schoolId = req.school._id.toString();
-  //     const connection = req.connection;
-  //     const FeeModel = Fee(connection);
-  //     const UserModel = User(connection);
-  //     const PaymentModel = Payment(connection);
   
-  //     if (!req.user.permissions.canManageFees) {
-  //       return res.status(403).json({ message: 'Unauthorized: Only fee managers can view fees' });
-  //     }
+  getAvailableClasses: async (req, res) => {
+    try {
+      const schoolId = req.school._id.toString();
+      const connection = req.connection;
+      const Class = require('../models/Class')(connection);
+      const User = require('../models/User')(connection);
   
-  //     // Get all students in the class
-  //     const students = await UserModel.find({
-  //       'studentDetails.class': classId,
-  //       school: schoolId,
-  //     }).select('_id name studentDetails.grNumber studentDetails.class');
+      const allClasses = await Class.find({ school: schoolId })
+        .select('name division academicYear capacity students classTeacher')
+        .populate('classTeacher', 'name', User)
+        .sort({ name: 1, division: 1 });
   
-  //     // Get fee definitions
-  //     const feeDefinitions = await FeeModel.find({
-  //       school: schoolId,
-  //       student: { $exists: false },
-  //       month: parseInt(month),
-  //       year: parseInt(year),
-  //     });
-  
-  //     // Get student-specific fee records
-  //     const studentFees = await FeeModel.find({
-  //       student: { $in: students.map(s => s._id) },
-  //       school: schoolId,
-  //       month: parseInt(month),
-  //       year: parseInt(year),
-  //     });
-  
-  //     // Also get payment records as a fallback
-  //     const paymentRecords = await PaymentModel.find({
-  //       student: { $in: students.map(s => s._id) },
-  //       school: schoolId,
-  //       status: 'completed',
-  //       'feesPaid.month': parseInt(month),
-  //       'feesPaid.year': parseInt(year)
-  //     });
-  
-  //     // Create a map of paid fees from payment records
-  //     const paidFeesMap = new Map();
-  //     paymentRecords.forEach(payment => {
-  //       payment.feesPaid.forEach(feePaid => {
-  //         if (feePaid.month === parseInt(month) && feePaid.year === parseInt(year)) {
-  //           const key = `${payment.student.toString()}_${feePaid.type}`;
-  //           paidFeesMap.set(key, {
-  //             status: 'paid',
-  //             paymentDate: payment.paymentDate
-  //           });
-  //         }
-  //       });
-  //     });
-  
-  //     // Process student fee data
-  //     const feeData = students.map(student => {
-  //       const studentSpecificFees = studentFees.filter(fee => 
-  //         fee.student && fee.student.toString() === student._id.toString()
-  //       );
-        
-  //       const feeSummary = {
-  //         studentId: student._id,
-  //         name: student.name,
-  //         grNumber: student.studentDetails.grNumber,
-  //         class: student.studentDetails.class,
-  //         fees: {},
-  //         total: 0,
-  //         allPaid: true
-  //       };
-  
-  //       feeDefinitions.forEach(def => {
-  //         // Check if there's a specific fee record for this student/fee type
-  //         const paidFee = studentSpecificFees.find(f => f.type === def.type);
-          
-  //         // Also check if there's a payment record for this fee (fallback)
-  //         const paymentInfo = paidFeesMap.get(`${student._id.toString()}_${def.type}`);
-          
-  //         // Determine fee status - use fee record if exists, otherwise check payment map
-  //         const status = paidFee ? paidFee.status : (paymentInfo ? paymentInfo.status : 'pending');
-  //         const paidDate = paidFee?.paymentDetails?.paymentDate || (paymentInfo ? paymentInfo.paymentDate : null);
-          
-  //         feeSummary.fees[def.type] = {
-  //           amount: def.amount,
-  //           status: status,
-  //           paidDate: paidDate
-  //         };
-          
-  //         feeSummary.total += def.amount;
-  //         if (status !== 'paid') feeSummary.allPaid = false;
-  //       });
-  
-  //       return feeSummary;
-  //     });
-  
-  //     res.json(feeData);
-  //   } catch (error) {
-  //     console.error('Error in getFeesByClassAndMonth:', error);
-  //     res.status(500).json({ error: error.message });
-  //   }
-  // },
+      res.json({
+        classes: allClasses.map(cls => ({
+          _id: cls._id,
+          name: cls.name,
+          division: cls.division,
+          academicYear: cls.academicYear,
+          teacher: cls.classTeacher ? cls.classTeacher.name : null,
+          enrolledCount: cls.students ? cls.students.length : 0,
+          capacity: cls.capacity,
+          remainingCapacity: cls.capacity - (cls.students ? cls.students.length : 0),
+        })),
+      });
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  },
 
   getFeesByClassAndMonth: async (req, res) => {
     try {

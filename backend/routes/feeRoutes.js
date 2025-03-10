@@ -32,4 +32,5 @@ router.post('/pay-for-student', authMiddleware, feesController.payFeesForStudent
 router.post('/verify-payment', authMiddleware, feesController.verifyPayment);
 router.post('/define-fees', authMiddleware, feesController.defineFeesForYear);
 
+router.get('/classes', authMiddleware, feesController.getAvailableClasses);
 module.exports = router;
