@@ -26,6 +26,8 @@ console.log('Loading models/index.js');
 const models = {
   User: require('../models/User'),
   Class: require('../models/Class'),
+  Fee: require('../models/Fee'),
+  Payment: require('../models/Payment'),
   Subject: require('../models/Subject'),
   Syllabus: require('../models/Syllabus'),
   TeacherAssignment: require('../models/TeacherAssignment'),

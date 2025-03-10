@@ -122,7 +122,7 @@ app.use('/api/student', studentRoutes);
 // app.use('/api/parent', parentRoutes);
 app.use('/api/clerk', clerkRoutes);
 app.use('/api/library', libraryRoutes);
-// app.use('/api/fee', feeRoutes);
+app.use('/api/fee', feeRoutes);
 app.use('/api/inventory', inventoryRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/admission', admissionRoutes);
