@@ -1403,7 +1403,124 @@ const feesController = {
     }
   },
 
-  // Process cash payment for student (Fee Manager)
+  // // Process cash payment for student (Fee Manager)
+  // payFeesForStudent: async (req, res) => {
+  //   try {
+  //     const { grNumber, selectedFees, totalAmount } = req.body; // selectedFees: { year, month, types[] }
+  //     const schoolId = req.school._id.toString();
+  //     const connection = req.connection;
+  //     const FeeModel = Fee(connection);
+  //     const PaymentModel = Payment(connection);
+  //     const UserModel = User(connection);
+
+  //     if (!req.user.permissions.canManageFees) {
+  //       return res.status(403).json({ message: 'Unauthorized: Only fee managers can process payments' });
+  //     }
+
+  //     const student = await UserModel.findOne({ 
+  //       'studentDetails.grNumber': grNumber, 
+  //       school: schoolId 
+  //     });
+  //     if (!student) return res.status(404).json({ message: 'Student not found' });
+
+  //     if (student.studentDetails.isRTE) return res.status(400).json({ message: 'RTE students are exempted from fees' });
+
+  //     const feesToPay = [];
+  //     let calculatedTotal = 0;
+
+  //     for (const fee of selectedFees) {
+  //       const { year, month, types } = fee;
+        
+  //       const existingFees = await FeeModel.find({
+  //         student: student._id,
+  //         school: schoolId,
+  //         year: parseInt(year),
+  //         month: parseInt(month),
+  //         type: { $in: types }
+  //       });
+
+  //       const feeDefinitions = await FeeModel.find({
+  //         school: schoolId,
+  //         student: { $exists: false },
+  //         year: parseInt(year),
+  //         month: parseInt(month),
+  //         type: { $in: types }
+  //       });
+
+  //       for (const def of feeDefinitions) {
+  //         const existing = existingFees.find(f => f.type === def.type);
+  //         if (!existing) {
+  //           const newFee = new FeeModel({
+  //             school: schoolId,
+  //             student: student._id,
+  //             grNumber: student.studentDetails.grNumber,
+  //             type: def.type,
+  //             amount: def.amount,
+  //             dueDate: def.dueDate,
+  //             month: parseInt(month),
+  //             year: parseInt(year),
+  //             status: 'pending',
+  //             description: def.description
+  //           });
+  //           feesToPay.push(newFee);
+  //           calculatedTotal += def.amount;
+  //         } else if (existing.status === 'pending') {
+  //           feesToPay.push(existing);
+  //           calculatedTotal += existing.amount;
+  //         }
+  //       }
+  //     }
+
+  //     if (calculatedTotal !== totalAmount) {
+  //       return res.status(400).json({ 
+  //         message: 'Payment amount mismatch',
+  //         calculatedAmount: calculatedTotal,
+  //         providedAmount: totalAmount
+  //       });
+  //     }
+
+  //     const receiptNumber = `REC-CASH-${Date.now()}`;
+  //     const payment = new PaymentModel({
+  //       school: schoolId,
+  //       student: student._id,
+  //       amount: totalAmount,
+  //       feeType: feesToPay.map(f => f.type).join(','),
+  //       paymentMethod: 'cash',
+  //       status: 'completed',
+  //       paymentDate: new Date(),
+  //       receiptNumber,
+  //     });
+
+  //     await payment.save();
+
+  //     const updatePromises = feesToPay.map(fee => {
+  //       fee.status = 'paid';
+  //       fee.paymentDetails = {
+  //         transactionId: receiptNumber,
+  //         paymentDate: new Date(),
+  //         paymentMethod: 'cash',
+  //         receiptNumber,
+  //       };
+  //       return fee.save();
+  //     });
+
+  //     await Promise.all(updatePromises);
+
+  //     res.json({ 
+  //       message: 'Cash payment processed successfully', 
+  //       payment,
+  //       paidFees: feesToPay.map(fee => ({
+  //         type: fee.type,
+  //         amount: fee.amount,
+  //         month: fee.month,
+  //         year: fee.year
+  //       }))
+  //     });
+  //   } catch (error) {
+  //     res.status(500).json({ error: error.message });
+  //   }
+  // },
+
   payFeesForStudent: async (req, res) => {
     try {
       const { grNumber, selectedFees, totalAmount } = req.body; // selectedFees: { year, month, types[] }
@@ -1412,25 +1529,30 @@ const feesController = {
       const FeeModel = Fee(connection);
       const PaymentModel = Payment(connection);
       const UserModel = User(connection);
-
+  
+      // Check if the user has permission to manage fees
       if (!req.user.permissions.canManageFees) {
         return res.status(403).json({ message: 'Unauthorized: Only fee managers can process payments' });
       }
-
+  
+      // Find the student by GR number
       const student = await UserModel.findOne({ 
         'studentDetails.grNumber': grNumber, 
         school: schoolId 
       });
       if (!student) return res.status(404).json({ message: 'Student not found' });
-
+  
+      // Check if the student is RTE (exempted from fees)
       if (student.studentDetails.isRTE) return res.status(400).json({ message: 'RTE students are exempted from fees' });
-
+  
       const feesToPay = [];
       let calculatedTotal = 0;
-
+  
+      // Process selected fees
       for (const fee of selectedFees) {
         const { year, month, types } = fee;
         
+        // Check for existing fees for the student
         const existingFees = await FeeModel.find({
           student: student._id,
           school: schoolId,
@@ -1438,7 +1560,8 @@ const feesController = {
           month: parseInt(month),
           type: { $in: types }
         });
-
+  
+        // Get fee definitions (default fees set by the school)
         const feeDefinitions = await FeeModel.find({
           school: schoolId,
           student: { $exists: false },
@@ -1446,10 +1569,12 @@ const feesController = {
           month: parseInt(month),
           type: { $in: types }
         });
-
+  
+        // Loop through fee definitions to either create or update fees
         for (const def of feeDefinitions) {
           const existing = existingFees.find(f => f.type === def.type);
           if (!existing) {
+            // Create a new fee entry if it doesn't exist
             const newFee = new FeeModel({
               school: schoolId,
               student: student._id,
@@ -1459,18 +1584,20 @@ const feesController = {
               dueDate: def.dueDate,
               month: parseInt(month),
               year: parseInt(year),
-              status: 'pending',
+              status: 'pending', // Initially pending, will be updated to paid below
               description: def.description
             });
             feesToPay.push(newFee);
             calculatedTotal += def.amount;
           } else if (existing.status === 'pending') {
+            // Add existing pending fee to the list
             feesToPay.push(existing);
             calculatedTotal += existing.amount;
           }
         }
       }
-
+  
+      // Validate total amount
       if (calculatedTotal !== totalAmount) {
         return res.status(400).json({ 
           message: 'Payment amount mismatch',
@@ -1478,21 +1605,26 @@ const feesController = {
           providedAmount: totalAmount
         });
       }
-
+  
+      // Generate a unique receipt number for cash payment
       const receiptNumber = `REC-CASH-${Date.now()}`;
+  
+      // Create a payment record
       const payment = new PaymentModel({
         school: schoolId,
         student: student._id,
         amount: totalAmount,
         feeType: feesToPay.map(f => f.type).join(','),
         paymentMethod: 'cash',
-        status: 'completed',
+        status: 'completed', // Directly mark as completed for cash
         paymentDate: new Date(),
         receiptNumber,
       });
-
+  
+      // Save the payment
       await payment.save();
-
+  
+      // Update all selected fees to "paid" status
       const updatePromises = feesToPay.map(fee => {
         fee.status = 'paid';
         fee.paymentDetails = {
@@ -1503,9 +1635,10 @@ const feesController = {
         };
         return fee.save();
       });
-
+  
       await Promise.all(updatePromises);
-
+  
+      // Send success response
       res.json({ 
         message: 'Cash payment processed successfully', 
         payment,
