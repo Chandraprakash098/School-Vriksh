@@ -1377,145 +1377,6 @@ const feesController = {
     }
   },
 
-  // payFeesForStudent: async (req, res) => {
-  //   try {
-  //     const { grNumber, selectedFees, totalAmount } = req.body;
-  //     const schoolId = req.school._id.toString();
-  //     const connection = req.connection;
-  //     const FeeModel = Fee(connection);
-  //     const PaymentModel = Payment(connection);
-  //     const UserModel = User(connection);
-
-  //     if (!grNumber) return res.status(400).json({ message: 'GR Number is required' });
-  //     if (!selectedFees || !Array.isArray(selectedFees) || selectedFees.length === 0)
-  //       return res.status(400).json({ message: 'Selected fees are required and must be an array' });
-  //     if (typeof totalAmount !== 'number' || totalAmount <= 0)
-  //       return res.status(400).json({ message: 'Valid total amount is required' });
-
-  //     if (!req.user.permissions.canManageFees)
-  //       return res.status(403).json({ message: 'Unauthorized: Only fee managers can process payments' });
-
-  //     const student = await UserModel.findOne({
-  //       'studentDetails.grNumber': grNumber,
-  //       school: schoolId,
-  //     });
-  //     if (!student) return res.status(404).json({ message: 'Student not found' });
-  //     if (student.studentDetails.isRTE) return res.status(400).json({ message: 'RTE students are exempted from fees' });
-
-  //     const feesToPay = [];
-  //     let calculatedTotal = 0;
-
-  //     for (const fee of selectedFees) {
-  //       const { year, month, types } = fee;
-  //       if (!year || !month || !types || !Array.isArray(types))
-  //         return res.status(400).json({ message: 'Invalid fee format: year, month, and types are required' });
-
-  //       const feeDefinitions = await FeeModel.find({
-  //         school: schoolId,
-  //         student: { $exists: false },
-  //         year: parseInt(year),
-  //         month: parseInt(month),
-  //         type: { $in: types },
-  //       });
-
-  //       if (feeDefinitions.length !== types.length)
-  //         return res.status(404).json({ message: 'Some fee types not defined for this month/year' });
-
-  //       const existingFees = await FeeModel.find({
-  //         student: student._id,
-  //         school: schoolId,
-  //         year: parseInt(year),
-  //         month: parseInt(month),
-  //         type: { $in: types },
-  //       });
-
-  //       for (const def of feeDefinitions) {
-  //         const existing = existingFees.find(f => f.type === def.type);
-  //         if (!existing) {
-  //           const newFee = new FeeModel({
-  //             school: schoolId,
-  //             student: student._id,
-  //             grNumber: student.studentDetails.grNumber,
-  //             type: def.type,
-  //             amount: def.amount,
-  //             dueDate: def.dueDate,
-  //             month: parseInt(month),
-  //             year: parseInt(year),
-  //             status: 'pending',
-  //             description: def.description,
-  //           });
-  //           feesToPay.push(newFee);
-  //           calculatedTotal += def.amount;
-  //         } else if (existing.status === 'pending') {
-  //           feesToPay.push(existing);
-  //           calculatedTotal += existing.amount;
-  //         }
-  //       }
-  //     }
-
-  //     if (calculatedTotal !== totalAmount)
-  //       return res.status(400).json({
-  //         message: 'Payment amount mismatch',
-  //         calculatedAmount: calculatedTotal,
-  //         providedAmount: totalAmount,
-  //       });
-
-  //     if (feesToPay.length === 0)
-  //       return res.status(400).json({ message: 'No pending fees to pay for the selected types' });
-
-  //     const receiptNumber = `REC-CASH-${Date.now()}`;
-  //     const payment = new PaymentModel({
-  //       school: schoolId,
-  //       student: student._id,
-  //       grNumber,
-  //       amount: totalAmount,
-  //       paymentMethod: 'cash',
-  //       status: 'completed',
-  //       paymentDate: new Date(),
-  //       receiptNumber,
-  //       feesPaid: feesToPay.map(fee => ({
-  //         feeId: fee._id || null,
-  //         type: fee.type,
-  //         month: fee.month,
-  //         year: fee.year,
-  //         amount: fee.amount,
-  //       })),
-  //     });
-
-  //     await payment.save();
-
-  //     const updatePromises = feesToPay.map(fee => {
-  //       fee.status = 'paid';
-  //       fee.paymentDetails = {
-  //         transactionId: receiptNumber,
-  //         paymentDate: new Date(),
-  //         paymentMethod: 'cash',
-  //         receiptNumber,
-  //       };
-  //       return fee.save();
-  //     });
-
-  //     await Promise.all(updatePromises);
-
-  //     const feeSlip = generateFeeSlip(student, payment, feesToPay, schoolId);
-
-  //     res.json({
-  //       message: 'Cash payment processed successfully',
-  //       payment,
-  //       paidFees: feesToPay.map(fee => ({
-  //         type: fee.type,
-  //         amount: fee.amount,
-  //         month: fee.month,
-  //         year: fee.year,
-  //       })),
-  //       feeSlip,
-  //     });
-  //   } catch (error) {
-  //     console.error('Payment processing error:', error);
-  //     res.status(500).json({ error: error.message || 'Internal server error' });
-  //   }
-  // },
-
   payFeesForStudent: async (req, res) => {
     try {
       const { grNumber, selectedFees, totalAmount } = req.body;
@@ -1524,84 +1385,59 @@ const feesController = {
       const FeeModel = Fee(connection);
       const PaymentModel = Payment(connection);
       const UserModel = User(connection);
-  
-      // Validate inputs
+
       if (!grNumber) return res.status(400).json({ message: 'GR Number is required' });
       if (!selectedFees || !Array.isArray(selectedFees) || selectedFees.length === 0)
         return res.status(400).json({ message: 'Selected fees are required and must be an array' });
       if (typeof totalAmount !== 'number' || totalAmount <= 0)
         return res.status(400).json({ message: 'Valid total amount is required' });
-  
+
       if (!req.user.permissions.canManageFees)
         return res.status(403).json({ message: 'Unauthorized: Only fee managers can process payments' });
-  
+
       const student = await UserModel.findOne({
         'studentDetails.grNumber': grNumber,
         school: schoolId,
       });
       if (!student) return res.status(404).json({ message: 'Student not found' });
       if (student.studentDetails.isRTE) return res.status(400).json({ message: 'RTE students are exempted from fees' });
-  
+
       const feesToPay = [];
       let calculatedTotal = 0;
-  
+
       for (const fee of selectedFees) {
-        const { year, month, types } = fee; // Expect types: [{ type: "school", amount: 1000 }, ...]
+        const { year, month, types } = fee;
         if (!year || !month || !types || !Array.isArray(types))
-          return res.status(400).json({ message: 'Invalid fee format: year, month, and types array are required' });
-  
-        // Validate types structure
-        for (const typeObj of types) {
-          if (!typeObj.type || typeof typeObj.amount !== 'number' || typeObj.amount <= 0) {
-            return res.status(400).json({ message: `Invalid type object: ${JSON.stringify(typeObj)}` });
-          }
-        }
-  
-        // Fetch fee definitions
-        const feeDefinitionsRaw = await FeeModel.find({
+          return res.status(400).json({ message: 'Invalid fee format: year, month, and types are required' });
+
+        const feeDefinitions = await FeeModel.find({
           school: schoolId,
           student: { $exists: false },
           year: parseInt(year),
           month: parseInt(month),
-          type: { $in: types.map(t => t.type) },
+          type: { $in: types },
         });
-  
-        // Remove duplicates
-        const feeDefinitions = Array.from(
-          new Map(feeDefinitionsRaw.map(f => [f.type, f])).values()
-        );
-  
+
+        if (feeDefinitions.length !== types.length)
+          return res.status(404).json({ message: 'Some fee types not defined for this month/year' });
+
         const existingFees = await FeeModel.find({
           student: student._id,
           school: schoolId,
           year: parseInt(year),
           month: parseInt(month),
-          type: { $in: types.map(t => t.type) },
+          type: { $in: types },
         });
-  
-        for (const typeObj of types) {
-          const { type, amount } = typeObj;
-          const def = feeDefinitions.find(f => f.type === type);
-  
-          if (!def) {
-            return res.status(404).json({ message: `Fee type ${type} not defined for ${month}/${year}` });
-          }
-  
-          // Use client-provided amount, but validate against definition
-          if (amount > def.amount) {
-            return res.status(400).json({
-              message: `Provided amount (${amount}) for ${type} exceeds defined amount (${def.amount})`,
-            });
-          }
-  
-          const existing = existingFees.find(f => f.type === type);
+
+        for (const def of feeDefinitions) {
+          const existing = existingFees.find(f => f.type === def.type);
           if (!existing) {
             const newFee = new FeeModel({
               school: schoolId,
               student: student._id,
               grNumber: student.studentDetails.grNumber,
-              type,
-              amount, // Use client-provided amount
+              type: def.type,
+              amount: def.amount,
               dueDate: def.dueDate,
               month: parseInt(month),
               year: parseInt(year),
@@ -1609,33 +1445,24 @@ const feesController = {
               description: def.description,
             });
             feesToPay.push(newFee);
-            calculatedTotal += amount;
-            console.log(`Added new fee: type=${type}, amount=${amount}, total=${calculatedTotal}`);
+            calculatedTotal += def.amount;
           } else if (existing.status === 'pending') {
-            if (existing.amount !== amount) {
-              return res.status(400).json({
-                message: `Provided amount (${amount}) for ${type} doesn’t match existing amount (${existing.amount})`,
-              });
-            }
             feesToPay.push(existing);
             calculatedTotal += existing.amount;
-            console.log(`Added existing fee: type=${type}, amount=${existing.amount}, total=${calculatedTotal}`);
           }
         }
       }
-  
-      if (calculatedTotal !== totalAmount) {
-        console.log(`Mismatch: calculatedTotal=${calculatedTotal}, totalAmount=${totalAmount}`);
+
+      if (calculatedTotal !== totalAmount)
         return res.status(400).json({
           message: 'Payment amount mismatch',
           calculatedAmount: calculatedTotal,
           providedAmount: totalAmount,
         });
-      }
-  
+
       if (feesToPay.length === 0)
         return res.status(400).json({ message: 'No pending fees to pay for the selected types' });
-  
+
       const receiptNumber = `REC-CASH-${Date.now()}`;
       const payment = new PaymentModel({
         school: schoolId,
@@ -1654,9 +1481,9 @@ const feesController = {
           amount: fee.amount,
         })),
       });
-  
+
       await payment.save();
-  
+
       const updatePromises = feesToPay.map(fee => {
         fee.status = 'paid';
         fee.paymentDetails = {
@@ -1667,11 +1494,11 @@ const feesController = {
         };
         return fee.save();
       });
-  
+
       await Promise.all(updatePromises);
-  
+
       const feeSlip = generateFeeSlip(student, payment, feesToPay, schoolId);
-  
+
       res.json({
         message: 'Cash payment processed successfully',
         payment,
@@ -1688,6 +1515,8 @@ const feesController = {
       res.status(500).json({ error: error.message || 'Internal server error' });
     }
   },
+
+  
 
   verifyPayment: async (req, res) => {
     try {
