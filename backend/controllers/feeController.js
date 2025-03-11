@@ -1890,6 +1890,45 @@ const feesController = {
     }
   },
 
+  // getFeeDefinitionsByYear: async (req, res) => {
+  //   try {
+  //     const { year } = req.params;
+  //     const schoolId = req.school._id.toString();
+  //     const connection = req.connection;
+  //     const FeeModel = Fee(connection);
+  
+  //     if (!req.user.permissions.canManageFees) {
+  //       return res.status(403).json({ message: 'Unauthorized: Only fee managers can view fee definitions' });
+  //     }
+  
+  //     const feeDefinitions = await FeeModel.find({
+  //       school: schoolId,
+  //       student: { $exists: false }, // General fee definitions
+  //       year: parseInt(year),
+  //     }).sort({ month: 1, type: 1 });
+  
+  //     if (!feeDefinitions.length) {
+  //       return res.status(404).json({ message: `No fee definitions found for ${year}` });
+  //     }
+  
+  //     res.json({
+  //       year,
+  //       feeDefinitions: feeDefinitions.map(fee => ({
+  //         id: fee._id,
+  //         type: fee.type,
+  //         amount: fee.amount,
+  //         month: fee.month,
+  //         dueDate: fee.dueDate,
+  //         description: fee.description,
+  //         status: fee.status,
+  //       })),
+  //     });
+  //   } catch (error) {
+  //     console.error('Error fetching fee definitions:', error);
+  //     res.status(500).json({ error: error.message });
+  //   }
+  // },
+
   getFeeDefinitionsByYear: async (req, res) => {
     try {
       const { year } = req.params;
@@ -1901,28 +1940,76 @@ const feesController = {
         return res.status(403).json({ message: 'Unauthorized: Only fee managers can view fee definitions' });
       }
   
+      // Validate year
+      if (!Number.isInteger(Number(year))) {
+        return res.status(400).json({ message: 'Year must be a valid integer' });
+      }
+  
+      // Get all fee definitions for the year
       const feeDefinitions = await FeeModel.find({
         school: schoolId,
         student: { $exists: false }, // General fee definitions
         year: parseInt(year),
-      }).sort({ month: 1, type: 1 });
+      }).sort({ type: 1, month: 1 });
   
       if (!feeDefinitions.length) {
         return res.status(404).json({ message: `No fee definitions found for ${year}` });
       }
   
-      res.json({
-        year,
-        feeDefinitions: feeDefinitions.map(fee => ({
-          id: fee._id,
-          type: fee.type,
+      // Group fees by type and check if they're consistent across months
+      const feeSummary = {};
+      const monthlyVariations = {};
+  
+      feeDefinitions.forEach(fee => {
+        if (!feeSummary[fee.type]) {
+          feeSummary[fee.type] = {
+            amount: fee.amount,
+            description: fee.description,
+            isConsistent: true,
+            monthlyDetails: {}
+          };
+        }
+  
+        // Store monthly details
+        feeSummary[fee.type].monthlyDetails[fee.month] = {
           amount: fee.amount,
-          month: fee.month,
           dueDate: fee.dueDate,
           description: fee.description,
           status: fee.status,
-        })),
+          id: fee._id
+        };
+  
+        // Check if amount varies across months
+        if (fee.amount !== feeSummary[fee.type].amount) {
+          feeSummary[fee.type].isConsistent = false;
+        }
       });
+  
+      // Format response
+      const responseData = {
+        year: parseInt(year),
+        fees: {}
+      };
+  
+      for (const [type, data] of Object.entries(feeSummary)) {
+        if (data.isConsistent) {
+          // If fees are consistent across all months, show only yearly data
+          responseData.fees[type] = {
+            annualAmount: data.amount * 12,
+            monthlyAmount: data.amount,
+            description: data.description,
+            status: Object.values(data.monthlyDetails).every(d => d.status === 'pending') ? 'pending' : 'mixed'
+          };
+        } else {
+          // If fees vary by month, show monthly breakdown
+          responseData.fees[type] = {
+            annualAmount: Object.values(data.monthlyDetails).reduce((sum, d) => sum + d.amount, 0),
+            monthlyBreakdown: data.monthlyDetails
+          };
+        }
+      }
+  
+      res.json(responseData);
     } catch (error) {
       console.error('Error fetching fee definitions:', error);
       res.status(500).json({ error: error.message });
