@@ -1436,6 +1436,8 @@ const crypto = require('crypto');
 const Fee = require('../models/Fee');
 const User = require('../models/User');
 const Payment = require('../models/Payment');
+const generatedSignature = require('../utils/helpers')
+const {generateFeeSlip}= require('../utils/helpers')
 
 // Initialize Razorpay
 const razorpay = new Razorpay({
@@ -2232,30 +2234,99 @@ const studentController = {
     }
   },
 
+
+
   // verifyPayment: async (req, res) => {
   //   try {
   //     const { razorpay_payment_id, razorpay_order_id, razorpay_signature } = req.body;
   //     const schoolId = req.school._id.toString();
   //     const connection = req.connection;
   //     const PaymentModel = Payment(connection);
-
+  //     const FeeModel = Fee(connection);
+  
+  //     // Uncomment this section if you want to validate the signature
   //     // const generatedSignature = crypto
   //     //   .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
   //     //   .update(`${razorpay_order_id}|${razorpay_payment_id}`)
   //     //   .digest('hex');
-
   //     // if (generatedSignature !== razorpay_signature) 
   //     //   return res.status(400).json({ message: 'Invalid payment signature' });
-
+  
   //     const payment = await PaymentModel.findOne({ orderId: razorpay_order_id });
   //     if (!payment) return res.status(404).json({ message: 'Payment not found' });
-
+  
+  //     // Update payment status
   //     payment.status = 'completed';
   //     payment.transactionId = razorpay_payment_id;
   //     payment.paymentDate = new Date();
   //     payment.receiptNumber = `REC${Date.now()}`;
   //     await payment.save();
-
+  
+  //     // Create or update Fee documents for each fee paid
+  //     // This is the key addition that was missing
+  //     for (const feePaid of payment.feesPaid) {
+  //       // Check if a fee document already exists for this student/type/month/year
+  //       let fee = await FeeModel.findOne({
+  //         school: schoolId,
+  //         student: payment.student,
+  //         type: feePaid.type,
+  //         month: feePaid.month,
+  //         year: feePaid.year
+  //       });
+  
+  //       if (!fee) {
+  //         // Create a new fee document if one doesn't exist
+  //         const feeDefinition = await FeeModel.findOne({
+  //           school: schoolId,
+  //           student: { $exists: false },
+  //           type: feePaid.type,
+  //           month: feePaid.month,
+  //           year: feePaid.year
+  //         });
+  
+  //         if (feeDefinition) {
+  //           fee = new FeeModel({
+  //             school: schoolId,
+  //             student: payment.student,
+  //             grNumber: payment.grNumber,
+  //             type: feePaid.type,
+  //             amount: feePaid.amount,
+  //             dueDate: feeDefinition.dueDate,
+  //             month: feePaid.month,
+  //             year: feePaid.year,
+  //             description: feeDefinition.description,
+  //             status: 'paid'
+  //           });
+  //         } else {
+  //           // Create a new fee document even without a definition
+  //           fee = new FeeModel({
+  //             school: schoolId,
+  //             student: payment.student,
+  //             grNumber: payment.grNumber,
+  //             type: feePaid.type,
+  //             amount: feePaid.amount,
+  //             dueDate: new Date(feePaid.year, feePaid.month - 1, 28), // Last day of the month as fallback
+  //             month: feePaid.month,
+  //             year: feePaid.year,
+  //             status: 'paid'
+  //           });
+  //         }
+  //       } else {
+  //         // Update existing fee document
+  //         fee.status = 'paid';
+  //       }
+  
+  //       // Add payment details to the fee document
+  //       fee.paymentDetails = {
+  //         transactionId: razorpay_payment_id,
+  //         paymentDate: payment.paymentDate,
+  //         paymentMethod: payment.paymentMethod,
+  //         receiptNumber: payment.receiptNumber
+  //       };
+  
+  //       await fee.save();
+  //     }
+  
   //     res.json({ message: 'Payment verified successfully', payment });
   //   } catch (error) {
   //     console.error('Verification Error:', error); // Add logging for debugging
@@ -2270,17 +2341,21 @@ const studentController = {
       const connection = req.connection;
       const PaymentModel = Payment(connection);
       const FeeModel = Fee(connection);
+      const UserModel = User(connection);
   
-      // Uncomment this section if you want to validate the signature
-      // const generatedSignature = crypto
-      //   .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
-      //   .update(`${razorpay_order_id}|${razorpay_payment_id}`)
-      //   .digest('hex');
-      // if (generatedSignature !== razorpay_signature) 
-      //   return res.status(400).json({ message: 'Invalid payment signature' });
+      // Signature validation (uncommented for security)
+      const generatedSignature = crypto
+        .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
+        .update(`${razorpay_order_id}|${razorpay_payment_id}`)
+        .digest('hex');
+      if (generatedSignature !== razorpay_signature) 
+        return res.status(400).json({ message: 'Invalid payment signature' });
   
       const payment = await PaymentModel.findOne({ orderId: razorpay_order_id });
       if (!payment) return res.status(404).json({ message: 'Payment not found' });
+  
+      const student = await UserModel.findById(payment.student);
+      if (!student) return res.status(404).json({ message: 'Student not found' });
   
       // Update payment status
       payment.status = 'completed';
@@ -2289,74 +2364,60 @@ const studentController = {
       payment.receiptNumber = `REC${Date.now()}`;
       await payment.save();
   
-      // Create or update Fee documents for each fee paid
-      // This is the key addition that was missing
+      // Update fee documents
       for (const feePaid of payment.feesPaid) {
-        // Check if a fee document already exists for this student/type/month/year
         let fee = await FeeModel.findOne({
           school: schoolId,
           student: payment.student,
           type: feePaid.type,
           month: feePaid.month,
-          year: feePaid.year
+          year: feePaid.year,
         });
   
         if (!fee) {
-          // Create a new fee document if one doesn't exist
           const feeDefinition = await FeeModel.findOne({
             school: schoolId,
             student: { $exists: false },
             type: feePaid.type,
             month: feePaid.month,
-            year: feePaid.year
+            year: feePaid.year,
           });
   
-          if (feeDefinition) {
-            fee = new FeeModel({
-              school: schoolId,
-              student: payment.student,
-              grNumber: payment.grNumber,
-              type: feePaid.type,
-              amount: feePaid.amount,
-              dueDate: feeDefinition.dueDate,
-              month: feePaid.month,
-              year: feePaid.year,
-              description: feeDefinition.description,
-              status: 'paid'
-            });
-          } else {
-            // Create a new fee document even without a definition
-            fee = new FeeModel({
-              school: schoolId,
-              student: payment.student,
-              grNumber: payment.grNumber,
-              type: feePaid.type,
-              amount: feePaid.amount,
-              dueDate: new Date(feePaid.year, feePaid.month - 1, 28), // Last day of the month as fallback
-              month: feePaid.month,
-              year: feePaid.year,
-              status: 'paid'
-            });
-          }
+          fee = new FeeModel({
+            school: schoolId,
+            student: payment.student,
+            grNumber: payment.grNumber,
+            type: feePaid.type,
+            amount: feePaid.amount,
+            dueDate: feeDefinition?.dueDate || new Date(feePaid.year, feePaid.month - 1, 28),
+            month: feePaid.month,
+            year: feePaid.year,
+            status: 'paid',
+            description: feeDefinition?.description || '',
+          });
         } else {
-          // Update existing fee document
           fee.status = 'paid';
         }
   
-        // Add payment details to the fee document
         fee.paymentDetails = {
           transactionId: razorpay_payment_id,
           paymentDate: payment.paymentDate,
           paymentMethod: payment.paymentMethod,
-          receiptNumber: payment.receiptNumber
+          receiptNumber: payment.receiptNumber,
         };
-  
         await fee.save();
       }
   
-      res.json({ message: 'Payment verified successfully', payment });
+      // Generate fee slip
+      const feeSlip = generateFeeSlip(student, payment, payment.feesPaid, schoolId);
+  
+      res.json({ 
+        message: 'Payment verified successfully', 
+        payment,
+        feeSlip, // Return the fee slip
+      });
     } catch (error) {
-      console.error('Verification Error:', error); // Add logging for debugging
+      console.error('Verification Error:', error);
       res.status(500).json({ error: error.message });
     }
   },

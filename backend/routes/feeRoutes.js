@@ -33,4 +33,5 @@ router.post('/verify-payment', authMiddleware, feesController.verifyPayment);
 router.post('/define-fees', authMiddleware, feesController.defineFeesForYear);
 
 router.get('/classes', authMiddleware, feesController.getAvailableClasses);
+router.get('/total-earnings', authMiddleware, feesController.getTotalEarningsByYear);
 module.exports = router;

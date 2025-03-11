@@ -38,8 +38,36 @@ const helpers = {
       // Combine all parts: ADM-YY-SCHOOL-TIMESTAMP-RND
       // Example: ADM-24-5B2D-123456-42
       return `ADM-${year}-${schoolPrefix}-${timestamp}-${random}`;
+    },
+    generateFeeSlip : (student, payment, feesPaid, schoolId) => {
+      const currentDate = new Date();
+      return {
+        feeSlipId: `FS-${payment.receiptNumber || `REC${Date.now()}`}`,
+        schoolId: schoolId,
+        student: {
+          id: student._id.toString(),
+          name: student.name,
+          grNumber: student.studentDetails.grNumber,
+          class: student.studentDetails.class,
+        },
+        paymentDetails: {
+          receiptNumber: payment.receiptNumber,
+          transactionId: payment.transactionId || null,
+          amount: payment.amount,
+          paymentMethod: payment.paymentMethod,
+          paymentDate: payment.paymentDate || currentDate,
+          status: payment.status,
+        },
+        feesBreakdown: feesPaid.map(fee => ({
+          type: fee.type,
+          amount: fee.amount,
+          month: fee.month,
+          year: fee.year,
+        })),
+        issuedDate: currentDate,
+        totalAmount: payment.amount,
+      };
     }
-
   };
   
   module.exports = helpers;
