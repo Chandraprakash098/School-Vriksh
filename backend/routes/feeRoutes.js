@@ -31,6 +31,7 @@ router.post('/pay-for-student', authMiddleware, feesController.payFeesForStudent
 // Razorpay payment verification (used by both student and fee manager)
 router.post('/verify-payment', authMiddleware, feesController.verifyPayment);
 router.post('/define-fees', authMiddleware, feesController.defineFeesForYear);
+router.get('/fee-definitions/:year', authMiddleware, feesController.getFeeDefinitionsByYear);
 
 router.get('/classes', authMiddleware, feesController.getAvailableClasses);
 router.get('/total-earnings', authMiddleware, feesController.getTotalEarningsByYear);

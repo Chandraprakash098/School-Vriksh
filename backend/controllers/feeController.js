@@ -1677,52 +1677,159 @@ const razorpay = new Razorpay({
 
 const feesController = {
   // Define fees for a year by month (Fee Manager only)
+  // defineFeesForYear: async (req, res) => {
+  //   try {
+  //     const { year, feeTypes } = req.body; // feeTypes: [{type, amount, description}]
+  //     const schoolId = req.school._id.toString();
+  //     const connection = req.connection;
+  //     const FeeModel = Fee(connection);
+
+  //     if (!req.user.permissions.canManageFees) {
+  //       return res.status(403).json({ message: 'Unauthorized: Only fee managers can define fees' });
+  //     }
+
+  //     // Validate inputs
+  //     if (!year || !feeTypes || !Array.isArray(feeTypes)) {
+  //       return res.status(400).json({ message: 'Year and feeTypes array are required' });
+  //     }
+
+  //     // Validate fee types
+  //     const validFeeTypes = ['school', 'computer', 'transportation', 'examination', 'classroom', 'educational'];
+  //     for (const feeType of feeTypes) {
+  //       const { type, amount } = feeType;
+  //       if (!validFeeTypes.includes(type)) {
+  //         return res.status(400).json({ message: `Invalid fee type: ${type}` });
+  //       }
+  //       if (typeof amount !== 'number' || amount <= 0) {
+  //         return res.status(400).json({ message: `Invalid amount for ${type}: ${amount}` });
+  //       }
+  //     }
+
+  //     // Check if fees are already defined for the year
+  //     const existingFees = await FeeModel.find({
+  //       school: schoolId,
+  //       student: { $exists: false }, // General fee definitions
+  //       year: parseInt(year),
+  //     });
+
+  //     if (existingFees.length > 0) {
+  //       return res.status(409).json({ message: `Fees for ${year} are already defined` });
+  //     }
+
+  //     const feeDefinitions = [];
+  //     // Create fee definitions for all 12 months
+  //     for (let month = 1; month <= 12; month++) {
+  //       for (const feeType of feeTypes) {
+  //         const { type, amount, description } = feeType;
+  //         const dueDate = new Date(year, month - 1, 28); // Last day of each month
+  //         const fee = new FeeModel({
+  //           school: schoolId,
+  //           type,
+  //           amount,
+  //           dueDate,
+  //           month,
+  //           year: parseInt(year),
+  //           description: description || `${type} fee for ${month}/${year}`,
+  //           status: 'pending',
+  //         });
+  //         feeDefinitions.push(fee);
+  //       }
+  //     }
+
+  //     await FeeModel.insertMany(feeDefinitions);
+  //     res.status(201).json({ message: `Fees defined for ${year} successfully`, feeDefinitions });
+  //   } catch (error) {
+  //     console.error('Error defining fees:', error);
+  //     res.status(500).json({ error: error.message });
+  //   }
+  // },
+
+
   defineFeesForYear: async (req, res) => {
     try {
-      const { year, feeTypes } = req.body; // feeTypes: [{type, amount, description}]
+      const { year, feeTypes, overrideExisting = false } = req.body; // Added overrideExisting option
       const schoolId = req.school._id.toString();
       const connection = req.connection;
       const FeeModel = Fee(connection);
-
+  
+      // Authorization check
       if (!req.user.permissions.canManageFees) {
-        return res.status(403).json({ message: 'Unauthorized: Only fee managers can define fees' });
+        return res.status(403).json({ 
+          message: 'Unauthorized: Only fee managers can define fees' 
+        });
       }
-
-      // Validate inputs
+  
+      // Input validation
       if (!year || !feeTypes || !Array.isArray(feeTypes)) {
-        return res.status(400).json({ message: 'Year and feeTypes array are required' });
+        return res.status(400).json({ 
+          message: 'Year and feeTypes array are required' 
+        });
       }
-
-      // Validate fee types
-      const validFeeTypes = ['school', 'computer', 'transportation', 'examination', 'classroom', 'educational'];
-      for (const feeType of feeTypes) {
-        const { type, amount } = feeType;
+  
+      if (!Number.isInteger(Number(year))) {
+        return res.status(400).json({ 
+          message: 'Year must be a valid integer' 
+        });
+      }
+  
+      // Valid fee types
+      const validFeeTypes = [
+        'school', 
+        'computer', 
+        'transportation', 
+        'examination', 
+        'classroom', 
+        'educational'
+      ];
+  
+      // Validate feeTypes array
+      const validationErrors = [];
+      feeTypes.forEach((feeType, index) => {
+        const { type, amount, description } = feeType;
+        
         if (!validFeeTypes.includes(type)) {
-          return res.status(400).json({ message: `Invalid fee type: ${type}` });
+          validationErrors.push(`Invalid fee type at index ${index}: ${type}`);
         }
-        if (typeof amount !== 'number' || amount <= 0) {
-          return res.status(400).json({ message: `Invalid amount for ${type}: ${amount}` });
+        
+        if (typeof amount !== 'number' || amount <= 0 || !Number.isFinite(amount)) {
+          validationErrors.push(`Invalid amount for ${type} at index ${index}: ${amount}`);
         }
+        
+        if (description && typeof description !== 'string') {
+          validationErrors.push(`Description must be a string for ${type} at index ${index}`);
+        }
+      });
+  
+      if (validationErrors.length > 0) {
+        return res.status(400).json({ 
+          message: 'Validation failed', 
+          errors: validationErrors 
+        });
       }
-
-      // Check if fees are already defined for the year
+  
+      // Check existing fees
       const existingFees = await FeeModel.find({
         school: schoolId,
-        student: { $exists: false }, // General fee definitions
+        student: { $exists: false },
         year: parseInt(year),
       });
-
-      if (existingFees.length > 0) {
-        return res.status(409).json({ message: `Fees for ${year} are already defined` });
+  
+      if (existingFees.length > 0 && !overrideExisting) {
+        return res.status(409).json({ 
+          message: `Fees for ${year} are already defined. Use overrideExisting: true to update.` 
+        });
       }
-
+  
+      // Prepare fee definitions
       const feeDefinitions = [];
-      // Create fee definitions for all 12 months
+      const operations = [];
+  
       for (let month = 1; month <= 12; month++) {
         for (const feeType of feeTypes) {
           const { type, amount, description } = feeType;
-          const dueDate = new Date(year, month - 1, 28); // Last day of each month
-          const fee = new FeeModel({
+          const dueDate = new Date(year, month - 1, 28);
+          
+          const feeData = {
             school: schoolId,
             type,
             amount,
@@ -1731,15 +1838,93 @@ const feesController = {
             year: parseInt(year),
             description: description || `${type} fee for ${month}/${year}`,
             status: 'pending',
-          });
-          feeDefinitions.push(fee);
+            updatedAt: new Date(),
+          };
+  
+          const existingFee = existingFees.find(f => 
+            f.type === type && f.month === month
+          );
+  
+          if (existingFee && overrideExisting) {
+            // Update existing fee
+            operations.push({
+              updateOne: {
+                filter: { _id: existingFee._id },
+                update: { $set: feeData }
+              }
+            });
+          } else if (!existingFee) {
+            // Create new fee
+            feeDefinitions.push(new FeeModel(feeData));
+          }
         }
       }
-
-      await FeeModel.insertMany(feeDefinitions);
-      res.status(201).json({ message: `Fees defined for ${year} successfully`, feeDefinitions });
+  
+      // Execute operations
+      let createdCount = 0;
+      let updatedCount = 0;
+  
+      if (feeDefinitions.length > 0) {
+        const created = await FeeModel.insertMany(feeDefinitions);
+        createdCount = created.length;
+      }
+  
+      if (operations.length > 0) {
+        const result = await FeeModel.bulkWrite(operations);
+        updatedCount = result.modifiedCount;
+      }
+  
+      res.status(201).json({ 
+        message: `Fees for ${year} processed successfully`,
+        createdCount,
+        updatedCount,
+        totalProcessed: createdCount + updatedCount
+      });
+  
     } catch (error) {
       console.error('Error defining fees:', error);
+      res.status(500).json({ 
+        error: 'Internal server error',
+        details: error.message 
+      });
+    }
+  },
+
+  getFeeDefinitionsByYear: async (req, res) => {
+    try {
+      const { year } = req.params;
+      const schoolId = req.school._id.toString();
+      const connection = req.connection;
+      const FeeModel = Fee(connection);
+  
+      if (!req.user.permissions.canManageFees) {
+        return res.status(403).json({ message: 'Unauthorized: Only fee managers can view fee definitions' });
+      }
+  
+      const feeDefinitions = await FeeModel.find({
+        school: schoolId,
+        student: { $exists: false }, // General fee definitions
+        year: parseInt(year),
+      }).sort({ month: 1, type: 1 });
+  
+      if (!feeDefinitions.length) {
+        return res.status(404).json({ message: `No fee definitions found for ${year}` });
+      }
+  
+      res.json({
+        year,
+        feeDefinitions: feeDefinitions.map(fee => ({
+          id: fee._id,
+          type: fee.type,
+          amount: fee.amount,
+          month: fee.month,
+          dueDate: fee.dueDate,
+          description: fee.description,
+          status: fee.status,
+        })),
+      });
+    } catch (error) {
+      console.error('Error fetching fee definitions:', error);
       res.status(500).json({ error: error.message });
     }
   },
