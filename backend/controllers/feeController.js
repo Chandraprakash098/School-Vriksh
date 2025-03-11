@@ -2016,6 +2016,150 @@ const feesController = {
     }
   },
 
+  editFeesForYear: async (req, res) => {
+    try {
+      const { year, feeUpdates, applyToAllMonths = true } = req.body;
+      const schoolId = req.school._id.toString();
+      const connection = req.connection;
+      const FeeModel = Fee(connection);
+  
+      // Authorization check
+      if (!req.user.permissions.canManageFees) {
+        return res.status(403).json({ 
+          message: 'Unauthorized: Only fee managers can edit fees' 
+        });
+      }
+  
+      // Input validation
+      if (!year || !feeUpdates || !Array.isArray(feeUpdates)) {
+        return res.status(400).json({ 
+          message: 'Year and feeUpdates array are required' 
+        });
+      }
+  
+      if (!Number.isInteger(Number(year))) {
+        return res.status(400).json({ 
+          message: 'Year must be a valid integer' 
+        });
+      }
+  
+      // Valid fee types
+      const validFeeTypes = [
+        'school', 
+        'computer', 
+        'transportation', 
+        'examination', 
+        'classroom', 
+        'educational'
+      ];
+  
+      // Validate feeUpdates
+      const validationErrors = [];
+      feeUpdates.forEach((update, index) => {
+        const { type, amount, description, months } = update;
+  
+        if (!validFeeTypes.includes(type)) {
+          validationErrors.push(`Invalid fee type at index ${index}: ${type}`);
+        }
+  
+        if (typeof amount !== 'number' || amount <= 0 || !Number.isFinite(amount)) {
+          validationErrors.push(`Invalid amount for ${type} at index ${index}: ${amount}`);
+        }
+  
+        if (description && typeof description !== 'string') {
+          validationErrors.push(`Description must be a string for ${type} at index ${index}`);
+        }
+  
+        if (!applyToAllMonths && (!months || !Array.isArray(months) || months.some(m => !Number.isInteger(m) || m < 1 || m > 12))) {
+          validationErrors.push(`Invalid months array for ${type} at index ${index}`);
+        }
+      });
+  
+      if (validationErrors.length > 0) {
+        return res.status(400).json({ 
+          message: 'Validation failed', 
+          errors: validationErrors 
+        });
+      }
+  
+      // Get existing fees for the year
+      const existingFees = await FeeModel.find({
+        school: schoolId,
+        student: { $exists: false },
+        year: parseInt(year),
+      });
+  
+      if (!existingFees.length) {
+        return res.status(404).json({ 
+          message: `No fee definitions found for ${year} to edit` 
+        });
+      }
+  
+      // Prepare bulk operations
+      const operations = [];
+  
+      for (const update of feeUpdates) {
+        const { type, amount, description, months } = update;
+        const targetMonths = applyToAllMonths ? Array.from({ length: 12 }, (_, i) => i + 1) : months;
+  
+        for (const month of targetMonths) {
+          const existingFee = existingFees.find(f => f.type === type && f.month === month);
+          
+          if (existingFee) {
+            operations.push({
+              updateOne: {
+                filter: { _id: existingFee._id },
+                update: {
+                  $set: {
+                    amount,
+                    description: description || existingFee.description || `${type} fee for ${month}/${year}`,
+                    dueDate: new Date(year, month - 1, 28),
+                    updatedAt: new Date()
+                  }
+                }
+              }
+            });
+          } else {
+            // If fee doesn't exist for this month, create it
+            operations.push({
+              insertOne: {
+                document: {
+                  school: schoolId,
+                  type,
+                  amount,
+                  dueDate: new Date(year, month - 1, 28),
+                  month,
+                  year: parseInt(year),
+                  description: description || `${type} fee for ${month}/${year}`,
+                  status: 'pending',
+                  createdAt: new Date(),
+                  updatedAt: new Date()
+                }
+              }
+            });
+          }
+        }
+      }
+  
+      // Execute bulk operations
+      const result = await FeeModel.bulkWrite(operations);
+  
+      res.status(200).json({
+        message: `Fees for ${year} updated successfully`,
+        updatedCount: result.modifiedCount,
+        createdCount: result.insertedCount,
+        totalAffected: result.modifiedCount + result.insertedCount
+      });
+  
+    } catch (error) {
+      console.error('Error editing fees:', error);
+      res.status(500).json({ 
+        error: 'Internal server error',
+        details: error.message 
+      });
+    }
+  },
+
   getAvailableClasses: async (req, res) => {
     try {
       const schoolId = req.school._id.toString();
