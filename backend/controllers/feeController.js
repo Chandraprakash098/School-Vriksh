@@ -2055,12 +2055,12 @@ const feesController = {
         }
       }
 
-      if (calculatedTotal !== totalAmount)
-        return res.status(400).json({
-          message: 'Payment amount mismatch',
-          calculatedAmount: calculatedTotal,
-          providedAmount: totalAmount,
-        });
+      // if (calculatedTotal !== totalAmount)
+      //   return res.status(400).json({
+      //     message: 'Payment amount mismatch',
+      //     calculatedAmount: calculatedTotal,
+      //     providedAmount: totalAmount,
+      //   });
 
       if (feesToPay.length === 0)
         return res.status(400).json({ message: 'No pending fees to pay for the selected types' });
