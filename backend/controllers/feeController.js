@@ -2264,10 +2264,15 @@
 
 
 
+
+
 const Razorpay = require('razorpay');
 const crypto = require('crypto');
+const Fee = require('../models/Fee');
+const User = require('../models/User');
+const Payment = require('../models/Payment');
 const mongoose = require('mongoose');
-const { generateFeeSlip } = require('../utils/helpers');
+const {generateFeeSlip}= require('../utils/helpers')
 
 // Initialize Razorpay instance
 const razorpay = new Razorpay({
