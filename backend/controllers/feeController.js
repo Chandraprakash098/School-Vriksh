@@ -2026,8 +2026,8 @@ const feesController = {
           type: { $in: types },
         });
 
-        if (feeDefinitions.length !== types.length)
-          return res.status(404).json({ message: 'Some fee types not defined for this month/year' });
+        // if (feeDefinitions.length !== types.length)
+        //   return res.status(404).json({ message: 'Some fee types not defined for this month/year' });
 
         for (const def of feeDefinitions) {
           const existing = existingFees.find(f => f.type === def.type);
