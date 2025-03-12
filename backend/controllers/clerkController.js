@@ -1563,7 +1563,8 @@ const clerkController = {
         student.name,
         password,
         school.name,
-        className
+        className,
+        grNumber
       );
 
       if (!notificationResult.emailSent || !notificationResult.smsSent) {
