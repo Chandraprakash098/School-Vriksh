@@ -121,14 +121,14 @@ const sendSMS = async (to, body) => {
 // Combined notification function with schoolName and className
 const sendAdmissionNotification = async (studentEmail, studentMobile, studentName, password, schoolName, className) => {
   const subject = `Admission Confirmed - Login Credentials from ${schoolName}`;
-  const emailMessage = `Dear ${studentName},\n\nYour admission has been confirmed at ${schoolName}!\n\nYou have been admitted to class: ${className}.\n\nLogin Credentials:\nEmail: ${studentEmail}\nPassword: ${password}\n\nPlease log in to the portal to access your details.\n\nRegards,\n${schoolName} Administration`;
+  const emailMessage = `Dear ${studentName},\n\nYour admission has been confirmed at ${schoolName}!\n\nYou have been admitted to class: ${className}.\nGR Number: ${grNumber}\n\nLogin Credentials:\nEmail: ${studentEmail}\nPassword: ${password}\n\nPlease log in to the portal to access your details.\n\nRegards,\n${schoolName} Administration`;
 
   try {
     // Send email
     await sendEmail(studentEmail, subject, emailMessage);
 
     // Send SMS (shortened due to character limits, e.g., 160 chars for standard SMS)
-    const smsMessage = `Dear ${studentName}, your admission at ${schoolName} in ${className} is confirmed! Login: ${studentEmail}, Pass: ${password}`;
+    const smsMessage = `Dear ${studentName}, your admission at ${schoolName} in ${className} is confirmed! GR: ${grNumber},Login: ${studentEmail}, Pass: ${password}`;
     await sendSMS(studentMobile, smsMessage);
 
     return { emailSent: true, smsSent: true };
