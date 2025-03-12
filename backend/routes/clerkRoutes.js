@@ -49,4 +49,5 @@ router.post('/rte-report/:schoolId', clerkController.generateRTEReport);
 
 router.get('/application/:applicationId/documents', clerkController.viewApplicationDocuments);
 
+router.post('/register-existing-student', clerkController.registerExistingStudent);
 module.exports = router;

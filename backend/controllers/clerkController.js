@@ -1288,59 +1288,7 @@ const clerkController = {
     }
   },
 
-  // uploadSignedCertificate: async (req, res) => {
-  //   try {
-  //     const { certificateId } = req.params;
-  //     // const { pdfData } = req.body;
-  //     const file = req.file;
-
-  //     const schoolId = req.school._id.toString();
-  //     const connection = req.connection;
-  //     const Certificate = require('../models/Certificate')(connection);
-
-  //     if (!mongoose.Types.ObjectId.isValid(certificateId)) {
-  //       return res.status(400).json({ message: 'Invalid certificate ID' });
-  //     }
-
-  //     const certificate = await Certificate.findOne({ _id: certificateId, school: schoolId });
-  //     if (!certificate) {
-  //       return res.status(404).json({ message: 'Certificate not found' });
-  //     }
-
-  //     if (certificate.status !== 'generated') {
-  //       return res.status(400).json({ message: 'Certificate must be generated before uploading a signed version' });
-  //     }
-
-  //     // if (!pdfData) {
-  //     //   return res.status(400).json({ message: 'PDF data is required' });
-  //     // }
-
-  //     if (!file) {
-  //       return res.status(400).json({ message: 'PDF file is required' });
-  //     }
-
-  //     // Convert base64 PDF data to buffer
-  //     // const pdfBuffer = Buffer.from(pdfData, 'base64');
-
-  //     // Upload the signed PDF to Cloudinary
-  //     // const cloudinaryResult = await uploadCertificateToCloudinary(pdfBuffer, `${certificate._id}_signed`, certificate.type);
-  //     const cloudinaryResult = await uploadCertificateToCloudinary(file.buffer, `${certificate._id}_signed`, certificate.type);
-  //     const signedDocumentUrl = cloudinaryResult.secure_url;
-
-  //     // Update certificate with the signed document URL
-  //     certificate.signedDocumentUrl = signedDocumentUrl;
-  //     await certificate.save();
-
-  //     res.json({
-  //       message: 'Signed certificate uploaded successfully',
-  //       certificate,
-  //     });
-  //   } catch (error) {
-  //     console.error('Error in uploadSignedCertificate:', error);
-  //     res.status(500).json({ error: error.message });
-  //   }
-  // },
-
+  
  
 
   uploadSignedCertificate: async (req, res) => {
@@ -1498,6 +1446,146 @@ const clerkController = {
 
       res.json({ report });
     } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  },
+
+  registerExistingStudent: async (req, res) => {
+    try {
+      const {
+        name,
+        email,
+        dob,
+        gender,
+        mobile,
+        parentName,
+        parentEmail,
+        parentMobile,
+        parentOccupation,
+        address, // Expected as an object { street, city, state, pincode }
+        grNumber,
+        classId,
+        admissionType = 'Regular', // Default to Regular if not provided
+        password,
+      } = req.body;
+
+      const schoolId = req.school._id.toString();
+      const connection = req.connection;
+      const User = require('../models/User')(connection);
+      const Class = require('../models/Class')(connection);
+      const School = require('../models/School')(require('../config/database').getOwnerConnection());
+
+      // Input validation
+      if (!name || !email || !dob || !gender || !mobile || !grNumber || !classId || !password) {
+        return res.status(400).json({ message: 'All required fields must be provided' });
+      }
+
+      // Validate email format
+      const emailRegex = /^[a-zA-Z0-9._-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,6}$/;
+      if (!emailRegex.test(email)) {
+        return res.status(400).json({ message: 'Invalid email format' });
+      }
+
+      // Validate mobile number
+      const mobileRegex = /^[0-9]{10}$/;
+      if (!mobileRegex.test(mobile) || (parentMobile && !mobileRegex.test(parentMobile))) {
+        return res.status(400).json({ message: 'Mobile number must be 10 digits' });
+      }
+
+      // Check if GR number already exists
+      const existingGR = await User.findOne({ 'studentDetails.grNumber': grNumber, school: schoolId });
+      if (existingGR) {
+        return res.status(400).json({ message: 'GR number already exists' });
+      }
+
+      // Check if email already exists
+      const existingEmail = await User.findOne({ email, school: schoolId });
+      if (existingEmail) {
+        return res.status(400).json({ message: 'Email already registered' });
+      }
+
+      // Validate class
+      const selectedClass = await Class.findOne({ _id: classId, school: schoolId });
+      if (!selectedClass) {
+        return res.status(404).json({ message: 'Class not found' });
+      }
+
+      if (selectedClass.students.length >= selectedClass.capacity) {
+        return res.status(400).json({ message: 'Class is at full capacity' });
+      }
+
+      // Fetch school name
+      const school = await School.findById(schoolId).select('name');
+      if (!school) {
+        return res.status(404).json({ message: 'School not found' });
+      }
+
+      // Hash password
+      const hashedPassword = await bcrypt.hash(password, 10);
+
+      // Create new student
+      const student = new User({
+        school: schoolId,
+        name,
+        email,
+        password: hashedPassword,
+        role: 'student',
+        status: 'active',
+        studentDetails: {
+          grNumber,
+          class: classId,
+          admissionType,
+          parentDetails: {
+            name: parentName,
+            email: parentEmail,
+            mobile: parentMobile,
+            occupation: parentOccupation,
+            address: address || {}, // Default to empty object if not provided
+          },
+          dob: new Date(dob),
+          gender,
+        },
+      });
+
+      // Save student to database
+      await student.save();
+
+      // Update class with student ID
+      await Class.findByIdAndUpdate(classId, { $push: { students: student._id } });
+
+      // Prepare class name
+      const className = `${selectedClass.name}${selectedClass.division ? ' ' + selectedClass.division : ''}`;
+
+      // Send notification
+      const notificationResult = await sendAdmissionNotification(
+        student.email,
+        mobile,
+        student.name,
+        password,
+        school.name,
+        className
+      );
+
+      if (!notificationResult.emailSent || !notificationResult.smsSent) {
+        console.warn('Notification partially failed:', notificationResult.error);
+      }
+
+      res.status(201).json({
+        message: 'Existing student registered successfully',
+        studentDetails: {
+          id: student._id,
+          name: student.name,
+          email: student.email,
+          grNumber,
+          class: { name: selectedClass.name, division: selectedClass.division },
+        },
+        notificationStatus: {
+          emailSent: notificationResult.emailSent,
+          smsSent: notificationResult.smsSent,
+        },
+      });
+    } catch (error) {
+      console.error('Error registering existing student:', error);
       res.status(500).json({ error: error.message });
     }
   },

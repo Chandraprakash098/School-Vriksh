@@ -27,7 +27,17 @@ const ownerController = {
       const School = require('../models/School')(ownerConnection);
 
       // Generate unique dbName for the school
-      const dbName = `school_db_${new mongoose.Types.ObjectId()}`;
+
+      // Generate dbName from school name (sanitized)
+      const sanitizedName = name.toLowerCase()
+                               .replace(/\s+/g, '_') // Replace spaces with underscores
+                               .replace(/[^a-z0-9_]/g, '') // Remove special characters
+                               .substring(0, 16); // Limit length
+      
+      // Add a timestamp to make it unique in case of schools with the same name
+      const timestamp = Date.now().toString().slice(-6);
+      const dbName = `school_${sanitizedName}_${timestamp}`;
+      // const dbName = `school_db_${new mongoose.Types.ObjectId()}`;
 
       if (!razorpayKeyId || !razorpayKeySecret) {
         return res.status(400).json({ error: 'Razorpay credentials are required' });
@@ -101,39 +111,7 @@ const ownerController = {
     }
   },
 
-  // updatePaymentConfig: async (req, res) => {
-  //   try {
-  //     const { schoolId } = req.params;
-  //     const { razorpayKeyId, razorpayKeySecret } = req.body;
-
-  //     const ownerConnection = await getOwnerConnection();
-  //     const School = require('../models/School').model(ownerConnection);
-
-  //     const school = await School.findById(schoolId);
-  //     if (!school) {
-  //       return res.status(404).json({ message: 'School not found' });
-  //     }
-
-  //     school.paymentConfig = {
-  //       razorpayKeyId,
-  //       razorpayKeySecret,
-  //       isPaymentConfigured: true
-  //     };
-
-  //     await school.save();
-
-  //     res.json({
-  //       message: 'Payment configuration updated successfully',
-  //       paymentConfig: {
-  //         razorpayKeyId: school.paymentConfig.razorpayKeyId,
-  //         isPaymentConfigured: true
-  //       }
-  //     });
-  //   } catch (error) {
-  //     res.status(500).json({ error: error.message });
-  //   }
-  // },
-
+  
   updatePaymentConfig: async (req, res) => {
     try {
       const { schoolId } = req.params;
@@ -284,15 +262,30 @@ const ownerController = {
   },
 
   getSchoolData: async (req, res) => {
+
     try {
       const { schoolId } = req.params;
-
+      console.log('SchoolId:', schoolId);
+  
+      console.log('Getting owner connection...');
       const ownerConnection = await getOwnerConnection();
-      const School = ownerConnection.model('School', require('../models/School').schema);
+      console.log('Owner connection successful:', !!ownerConnection);
+  
+      console.log('Getting School model...');
+      const getModel = require('../models/index');
+      console.log('getModel type:', typeof getModel);
+      // const School = getModel('School', ownerConnection);
+      const School = getModel('School', ownerConnection);
+      console.log('School type:', typeof School);
+      console.log('School has findById:', typeof School.findById === 'function');
+      console.log('School model retrieved');
+  
+      console.log('Fetching school data...');
       const schoolData = await School.findById(schoolId);
-      if (!schoolData) {
-        return res.status(404).json({ message: 'School not found' });
-      }
+      console.log('School data retrieved:', !!schoolData);
+
+ 
+   
 
       const schoolConnection = await getSchoolConnection(schoolId);
       const User = require('../models/User')(schoolConnection);
@@ -310,49 +303,52 @@ const ownerController = {
         }}
       ]);
 
-      const inventoryStats = await Inventory.aggregate([
-        { $match: { school: schoolId } },
-        { $group: { _id: null, totalItems: { $sum: 1 }, totalValue: { $sum: '$value' }, lowStock: { $sum: { $cond: [{ $lt: ['$quantity', '$minimumQuantity'] }, 1, 0] } } }}
-      ]);
+      // const inventoryStats = await Inventory.aggregate([
+      //   { $match: { school: schoolId } },
+      //   { $group: { _id: null, totalItems: { $sum: 1 }, totalValue: { $sum: '$value' }, lowStock: { $sum: { $cond: [{ $lt: ['$quantity', '$minimumQuantity'] }, 1, 0] } } }}
+      // ]);
 
-      const libraryStats = await Library.aggregate([
-        { $match: { school: schoolId } },
-        { $group: { _id: null, totalBooks: { $sum: '$quantity' }, availableBooks: { $sum: '$availableQuantity' }, categories: { $addToSet: '$category' } }}
-      ]);
+      // const libraryStats = await Library.aggregate([
+      //   { $match: { school: schoolId } },
+      //   { $group: { _id: null, totalBooks: { $sum: '$quantity' }, availableBooks: { $sum: '$availableQuantity' }, categories: { $addToSet: '$category' } }}
+      // ]);
 
-      const feeStats = await Fee.aggregate([
-        { $match: { school: schoolId } },
-        { $group: {
-          _id: '$type',
-          collected: { $sum: { $cond: [{ $eq: ['$status', 'paid'] }, '$amount', 0] } },
-          pending: { $sum: { $cond: [{ $eq: ['$status', 'pending'] }, '$amount', 0] } },
-          overdue: { $sum: { $cond: [{ $eq: ['$status', 'overdue'] }, '$amount', 0] } }
-        }}
-      ]);
+      // const feeStats = await Fee.aggregate([
+      //   { $match: { school: schoolId } },
+      //   { $group: {
+      //     _id: '$type',
+      //     collected: { $sum: { $cond: [{ $eq: ['$status', 'paid'] }, '$amount', 0] } },
+      //     pending: { $sum: { $cond: [{ $eq: ['$status', 'pending'] }, '$amount', 0] } },
+      //     overdue: { $sum: { $cond: [{ $eq: ['$status', 'overdue'] }, '$amount', 0] } }
+      //   }}
+      // ]);
 
-      const rteCompliance = {
-        ...schoolData.rteQuota,
-        compliancePercentage: ((schoolData.rteQuota.occupied / schoolData.rteQuota.totalSeats) * 100).toFixed(2),
-        feeWaiver: await Fee.aggregate([
-          { $match: { school: schoolId, isRTE: true } },
-          { $group: { _id: null, totalWaiver: { $sum: '$amount' } }}
-        ])
-      };
+      // const rteCompliance = {
+      //   ...schoolData.rteQuota,
+      //   compliancePercentage: ((schoolData.rteQuota.occupied / schoolData.rteQuota.totalSeats) * 100).toFixed(2),
+      //   feeWaiver: await Fee.aggregate([
+      //     { $match: { school: schoolId, isRTE: true } },
+      //     { $group: { _id: null, totalWaiver: { $sum: '$amount' } }}
+      //   ])
+      // };
 
       res.json({
         school: schoolData,
         statistics: {
           users: { byRole: users.reduce((acc, role) => ({ ...acc, [role._id]: { active: role.activeCount, total: role.totalCount, users: role.users } }), {}) },
-          inventory: inventoryStats[0] || { totalItems: 0, totalValue: 0, lowStock: 0 },
-          library: libraryStats[0] || { totalBooks: 0, availableBooks: 0, categories: [] },
-          fees: feeStats.reduce((acc, fee) => ({ ...acc, [fee._id]: { collected: fee.collected, pending: fee.pending, overdue: fee.overdue } }), {}),
-          rte: rteCompliance
+          // inventory: inventoryStats[0] || { totalItems: 0, totalValue: 0, lowStock: 0 },
+          // library: libraryStats[0] || { totalBooks: 0, availableBooks: 0, categories: [] },
+          // fees: feeStats.reduce((acc, fee) => ({ ...acc, [fee._id]: { collected: fee.collected, pending: fee.pending, overdue: fee.overdue } }), {}),
+          // rte: rteCompliance
         }
       });
     } catch (error) {
       res.status(500).json({ error: error.message });
     }
   },
+
+  // Fix for the getSchoolData function in ownerController.js
+  
 
   updateSubscription: async (req, res) => {
     try {
@@ -415,3 +411,4 @@ const ownerController = {
 };
 
 module.exports = ownerController;
+

@@ -26,4 +26,5 @@ const inventorySchema = new mongoose.Schema({
   }
 }, { timestamps: true });
 
-module.exports = mongoose.model('Inventory', inventorySchema);
+// module.exports = mongoose.model('Inventory', inventorySchema);
+module.exports = (connection) => connection.model('Inventory',inventorySchema);
