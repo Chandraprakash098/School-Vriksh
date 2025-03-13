@@ -9,7 +9,7 @@ const roleCheck = require('../middleware/roleCheck');
 // Apply clerk authentication middleware to all routes
 router.use(auth, roleCheck(['clerk']));
 
-
+router.get('/dashboard', clerkController.getDashboard);
 router.get('/applications/pending-verification',clerkController.getPendingVerifications);
 
 // Admission routes
