@@ -104,13 +104,10 @@ const clerkController = {
           timestamp: new Date(),
           pendingVerifications,
           pendingCertificates,
-          enrolledToday,
+          
           totalStudents, // Added total number of students
           leaveStatus,
-          rteAdmissions: {
-            total: rteStudents,
-            note: 'RTE admissions for the 2025 academic year',
-          },
+          
         };
   
         res.json(dashboardData);
