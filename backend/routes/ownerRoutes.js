@@ -14,7 +14,7 @@ router.get('/schools/:schoolId', ownerController.getSchoolData);
 router.patch('/schools/:schoolId/subscription', ownerController.updateSubscription);
 router.patch('/schools/:schoolId/admin', ownerController.updateAdminCredentials);
 router.patch('/schools/:schoolId/payment-config', ownerController.updatePaymentConfig); // New route
-
+router.get('/school-admins', roleCheck(['owner', 'admin']), ownerController.getSchoolAdmins);
 // Consolidated reports
 router.get('/reports/consolidated', ownerController.getConsolidatedReports);
 

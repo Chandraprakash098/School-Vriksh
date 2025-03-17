@@ -110,7 +110,48 @@ const ownerController = {
       res.status(500).json({ error: error.message });
     }
   },
+  
+  getSchoolAdmins: async (req, res) => {
+    try {
+      const ownerConnection = await getOwnerConnection();
+      const School = require('../models/School')(ownerConnection);
+      
+      // Get all schools with basic info
+      const schools = await School.find()
+        .select('name dbName')
+        .lean();
 
+      // Collect admin data for each school
+      const adminData = await Promise.all(schools.map(async (school) => {
+        const schoolConnection = await getSchoolConnection(school._id);
+        const User = require('../models/User')(schoolConnection);
+
+        const admin = await User.findOne({ 
+          school: school._id, 
+          role: 'admin' 
+        })
+        .select('name email profile status')
+        .lean();
+
+        return {
+          schoolId: school._id,
+          schoolName: school.name,
+          admin: admin ? {
+            id: admin._id,
+            name: admin.name,
+            email: admin.email,
+            phone: admin.profile?.phone,
+            address: admin.profile?.address,
+            status: admin.status
+          } : null
+        };
+      }));
+
+      res.json(adminData);
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  },
   
   updatePaymentConfig: async (req, res) => {
     try {
@@ -380,6 +421,35 @@ const ownerController = {
     }
   },
 
+  // updateAdminCredentials: async (req, res) => {
+  //   try {
+  //     const { schoolId } = req.params;
+  //     const { adminDetails } = req.body;
+
+  //     const schoolConnection = await getSchoolConnection(schoolId);
+  //     const User = require('../models/User')(schoolConnection);
+
+  //     const admin = await User.findOneAndUpdate(
+  //       { school: schoolId, role: 'admin' },
+  //       {
+  //         name: adminDetails.name,
+  //         email: adminDetails.email,
+  //         ...(adminDetails.password && { password: await bcrypt.hash(adminDetails.password, 10) }),
+  //         profile: { phone: adminDetails.phone, address: adminDetails.address }
+  //       },
+  //       { new: true }
+  //     ).select('-password');
+
+  //     if (!admin) {
+  //       return res.status(404).json({ message: 'Admin not found' });
+  //     }
+
+  //     res.json({ message: 'Admin credentials updated successfully', admin });
+  //   } catch (error) {
+  //     res.status(500).json({ error: error.message });
+  //   }
+  // }
+
   updateAdminCredentials: async (req, res) => {
     try {
       const { schoolId } = req.params;
@@ -388,14 +458,23 @@ const ownerController = {
       const schoolConnection = await getSchoolConnection(schoolId);
       const User = require('../models/User')(schoolConnection);
 
+      const updateData = {
+        name: adminDetails.name,
+        email: adminDetails.email,
+        profile: { 
+          phone: adminDetails.phone,
+          address: adminDetails.address 
+        }
+      };
+
+      // Only hash password if it's provided
+      if (adminDetails.password) {
+        updateData.password = await bcrypt.hash(adminDetails.password, 10);
+      }
+
       const admin = await User.findOneAndUpdate(
         { school: schoolId, role: 'admin' },
-        {
-          name: adminDetails.name,
-          email: adminDetails.email,
-          ...(adminDetails.password && { password: await bcrypt.hash(adminDetails.password, 10) }),
-          profile: { phone: adminDetails.phone, address: adminDetails.address }
-        },
+        updateData,
         { new: true }
       ).select('-password');
 
@@ -403,7 +482,17 @@ const ownerController = {
         return res.status(404).json({ message: 'Admin not found' });
       }
 
-      res.json({ message: 'Admin credentials updated successfully', admin });
+      res.json({ 
+        message: 'Admin credentials updated successfully', 
+        admin: {
+          id: admin._id,
+          name: admin.name,
+          email: admin.email,
+          phone: admin.profile?.phone,
+          address: admin.profile?.address,
+          status: admin.status
+        }
+      });
     } catch (error) {
       res.status(500).json({ error: error.message });
     }
