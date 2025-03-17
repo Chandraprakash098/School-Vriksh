@@ -229,7 +229,9 @@ const ownerController = {
   getConsolidatedReports: async (req, res) => {
     try {
       const ownerConnection = await getOwnerConnection();
-      const School = ownerConnection.model('School', require('../models/School').schema);
+      // const School = ownerConnection.model('School', require('../models/School').schema);
+      const getModel = require('../models/index');
+      const School = getModel('School', ownerConnection);
       const schools = await School.find().lean();
 
       const subscriptionStats = {
@@ -302,8 +304,149 @@ const ownerController = {
     }
   },
 
-  getSchoolData: async (req, res) => {
+  // getSchoolData: async (req, res) => {
 
+  //   try {
+  //     const { schoolId } = req.params;
+  //     console.log('SchoolId:', schoolId);
+  
+  //     console.log('Getting owner connection...');
+  //     const ownerConnection = await getOwnerConnection();
+  //     console.log('Owner connection successful:', !!ownerConnection);
+  
+  //     console.log('Getting School model...');
+  //     const getModel = require('../models/index');
+  //     console.log('getModel type:', typeof getModel);
+  //     // const School = getModel('School', ownerConnection);
+  //     const School = getModel('School', ownerConnection);
+  //     console.log('School type:', typeof School);
+  //     console.log('School has findById:', typeof School.findById === 'function');
+  //     console.log('School model retrieved');
+  
+  //     console.log('Fetching school data...');
+  //     const schoolData = await School.findById(schoolId);
+  //     console.log('School data retrieved:', !!schoolData);
+
+ 
+   
+
+  //     const schoolConnection = await getSchoolConnection(schoolId);
+  //     const User = require('../models/User')(schoolConnection);
+  //     const Inventory = require('../models/Inventory')(schoolConnection);
+  //     const Library = require('../models/Library')(schoolConnection);
+  //     const Fee = require('../models/Fee')(schoolConnection);
+
+  //     const users = await User.aggregate([
+  //       { $match: { school: schoolId } },
+  //       { $group: {
+  //         _id: '$role',
+  //         users: { $push: { _id: '$_id', name: '$name', email: '$email', status: '$status', profile: '$profile' } },
+  //         activeCount: { $sum: { $cond: [{ $eq: ['$status', 'active'] }, 1, 0] } },
+  //         totalCount: { $sum: 1 }
+  //       }}
+  //     ]);
+
+  //     // const inventoryStats = await Inventory.aggregate([
+  //     //   { $match: { school: schoolId } },
+  //     //   { $group: { _id: null, totalItems: { $sum: 1 }, totalValue: { $sum: '$value' }, lowStock: { $sum: { $cond: [{ $lt: ['$quantity', '$minimumQuantity'] }, 1, 0] } } }}
+  //     // ]);
+
+  //     // const libraryStats = await Library.aggregate([
+  //     //   { $match: { school: schoolId } },
+  //     //   { $group: { _id: null, totalBooks: { $sum: '$quantity' }, availableBooks: { $sum: '$availableQuantity' }, categories: { $addToSet: '$category' } }}
+  //     // ]);
+
+  //     // const feeStats = await Fee.aggregate([
+  //     //   { $match: { school: schoolId } },
+  //     //   { $group: {
+  //     //     _id: '$type',
+  //     //     collected: { $sum: { $cond: [{ $eq: ['$status', 'paid'] }, '$amount', 0] } },
+  //     //     pending: { $sum: { $cond: [{ $eq: ['$status', 'pending'] }, '$amount', 0] } },
+  //     //     overdue: { $sum: { $cond: [{ $eq: ['$status', 'overdue'] }, '$amount', 0] } }
+  //     //   }}
+  //     // ]);
+
+  //     // const rteCompliance = {
+  //     //   ...schoolData.rteQuota,
+  //     //   compliancePercentage: ((schoolData.rteQuota.occupied / schoolData.rteQuota.totalSeats) * 100).toFixed(2),
+  //     //   feeWaiver: await Fee.aggregate([
+  //     //     { $match: { school: schoolId, isRTE: true } },
+  //     //     { $group: { _id: null, totalWaiver: { $sum: '$amount' } }}
+  //     //   ])
+  //     // };
+
+  //     res.json({
+  //       school: schoolData,
+  //       statistics: {
+  //         users: { byRole: users.reduce((acc, role) => ({ ...acc, [role._id]: { active: role.activeCount, total: role.totalCount, users: role.users } }), {}) },
+  //         // inventory: inventoryStats[0] || { totalItems: 0, totalValue: 0, lowStock: 0 },
+  //         // library: libraryStats[0] || { totalBooks: 0, availableBooks: 0, categories: [] },
+  //         // fees: feeStats.reduce((acc, fee) => ({ ...acc, [fee._id]: { collected: fee.collected, pending: fee.pending, overdue: fee.overdue } }), {}),
+  //         // rte: rteCompliance
+  //       }
+  //     });
+  //   } catch (error) {
+  //     res.status(500).json({ error: error.message });
+  //   }
+  // },
+
+
+  // getSchoolData: async (req, res) => {
+  //   try {
+  //     const { schoolId } = req.params;
+  //     console.log('SchoolId:', schoolId);
+  
+  //     console.log('Getting owner connection...');
+  //     const ownerConnection = await getOwnerConnection();
+  //     console.log('Owner connection successful:', !!ownerConnection);
+  
+  //     console.log('Getting School model...');
+  //     const getModel = require('../models/index');
+  //     const School = getModel('School', ownerConnection); // Use getModel consistently
+  //     console.log('School model retrieved:', !!School);
+  
+  //     console.log('Fetching school data...');
+  //     const schoolData = await School.findById(schoolId);
+  //     if (!schoolData) {
+  //       return res.status(404).json({ error: 'School not found' });
+  //     }
+  //     console.log('School data retrieved:', !!schoolData);
+  
+  //     const schoolConnection = await getSchoolConnection(schoolId);
+  //     const User = getModel('User', schoolConnection); // Use getModel for User too
+  
+  //     const users = await User.aggregate([
+  //       { $match: { school: new mongoose.Types.ObjectId(schoolId) } }, // Ensure schoolId is ObjectId
+  //       {
+  //         $group: {
+  //           _id: '$role',
+  //           users: {
+  //             $push: { _id: '$_id', name: '$name', email: '$email', status: '$status', profile: '$profile' },
+  //           },
+  //           activeCount: { $sum: { $cond: [{ $eq: ['$status', 'active'] }, 1, 0] } },
+  //           totalCount: { $sum: 1 },
+  //         },
+  //       },
+  //     ]);
+  
+  //     res.json({
+  //       school: schoolData,
+  //       statistics: {
+  //         users: {
+  //           byRole: users.reduce((acc, role) => ({
+  //             ...acc,
+  //             [role._id]: { active: role.activeCount, total: role.totalCount, users: role.users },
+  //           }), {}),
+  //         },
+  //       },
+  //     });
+  //   } catch (error) {
+  //     console.error('Error in getSchoolData:', error);
+  //     res.status(500).json({ error: error.message });
+  //   }
+  // },
+
+  getSchoolData: async (req, res) => {
     try {
       const { schoolId } = req.params;
       console.log('SchoolId:', schoolId);
@@ -314,76 +457,100 @@ const ownerController = {
   
       console.log('Getting School model...');
       const getModel = require('../models/index');
-      console.log('getModel type:', typeof getModel);
-      // const School = getModel('School', ownerConnection);
       const School = getModel('School', ownerConnection);
-      console.log('School type:', typeof School);
-      console.log('School has findById:', typeof School.findById === 'function');
-      console.log('School model retrieved');
+      console.log('School model retrieved:', !!School);
   
       console.log('Fetching school data...');
-      const schoolData = await School.findById(schoolId);
+      const schoolData = await School.findById(schoolId).lean();
+      if (!schoolData) {
+        return res.status(404).json({ error: 'School not found' });
+      }
       console.log('School data retrieved:', !!schoolData);
-
- 
-   
-
+  
       const schoolConnection = await getSchoolConnection(schoolId);
-      const User = require('../models/User')(schoolConnection);
-      const Inventory = require('../models/Inventory')(schoolConnection);
-      const Library = require('../models/Library')(schoolConnection);
-      const Fee = require('../models/Fee')(schoolConnection);
-
-      const users = await User.aggregate([
-        { $match: { school: schoolId } },
-        { $group: {
-          _id: '$role',
-          users: { $push: { _id: '$_id', name: '$name', email: '$email', status: '$status', profile: '$profile' } },
-          activeCount: { $sum: { $cond: [{ $eq: ['$status', 'active'] }, 1, 0] } },
-          totalCount: { $sum: 1 }
-        }}
+      const User = getModel('User', schoolConnection);
+  
+      // Fetch detailed user data for students
+      const students = await User.find({ 
+        school: new mongoose.Types.ObjectId(schoolId), 
+        role: 'student' 
+      })
+      .select('name email status profile studentDetails')
+      .lean();
+  
+      // Fetch detailed user data for staff (excluding students and owners)
+      const staff = await User.find({ 
+        school: new mongoose.Types.ObjectId(schoolId), 
+        role: { $nin: ['student', 'owner'] } // Exclude students and owners
+      })
+      .select('name email role status profile')
+      .lean();
+  
+      // Aggregate user counts by role for statistics
+      const userCounts = await User.aggregate([
+        { $match: { school: new mongoose.Types.ObjectId(schoolId) } },
+        {
+          $group: {
+            _id: '$role',
+            activeCount: { $sum: { $cond: [{ $eq: ['$status', 'active'] }, 1, 0] } },
+            totalCount: { $sum: 1 },
+          },
+        },
       ]);
-
-      // const inventoryStats = await Inventory.aggregate([
-      //   { $match: { school: schoolId } },
-      //   { $group: { _id: null, totalItems: { $sum: 1 }, totalValue: { $sum: '$value' }, lowStock: { $sum: { $cond: [{ $lt: ['$quantity', '$minimumQuantity'] }, 1, 0] } } }}
-      // ]);
-
-      // const libraryStats = await Library.aggregate([
-      //   { $match: { school: schoolId } },
-      //   { $group: { _id: null, totalBooks: { $sum: '$quantity' }, availableBooks: { $sum: '$availableQuantity' }, categories: { $addToSet: '$category' } }}
-      // ]);
-
-      // const feeStats = await Fee.aggregate([
-      //   { $match: { school: schoolId } },
-      //   { $group: {
-      //     _id: '$type',
-      //     collected: { $sum: { $cond: [{ $eq: ['$status', 'paid'] }, '$amount', 0] } },
-      //     pending: { $sum: { $cond: [{ $eq: ['$status', 'pending'] }, '$amount', 0] } },
-      //     overdue: { $sum: { $cond: [{ $eq: ['$status', 'overdue'] }, '$amount', 0] } }
-      //   }}
-      // ]);
-
-      // const rteCompliance = {
-      //   ...schoolData.rteQuota,
-      //   compliancePercentage: ((schoolData.rteQuota.occupied / schoolData.rteQuota.totalSeats) * 100).toFixed(2),
-      //   feeWaiver: await Fee.aggregate([
-      //     { $match: { school: schoolId, isRTE: true } },
-      //     { $group: { _id: null, totalWaiver: { $sum: '$amount' } }}
-      //   ])
-      // };
-
+  
+      // Optionally, add more detailed statistics (e.g., RTE students)
+      const rteStudents = students.filter(student => 
+        student.studentDetails?.admissionType === 'RTE'
+      ).length;
+  
       res.json({
-        school: schoolData,
+        school: {
+          ...schoolData,
+          paymentConfig: {
+            ...schoolData.paymentConfig,
+            razorpayKeySecret: undefined // Hide sensitive data
+          }
+        },
         statistics: {
-          users: { byRole: users.reduce((acc, role) => ({ ...acc, [role._id]: { active: role.activeCount, total: role.totalCount, users: role.users } }), {}) },
-          // inventory: inventoryStats[0] || { totalItems: 0, totalValue: 0, lowStock: 0 },
-          // library: libraryStats[0] || { totalBooks: 0, availableBooks: 0, categories: [] },
-          // fees: feeStats.reduce((acc, fee) => ({ ...acc, [fee._id]: { collected: fee.collected, pending: fee.pending, overdue: fee.overdue } }), {}),
-          // rte: rteCompliance
+          users: {
+            byRole: userCounts.reduce((acc, role) => ({
+              ...acc,
+              [role._id]: { active: role.activeCount, total: role.totalCount },
+            }), {}),
+            rteStudents: {
+              total: rteStudents,
+              percentage: schoolData.rteQuota?.totalSeats 
+                ? ((rteStudents / schoolData.rteQuota.totalSeats) * 100).toFixed(2) 
+                : 0
+            }
+          },
+          students: students.map(student => ({
+            id: student._id,
+            name: student.name,
+            email: student.email,
+            status: student.status,
+            phone: student.profile?.phone,
+            address: student.profile?.address,
+            grNumber: student.studentDetails?.grNumber,
+            classId: student.studentDetails?.class,
+            admissionType: student.studentDetails?.admissionType,
+            dob: student.studentDetails?.dob,
+            gender: student.studentDetails?.gender,
+            parentDetails: student.studentDetails?.parentDetails
+          })),
+          staff: staff.map(staffMember => ({
+            id: staffMember._id,
+            name: staffMember.name,
+            email: staffMember.email,
+            role: staffMember.role,
+            status: staffMember.status,
+            phone: staffMember.profile?.phone,
+            address: staffMember.profile?.address
+          }))
         }
       });
     } catch (error) {
+      console.error('Error in getSchoolData:', error);
       res.status(500).json({ error: error.message });
     }
   },
