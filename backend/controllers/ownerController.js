@@ -588,34 +588,7 @@ const ownerController = {
     }
   },
 
-  // updateAdminCredentials: async (req, res) => {
-  //   try {
-  //     const { schoolId } = req.params;
-  //     const { adminDetails } = req.body;
-
-  //     const schoolConnection = await getSchoolConnection(schoolId);
-  //     const User = require('../models/User')(schoolConnection);
-
-  //     const admin = await User.findOneAndUpdate(
-  //       { school: schoolId, role: 'admin' },
-  //       {
-  //         name: adminDetails.name,
-  //         email: adminDetails.email,
-  //         ...(adminDetails.password && { password: await bcrypt.hash(adminDetails.password, 10) }),
-  //         profile: { phone: adminDetails.phone, address: adminDetails.address }
-  //       },
-  //       { new: true }
-  //     ).select('-password');
-
-  //     if (!admin) {
-  //       return res.status(404).json({ message: 'Admin not found' });
-  //     }
-
-  //     res.json({ message: 'Admin credentials updated successfully', admin });
-  //   } catch (error) {
-  //     res.status(500).json({ error: error.message });
-  //   }
-  // }
+  
 
   updateAdminCredentials: async (req, res) => {
     try {

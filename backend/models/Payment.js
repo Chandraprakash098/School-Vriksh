@@ -12,6 +12,7 @@ const paymentSchema = new mongoose.Schema({
   orderId: String,
   receiptNumber: String,
   paymentDate: { type: Date },
+  receiptUrl: String,
   feesPaid: [{
     feeId: { type: mongoose.Schema.Types.ObjectId, ref: 'Fee', required: true },
     type: { type: String, required: true }, // e.g., "school"

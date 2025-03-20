@@ -2410,11 +2410,14 @@ const studentController = {
   
       // Generate fee slip
       const feeSlip = generateFeeSlip(student, payment, payment.feesPaid, schoolId);
+      payment.receiptUrl = feeSlip.pdfUrl;
+      await payment.save();
   
       res.json({ 
         message: 'Payment verified successfully', 
         payment,
         feeSlip, // Return the fee slip
+        receiptUrl: feeSlip.pdfUrl
       });
     } catch (error) {
       console.error('Verification Error:', error);
@@ -2436,17 +2439,42 @@ const studentController = {
         status: 'completed',
       }).sort({ paymentDate: -1 });
 
+      // const receipts = await Promise.all(payments.map(async payment => {
+      //   const fees = await FeeModel.find({ _id: { $in: payment.feeId || [] } });
+      //   return {
+      //     ...payment.toObject(),
+      //     fees: fees.map(fee => ({
+      //       type: fee.type,
+      //       amount: fee.amount,
+      //       month: fee.month,
+      //       year: fee.year,
+      //       dueDate: fee.dueDate
+      //     }))
+      //   };
+      // }));
+
       const receipts = await Promise.all(payments.map(async payment => {
-        const fees = await FeeModel.find({ _id: { $in: payment.feeId || [] } });
+        const fees = await FeeModel.find({ 
+          student: studentId,
+          school: schoolId,
+          month: { $in: payment.feesPaid.map(f => f.month) },
+          year: { $in: payment.feesPaid.map(f => f.year) },
+          type: { $in: payment.feesPaid.map(f => f.type) },
+        });
         return {
-          ...payment.toObject(),
+          paymentId: payment._id,
+          receiptNumber: payment.receiptNumber,
+          amount: payment.amount,
+          paymentDate: payment.paymentDate,
+          paymentMethod: payment.paymentMethod,
+          receiptUrl: payment.receiptUrl,
           fees: fees.map(fee => ({
             type: fee.type,
             amount: fee.amount,
             month: fee.month,
             year: fee.year,
-            dueDate: fee.dueDate
-          }))
+            dueDate: fee.dueDate,
+          })),
         };
       }));
 
