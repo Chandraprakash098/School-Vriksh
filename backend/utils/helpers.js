@@ -1,3 +1,6 @@
+const PDFDocument = require('pdfkit');  // Add this import
+const cloudinary = require('cloudinary').v2;
+
 const helpers = {
     getCurrentAcademicYear: () => {
       const now = new Date();
