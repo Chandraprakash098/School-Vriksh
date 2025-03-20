@@ -956,7 +956,7 @@ const feesController = {
 
       await Promise.all(updatePromises);
 
-      const feeSlip = generateFeeSlip(student, payment, feesToPay, schoolId,connection);
+      const feeSlip = await generateFeeSlip(student, payment, feesToPay, schoolId,connection);
       payment.receiptUrl = feeSlip.pdfUrl;//new
       await payment.save();//new one for test
 
@@ -988,6 +988,7 @@ const feesController = {
       const connection = req.connection;
       const PaymentModel = Payment(connection);
       const FeeModel = Fee(connection);
+      const UserModel = User(connection);
 
       const generatedSignature = crypto
         .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
