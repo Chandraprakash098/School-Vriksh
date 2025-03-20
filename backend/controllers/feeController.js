@@ -956,7 +956,7 @@ const feesController = {
 
       await Promise.all(updatePromises);
 
-      const feeSlip = generateFeeSlip(student, payment, feesToPay, schoolId);
+      const feeSlip = generateFeeSlip(student, payment, feesToPay, schoolId,connection);
       payment.receiptUrl = feeSlip.pdfUrl;//new
       await payment.save();//new one for test
 
@@ -1061,7 +1061,8 @@ const feesController = {
           payment.student,
           payment,
           payment.feesPaid,
-          schoolId
+          schoolId,
+          connection
         );
         payment.receiptUrl = feeSlip.pdfUrl;
         await payment.save();
