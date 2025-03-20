@@ -78,17 +78,17 @@ const helpers = {
       const receiptNumber = payment.receiptNumber || `REC${Date.now()}`;
       const feeSlipId = `FS-${receiptNumber}`;
       
-      const Class = require('../models/Class')(connection);
+      // const Class = require('../models/Class')(connection);
 
-      // Fetch the class details
-      const classDetails = await Class.findById(student.studentDetails.class)
-        .select('name division')
-        .lean();
+      // // Fetch the class details
+      // const classDetails = await Class.findById(student.studentDetails.class)
+      //   .select('name division')
+      //   .lean();
 
-      // Construct class name (e.g., "10 A" or just "10" if no division)
-      const className = classDetails 
-        ? `${classDetails.name}${classDetails.division ? ' ' + classDetails.division : ''}`
-        : 'Unknown Class';
+      // // Construct class name (e.g., "10 A" or just "10" if no division)
+      // const className = classDetails 
+      //   ? `${classDetails.name}${classDetails.division ? ' ' + classDetails.division : ''}`
+      //   : 'Unknown Class';
 
       // Basic fee slip data
       const feeSlipData = {
@@ -98,8 +98,8 @@ const helpers = {
           id: student._id.toString(),
           name: student.name,
           grNumber: student.studentDetails.grNumber,
-          // class: student.studentDetails.class,
-          class: className,
+          class: student.studentDetails.class,
+          
         },
         paymentDetails: {
           receiptNumber,
