@@ -1485,6 +1485,46 @@ const feesController = {
     }
   },
 
+  // downloadReceipt: async (req, res) => {
+  //   try {
+  //     const { paymentId } = req.params;
+  //     const schoolId = req.school._id.toString();
+  //     const connection = req.connection;
+  //     const PaymentModel = Payment(connection);
+
+  //     const payment = await PaymentModel.findOne({ 
+  //       _id: paymentId, 
+  //       school: schoolId,
+  //       status: 'completed'
+  //     }).populate('student', 'name studentDetails.grNumber studentDetails.class');
+
+  //     if (!payment) {
+  //       return res.status(404).json({ message: 'Payment not found or not completed' });
+  //     }
+
+  //     if (!payment.receiptUrl) {
+  //       // Regenerate receipt if URL is missing
+  //       const feeSlip = await generateFeeSlip(
+  //         payment.student,
+  //         payment,
+  //         payment.feesPaid,
+  //         schoolId,
+  //       );
+  //       payment.receiptUrl = feeSlip.pdfUrl;
+  //       await payment.save();
+  //     }
+
+  //     res.json({
+  //       message: 'Receipt ready for download',
+  //       receiptUrl: payment.receiptUrl,
+  //     });
+  //   } catch (error) {
+  //     console.error('Error downloading receipt:', error);
+  //     res.status(500).json({ error: error.message });
+  //   }
+  // },
+   
+
   downloadReceipt: async (req, res) => {
     try {
       const { paymentId } = req.params;
@@ -1502,28 +1542,40 @@ const feesController = {
         return res.status(404).json({ message: 'Payment not found or not completed' });
       }
 
-      if (!payment.receiptUrl) {
+      let receiptUrl = payment.receiptUrl;
+
+      if (!receiptUrl) {
         // Regenerate receipt if URL is missing
         const feeSlip = await generateFeeSlip(
           payment.student,
           payment,
           payment.feesPaid,
-          schoolId,
+          schoolId
         );
         payment.receiptUrl = feeSlip.pdfUrl;
+        receiptUrl = feeSlip.pdfUrl;
         await payment.save();
       }
 
+      // Extract the public ID from the receiptUrl
+      const publicId = receiptUrl.match(/fee_receipts\/receipt_FS-[^\/]+\.pdf/)[0].replace('.pdf', '');
+      
+      // Generate a signed URL with an expiration time (e.g., 1 hour = 3600 seconds)
+      const expires = Math.floor(Date.now() / 1000) + 3600; // Current time + 1 hour
+      const signedUrl = cloudinary.utils.private_download_url(publicId, 'pdf', {
+        resource_type: 'raw',
+        expires_at: expires,
+      });
+
       res.json({
         message: 'Receipt ready for download',
-        receiptUrl: payment.receiptUrl,
+        receiptUrl: signedUrl,
       });
     } catch (error) {
-      console.error('Error downloading receipt:', error);
-      res.status(500).json({ error: error.message });
+      console.error('Error generating signed URL for receipt:', error);
+      res.status(500).json({ error: error.message || 'Failed to generate signed URL' });
     }
   },
-
   
 
   // getStudentFeeHistory: async (req, res) => {
