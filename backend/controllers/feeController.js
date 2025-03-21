@@ -1687,6 +1687,7 @@ const feesController = {
       // Group fees by month-year across all payments
       const feesByMonthYear = {};
       const receiptUrlsByMonthYear = {};
+      const paymentIdsByMonthYear = {}; // To store paymentId for each month-year
 
       await Promise.all(payments.map(async (payment) => {
         const uniqueFeeKeys = new Set();
@@ -1708,6 +1709,7 @@ const feesController = {
               paymentDate: payment.paymentDate,
               paymentMethod: payment.paymentMethod,
               receiptNumber: payment.receiptNumber,
+              paymentId: payment._id.toString(), // Include paymentId in paymentDetails
             },
           }));
 
@@ -1716,11 +1718,16 @@ const feesController = {
           if (!feesByMonthYear[key]) feesByMonthYear[key] = [];
           feesByMonthYear[key].push(fee);
 
-          // Use existing receipt URL if available, or generate new one
+          // Store or update receipt URL and paymentId
           if (payment.receiptUrls && payment.receiptUrls[key]) {
             receiptUrlsByMonthYear[key] = payment.receiptUrls[key];
           } else if (!receiptUrlsByMonthYear[key]) {
             receiptUrlsByMonthYear[key] = payment.receiptUrl; // Fallback to single receiptUrl
+          }
+
+          // Use the latest paymentId for this month-year
+          if (!paymentIdsByMonthYear[key] || new Date(payment.paymentDate) > new Date(feesByMonthYear[key][0].paymentDetails.paymentDate)) {
+            paymentIdsByMonthYear[key] = payment._id.toString();
           }
         });
 
@@ -1731,7 +1738,6 @@ const feesController = {
             const feeSlip = await generateFeeSlip(student, payment, fees, schoolId, `${month}-${year}`);
             receiptUrlsByMonthYear[key] = feeSlip.pdfUrl;
 
-            // Update payment with new receipt URL if not already set
             if (!payment.receiptUrls) payment.receiptUrls = {};
             payment.receiptUrls[key] = feeSlip.pdfUrl;
             await payment.save();
@@ -1748,6 +1754,7 @@ const feesController = {
         );
 
         return {
+          paymentId: paymentIdsByMonthYear[key], // Include paymentId
           month: parseInt(month),
           year: parseInt(year),
           totalAmount,
@@ -1791,7 +1798,7 @@ const feesController = {
       res.status(500).json({ error: error.message });
     }
   },
-
+  
   getTotalEarningsByYear: async (req, res) => {
     try {
       const { year } = req.query;
