@@ -1485,45 +1485,6 @@ const feesController = {
     }
   },
 
-  // downloadReceipt: async (req, res) => {
-  //   try {
-  //     const { paymentId } = req.params;
-  //     const schoolId = req.school._id.toString();
-  //     const connection = req.connection;
-  //     const PaymentModel = Payment(connection);
-
-  //     const payment = await PaymentModel.findOne({ 
-  //       _id: paymentId, 
-  //       school: schoolId,
-  //       status: 'completed'
-  //     }).populate('student', 'name studentDetails.grNumber studentDetails.class');
-
-  //     if (!payment) {
-  //       return res.status(404).json({ message: 'Payment not found or not completed' });
-  //     }
-
-  //     if (!payment.receiptUrl) {
-  //       // Regenerate receipt if URL is missing
-  //       const feeSlip = await generateFeeSlip(
-  //         payment.student,
-  //         payment,
-  //         payment.feesPaid,
-  //         schoolId,
-  //       );
-  //       payment.receiptUrl = feeSlip.pdfUrl;
-  //       await payment.save();
-  //     }
-
-  //     res.json({
-  //       message: 'Receipt ready for download',
-  //       receiptUrl: payment.receiptUrl,
-  //     });
-  //   } catch (error) {
-  //     console.error('Error downloading receipt:', error);
-  //     res.status(500).json({ error: error.message });
-  //   }
-  // },
-
   downloadReceipt: async (req, res) => {
     try {
       const { paymentId } = req.params;
@@ -1541,39 +1502,29 @@ const feesController = {
         return res.status(404).json({ message: 'Payment not found or not completed' });
       }
 
-      let receiptUrl = payment.receiptUrl;
-
-      if (!receiptUrl) {
+      if (!payment.receiptUrl) {
         // Regenerate receipt if URL is missing
         const feeSlip = await generateFeeSlip(
           payment.student,
           payment,
           payment.feesPaid,
-          schoolId
+          schoolId,
         );
         payment.receiptUrl = feeSlip.pdfUrl;
-        receiptUrl = feeSlip.pdfUrl;
         await payment.save();
       }
 
-      // Fetch the PDF from Cloudinary
-      const response = await axios({
-        url: receiptUrl,
-        method: 'GET',
-        responseType: 'stream', // Stream the file
+      res.json({
+        message: 'Receipt ready for download',
+        receiptUrl: payment.receiptUrl,
       });
-
-      // Set headers for file download
-      res.setHeader('Content-Disposition', `attachment; filename="receipt-${payment.receiptNumber}.pdf"`);
-      res.setHeader('Content-Type', 'application/pdf');
-
-      // Pipe the stream to the response
-      response.data.pipe(res);
     } catch (error) {
       console.error('Error downloading receipt:', error);
-      res.status(500).json({ error: error.message || 'Failed to download receipt' });
+      res.status(500).json({ error: error.message });
     }
   },
+
+  
 
   // getStudentFeeHistory: async (req, res) => {
   //   try {
