@@ -1144,7 +1144,7 @@ const feesController = {
 
       const feesToPay = [];
       let calculatedTotal = 0;
-      const uniqueFeeKeys = new Set(); // To prevent duplicates
+      const uniqueFeeKeys = new Set();
 
       for (const fee of selectedFees) {
         const { year, month, types } = fee;
@@ -1169,7 +1169,7 @@ const feesController = {
 
         for (const def of feeDefinitions) {
           const key = `${def.type}-${month}-${year}`;
-          if (uniqueFeeKeys.has(key)) continue; // Skip duplicates
+          if (uniqueFeeKeys.has(key)) continue;
           uniqueFeeKeys.add(key);
 
           const existing = existingFees.find(f => f.type === def.type);
@@ -1241,8 +1241,23 @@ const feesController = {
 
       await Promise.all(updatePromises);
 
-      const feeSlip = await generateFeeSlip(student, payment, feesToPay, schoolId);
-      payment.receiptUrl = feeSlip.pdfUrl;
+      // Group fees by month-year for receipt generation
+      const feesByMonthYear = feesToPay.reduce((acc, fee) => {
+        const key = `${fee.month}-${fee.year}`;
+        if (!acc[key]) acc[key] = [];
+        acc[key].push(fee);
+        return acc;
+      }, {});
+
+      const receiptUrls = {};
+      for (const [key, fees] of Object.entries(feesByMonthYear)) {
+        const [month, year] = key.split('-');
+        const feeSlip = await generateFeeSlip(student, payment, fees, schoolId, `${month}-${year}`);
+        receiptUrls[key] = feeSlip.pdfUrl;
+      }
+
+      payment.receiptUrl = receiptUrls[`${feesToPay[0].month}-${feesToPay[0].year}`]; // Default to first month-year
+      payment.receiptUrls = receiptUrls; // Store all receipt URLs by month-year
       await payment.save();
 
       res.json({
@@ -1254,8 +1269,7 @@ const feesController = {
           month: fee.month,
           year: fee.year,
         })),
-        feeSlip,
-        receiptUrl: feeSlip.pdfUrl,
+        receiptUrls,
       });
     } catch (error) {
       console.error('Payment processing error:', error);
@@ -1410,50 +1424,59 @@ const feesController = {
       payment.receiptNumber = `REC${Date.now()}`;
       await payment.save();
 
-      const uniqueFeeKeys = new Set(); // To prevent duplicates
-      const feeUpdates = payment.feesPaid
-        .filter(feePaid => {
-          const key = `${feePaid.type}-${feePaid.month}-${feePaid.year}`;
-          if (uniqueFeeKeys.has(key)) return false;
-          uniqueFeeKeys.add(key);
-          return true;
-        })
-        .map(async feePaid => {
-          const fee = await FeeModel.findOne({
-            student: payment.student,
-            school: schoolId,
-            type: feePaid.type,
-            month: feePaid.month,
-            year: feePaid.year,
-          });
-          if (fee) {
-            fee.status = 'paid';
-            fee.paymentDetails = {
-              transactionId: razorpay_payment_id,
-              paymentDate: payment.paymentDate,
-              paymentMethod: payment.paymentMethod,
-              receiptNumber: payment.receiptNumber,
-            };
-            await fee.save();
-          }
+      const uniqueFeeKeys = new Set();
+      const feesPaid = payment.feesPaid.filter(feePaid => {
+        const key = `${feePaid.type}-${feePaid.month}-${feePaid.year}`;
+        if (uniqueFeeKeys.has(key)) return false;
+        uniqueFeeKeys.add(key);
+        return true;
+      });
+
+      const feeUpdates = feesPaid.map(async feePaid => {
+        const fee = await FeeModel.findOne({
+          student: payment.student,
+          school: schoolId,
+          type: feePaid.type,
+          month: feePaid.month,
+          year: feePaid.year,
         });
+        if (fee) {
+          fee.status = 'paid';
+          fee.paymentDetails = {
+            transactionId: razorpay_payment_id,
+            paymentDate: payment.paymentDate,
+            paymentMethod: payment.paymentMethod,
+            receiptNumber: payment.receiptNumber,
+          };
+          await fee.save();
+        }
+      });
 
       await Promise.all(feeUpdates);
 
       const student = await UserModel.findById(payment.student);
-      const uniqueFeesPaid = Array.from(uniqueFeeKeys).map(key => {
-        const [type, month, year] = key.split('-');
-        const feePaid = payment.feesPaid.find(f => f.type === type && f.month === parseInt(month) && f.year === parseInt(year));
-        return feePaid;
-      });
-      const feeSlip = await generateFeeSlip(student, payment, uniqueFeesPaid, schoolId);
-      payment.receiptUrl = feeSlip.pdfUrl;
+      const feesByMonthYear = feesPaid.reduce((acc, fee) => {
+        const key = `${fee.month}-${fee.year}`;
+        if (!acc[key]) acc[key] = [];
+        acc[key].push(fee);
+        return acc;
+      }, {});
+
+      const receiptUrls = {};
+      for (const [key, fees] of Object.entries(feesByMonthYear)) {
+        const [month, year] = key.split('-');
+        const feeSlip = await generateFeeSlip(student, payment, fees, schoolId, `${month}-${year}`);
+        receiptUrls[key] = feeSlip.pdfUrl;
+      }
+
+      payment.receiptUrl = receiptUrls[`${feesPaid[0].month}-${feesPaid[0].year}`];
+      payment.receiptUrls = receiptUrls;
       await payment.save();
 
       res.json({ 
         message: 'Payment verified successfully', 
         payment, 
-        receiptUrl: feeSlip.pdfUrl 
+        receiptUrls 
       });
     } catch (error) {
       console.error('Error in verifyPayment:', error);
@@ -1661,7 +1684,11 @@ const feesController = {
         school: schoolId,
       }).sort({ year: -1, month: -1 });
 
-      const feeHistory = await Promise.all(payments.map(async (payment) => {
+      // Group fees by month-year across all payments
+      const feesByMonthYear = {};
+      const receiptUrlsByMonthYear = {};
+
+      await Promise.all(payments.map(async (payment) => {
         const uniqueFeeKeys = new Set();
         const feesPaidDetails = payment.feesPaid
           .filter(feePaid => {
@@ -1684,22 +1711,53 @@ const feesController = {
             },
           }));
 
-        if (!payment.receiptUrl) {
-          const feeSlip = await generateFeeSlip(student, payment, feesPaidDetails, schoolId);
-          payment.receiptUrl = feeSlip.pdfUrl;
-          await payment.save();
+        feesPaidDetails.forEach(fee => {
+          const key = `${fee.month}-${fee.year}`;
+          if (!feesByMonthYear[key]) feesByMonthYear[key] = [];
+          feesByMonthYear[key].push(fee);
+
+          // Use existing receipt URL if available, or generate new one
+          if (payment.receiptUrls && payment.receiptUrls[key]) {
+            receiptUrlsByMonthYear[key] = payment.receiptUrls[key];
+          } else if (!receiptUrlsByMonthYear[key]) {
+            receiptUrlsByMonthYear[key] = payment.receiptUrl; // Fallback to single receiptUrl
+          }
+        });
+
+        // Regenerate receipt if missing for any month-year
+        for (const [key, fees] of Object.entries(feesByMonthYear)) {
+          if (!receiptUrlsByMonthYear[key]) {
+            const [month, year] = key.split('-');
+            const feeSlip = await generateFeeSlip(student, payment, fees, schoolId, `${month}-${year}`);
+            receiptUrlsByMonthYear[key] = feeSlip.pdfUrl;
+
+            // Update payment with new receipt URL if not already set
+            if (!payment.receiptUrls) payment.receiptUrls = {};
+            payment.receiptUrls[key] = feeSlip.pdfUrl;
+            await payment.save();
+          }
         }
+      }));
+
+      // Convert grouped fees into feeHistory format
+      const feeHistory = Object.entries(feesByMonthYear).map(([key, fees]) => {
+        const [month, year] = key.split('-');
+        const totalAmount = fees.reduce((sum, fee) => sum + fee.amount, 0);
+        const latestPayment = fees.reduce((latest, fee) => 
+          new Date(fee.paymentDetails.paymentDate) > new Date(latest.paymentDetails.paymentDate) ? fee : latest
+        );
 
         return {
-          paymentId: payment._id,
-          receiptNumber: payment.receiptNumber,
-          amount: payment.amount,
-          paymentDate: payment.paymentDate,
-          paymentMethod: payment.paymentMethod,
-          receiptUrl: payment.receiptUrl,
-          fees: feesPaidDetails,
+          month: parseInt(month),
+          year: parseInt(year),
+          totalAmount,
+          paymentDate: latestPayment.paymentDetails.paymentDate,
+          paymentMethod: latestPayment.paymentDetails.paymentMethod,
+          receiptNumber: latestPayment.paymentDetails.receiptNumber,
+          receiptUrl: receiptUrlsByMonthYear[key],
+          fees,
         };
-      }));
+      });
 
       const paidFeeKeys = new Set(
         payments.flatMap(p => p.feesPaid.map(f => `${f.year}-${f.month}-${f.type}`))
@@ -1723,14 +1781,17 @@ const feesController = {
           grNumber: student.studentDetails.grNumber,
           class: student.studentDetails.class,
         },
-        feeHistory: [...feeHistory, ...pendingFees.sort((a, b) => new Date(b.year, b.month - 1) - new Date(a.year, a.month - 1))],
+        feeHistory: [
+          ...feeHistory.sort((a, b) => new Date(b.year, b.month - 1) - new Date(a.year, a.month - 1)),
+          ...pendingFees.sort((a, b) => new Date(b.year, b.month - 1) - new Date(a.year, a.month - 1)),
+        ],
       });
     } catch (error) {
       console.error('Error fetching fee history:', error);
       res.status(500).json({ error: error.message });
     }
   },
-  
+
   getTotalEarningsByYear: async (req, res) => {
     try {
       const { year } = req.query;
