@@ -723,47 +723,168 @@ const feesController = {
   },
 
 
-  getStudentByGrNumber: async (req, res) => {
+  // getStudentByGrNumber: async (req, res) => {
+  //   try {
+  //     const { grNumber } = req.params;
+  //     const schoolId = req.school._id.toString();
+  //     const connection = req.connection;
+  //     const UserModel = User(connection);
+  //     const FeeModel = Fee(connection);
+  //     const PaymentModel = Payment(connection); // Add Payment model to check completed payments
+  
+  //     if (!req.user.permissions.canManageFees) {
+  //       return res.status(403).json({ message: 'Unauthorized: Only fee managers can view student fees' });
+  //     }
+  
+  //     const student = await UserModel.findOne({
+  //       'studentDetails.grNumber': grNumber,
+  //       school: schoolId,
+  //     }).select('_id name studentDetails.grNumber studentDetails.class');
+  
+  //     if (!student) return res.status(404).json({ message: 'Student not found' });
+  //     if (student.studentDetails.isRTE) return res.status(400).json({ message: 'RTE students are exempted from fees' });
+  
+  //     // Get general fee definitions (school-wide, not student-specific)
+  //     const generalFees = await FeeModel.find({
+  //       school: schoolId,
+  //       student: { $exists: false },
+  //     }).sort({ year: 1, month: 1 });
+  
+  //     // Get student-specific fee records (including paid ones)
+  //     const studentFees = await FeeModel.find({
+  //       student: student._id,
+  //       school: schoolId,
+  //     }).sort({ year: 1, month: 1 });
+  
+  //     // Get payment records for the student
+  //     const payments = await PaymentModel.find({
+  //       student: student._id,
+  //       school: schoolId,
+  //       status: 'completed',
+  //     });
+  
+  //     // Create a map of paid fees from payment records
+  //     const paidFeesMap = new Map();
+  //     payments.forEach(payment => {
+  //       payment.feesPaid.forEach(feePaid => {
+  //         const key = `${feePaid.year}-${feePaid.month}-${feePaid.type}`;
+  //         paidFeesMap.set(key, {
+  //           status: 'paid',
+  //           paymentDetails: {
+  //             transactionId: payment.transactionId || payment.receiptNumber,
+  //             paymentDate: payment.paymentDate,
+  //             paymentMethod: payment.paymentMethod,
+  //             receiptNumber: payment.receiptNumber,
+  //           },
+  //         });
+  //       });
+  //     });
+  
+  //     const feeData = {};
+  
+  //     // Step 1: Populate feeData with general fee definitions as a baseline
+  //     generalFees.forEach(fee => {
+  //       const key = `${fee.year}-${fee.month}`;
+  //       if (!feeData[key]) {
+  //         feeData[key] = { total: 0, fees: {} };
+  //       }
+  //       feeData[key].fees[fee.type] = {
+  //         amount: fee.amount,
+  //         dueDate: fee.dueDate,
+  //         description: fee.description,
+  //         status: 'pending', // Default status
+  //       };
+  //       feeData[key].total += fee.amount;
+  //     });
+  
+  //     // Step 2: Override with student-specific fee records
+  //     studentFees.forEach(fee => {
+  //       const key = `${fee.year}-${fee.month}`;
+  //       if (!feeData[key]) {
+  //         feeData[key] = { total: 0, fees: {} };
+  //       }
+  //       feeData[key].fees[fee.type] = {
+  //         amount: fee.amount,
+  //         dueDate: fee.dueDate,
+  //         description: fee.description,
+  //         status: fee.status,
+  //         ...(fee.paymentDetails && { paymentDetails: fee.paymentDetails }),
+  //       };
+  //       feeData[key].total = Object.values(feeData[key].fees).reduce((sum, f) => sum + f.amount, 0);
+  //     });
+  
+  //     // Step 3: Update status based on payment records
+  //     Object.keys(feeData).forEach(key => {
+  //       const [year, month] = key.split('-');
+  //       Object.keys(feeData[key].fees).forEach(type => {
+  //         const paymentKey = `${year}-${month}-${type}`;
+  //         if (paidFeesMap.has(paymentKey)) {
+  //           const paidInfo = paidFeesMap.get(paymentKey);
+  //           feeData[key].fees[type].status = paidInfo.status;
+  //           feeData[key].fees[type].paymentDetails = paidInfo.paymentDetails;
+  //         }
+  //       });
+  //     });
+  
+  //     res.json({
+  //       student: {
+  //         _id: student._id,
+  //         name: student.name,
+  //         grNumber: student.studentDetails.grNumber,
+  //         class: student.studentDetails.class,
+  //       },
+  //       feeData,
+  //     });
+  //   } catch (error) {
+  //     console.error('Error in getStudentByGrNumber:', error);
+  //     res.status(500).json({ error: error.message });
+  //   }
+  // },
+
+  getStudentByGrNumber : async (req, res) => {
     try {
       const { grNumber } = req.params;
       const schoolId = req.school._id.toString();
       const connection = req.connection;
-      const UserModel = User(connection);
-      const FeeModel = Fee(connection);
-      const PaymentModel = Payment(connection); // Add Payment model to check completed payments
+      const getModel = require('../models/index'); // Adjust path to your index.js
+  
+      const UserModel = getModel('User', connection);
+      const FeeModel = getModel('Fee', connection);
+      const PaymentModel = getModel('Payment', connection);
+      const ClassModel = getModel('Class', connection); // Explicitly load Class model
   
       if (!req.user.permissions.canManageFees) {
         return res.status(403).json({ message: 'Unauthorized: Only fee managers can view student fees' });
       }
   
+      // Query with populated class details
       const student = await UserModel.findOne({
         'studentDetails.grNumber': grNumber,
         school: schoolId,
-      }).select('_id name studentDetails.grNumber studentDetails.class');
+      })
+        .select('_id name studentDetails.grNumber studentDetails.class')
+        .populate('studentDetails.class', 'name division');
   
       if (!student) return res.status(404).json({ message: 'Student not found' });
       if (student.studentDetails.isRTE) return res.status(400).json({ message: 'RTE students are exempted from fees' });
   
-      // Get general fee definitions (school-wide, not student-specific)
+      // Rest of your existing logic...
       const generalFees = await FeeModel.find({
         school: schoolId,
         student: { $exists: false },
       }).sort({ year: 1, month: 1 });
   
-      // Get student-specific fee records (including paid ones)
       const studentFees = await FeeModel.find({
         student: student._id,
         school: schoolId,
       }).sort({ year: 1, month: 1 });
   
-      // Get payment records for the student
       const payments = await PaymentModel.find({
         student: student._id,
         school: schoolId,
         status: 'completed',
       });
   
-      // Create a map of paid fees from payment records
       const paidFeesMap = new Map();
       payments.forEach(payment => {
         payment.feesPaid.forEach(feePaid => {
@@ -781,8 +902,6 @@ const feesController = {
       });
   
       const feeData = {};
-  
-      // Step 1: Populate feeData with general fee definitions as a baseline
       generalFees.forEach(fee => {
         const key = `${fee.year}-${fee.month}`;
         if (!feeData[key]) {
@@ -792,12 +911,11 @@ const feesController = {
           amount: fee.amount,
           dueDate: fee.dueDate,
           description: fee.description,
-          status: 'pending', // Default status
+          status: 'pending',
         };
         feeData[key].total += fee.amount;
       });
   
-      // Step 2: Override with student-specific fee records
       studentFees.forEach(fee => {
         const key = `${fee.year}-${fee.month}`;
         if (!feeData[key]) {
@@ -813,7 +931,6 @@ const feesController = {
         feeData[key].total = Object.values(feeData[key].fees).reduce((sum, f) => sum + f.amount, 0);
       });
   
-      // Step 3: Update status based on payment records
       Object.keys(feeData).forEach(key => {
         const [year, month] = key.split('-');
         Object.keys(feeData[key].fees).forEach(type => {
@@ -831,7 +948,11 @@ const feesController = {
           _id: student._id,
           name: student.name,
           grNumber: student.studentDetails.grNumber,
-          class: student.studentDetails.class,
+          class: student.studentDetails.class ? {
+            _id: student.studentDetails.class._id,
+            name: student.studentDetails.class.name,
+            division: student.studentDetails.class.division
+          } : null,
         },
         feeData,
       });
