@@ -1187,13 +1187,12 @@
 // };
 
 
-
 const Razorpay = require('razorpay');
 const crypto = require('crypto');
 const { generateTrackingId } = require('../utils/helpers');
 const { encrypt, decrypt } = require('../utils/encryption');
 const { getOwnerConnection } = require('../config/database');
-const { s3, deleteFromS3 } = require('../config/s3Upload');
+const { uploadToS3, deleteFromS3 } = require('../config/s3Upload'); // Updated import for v3
 
 const razorpay = new Razorpay({
   key_id: process.env.RAZORPAY_KEY_ID,
@@ -1483,21 +1482,21 @@ const admissionController = {
       const schoolId = form.school;
       const trackingId = generateTrackingId(schoolId);
 
-      // Process uploaded files with S3
+      // Process uploaded files with S3 (v3)
       const uploadedDocuments = [];
       try {
         for (const fileType in req.files) {
           const file = req.files[fileType][0];
           uploadedDocuments.push({
             type: fileType,
-            documentUrl: file.location, // S3 URL
+            documentUrl: file.location, // S3 URL from multer-s3
             key: file.key, // S3 key for deletion
           });
         }
       } catch (error) {
         // Cleanup uploaded files if there's an error
         for (const doc of uploadedDocuments) {
-          await deleteFromS3(doc.key);
+          await deleteFromS3(doc.key); // Updated to v3 delete
         }
         throw new Error('File upload failed: ' + error.message);
       }
@@ -1544,10 +1543,10 @@ const admissionController = {
       const application = await AdmissionApplication.findById(applicationId);
       if (!application) return;
 
-      // Delete all documents from S3
+      // Delete all documents from S3 using v3
       for (const doc of application.documents) {
         if (doc.key) {
-          await deleteFromS3(doc.key);
+          await deleteFromS3(doc.key); // Updated to v3 delete
         }
       }
     } catch (error) {
@@ -2002,5 +2001,5 @@ function getNextSteps(application) {
 
 module.exports = {
   admissionController,
-  uploadDocuments: require('../config/s3Upload').uploadDocuments,
+  uploadDocuments: require('../config/s3Upload').uploadDocuments, // Ensure this matches the v3 export
 };
