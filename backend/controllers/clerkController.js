@@ -1830,6 +1830,72 @@ const clerkController = {
     }
   },
 
+  // getCertificateHistory: async (req, res) => {
+  //   try {
+  //     const schoolId = req.school._id.toString();
+  //     const connection = req.connection;
+  //     const Certificate = require('../models/Certificate')(connection);
+  //     const User = require('../models/User')(connection);
+  //     const Class = require('../models/Class')(connection);
+
+  //     const certificates = await Certificate.find({ school: schoolId })
+  //       .populate({
+  //         path: 'student',
+  //         select: 'name email studentDetails',
+  //         populate: {
+  //           path: 'studentDetails.class',
+  //           model: Class,
+  //           select: 'name division',
+  //         },
+  //       })
+  //       .populate('generatedBy', 'name email', User)
+  //       .sort({ requestDate: -1 });
+
+  //     const certificatesWithPresignedUrls = await Promise.all(
+  //       certificates.map(async (cert) => ({
+  //         id: cert._id,
+  //         studentName: cert.student?.name || 'N/A',
+  //         studentEmail: cert.student?.email || 'N/A',
+  //         type: cert.type,
+  //         purpose: cert.purpose,
+  //         urgency: cert.urgency,
+  //         requestDate: cert.requestDate,
+  //         status: cert.status,
+  //         documentUrl: cert.documentUrl,
+  //         signedDocumentUrl: cert.signedDocumentUrl,
+  //         documentPresignedUrl: cert.documentUrl ? await getPresignedUrl(cert.documentKey) : null,
+  //         signedDocumentPresignedUrl: cert.signedDocumentUrl ? await getPresignedUrl(cert.signedDocumentKey) : null,
+  //         isSentToStudent: cert.isSentToStudent,
+  //         issuedDate: cert.issuedDate || null,
+  //         generatedBy: cert.generatedBy ? cert.generatedBy.name : null,
+  //         comments: cert.comments || null,
+  //         grNumber: cert.student?.studentDetails?.grNumber || 'N/A',
+  //         parentName: cert.student?.studentDetails?.parentDetails?.name || 'N/A',
+  //         admissionDate: cert.student?.studentDetails?.admissionDate
+  //           ? new Date(cert.student.studentDetails.admissionDate).toISOString().split('T')[0]
+  //           : 'N/A',
+  //         dob: cert.student?.studentDetails?.dob
+  //           ? new Date(cert.student.studentDetails.dob).toISOString().split('T')[0]
+  //           : 'N/A',
+  //         className: cert.student?.studentDetails?.class
+  //           ? `${cert.student.studentDetails.class.name}${cert.student.studentDetails.class.division ? ' ' + cert.student.studentDetails.class.division : ''}`
+  //           : 'N/A',
+  //         schoolName: req.school?.name || 'N/A',
+  //         schoolAddress: req.school?.address || 'N/A',
+  //       }))
+  //     );
+
+  //     res.json({
+  //       status: 'success',
+  //       count: certificates.length,
+  //       certificates: certificatesWithPresignedUrls,
+  //     });
+  //   } catch (error) {
+  //     console.error('Error in getCertificateHistory:', error);
+  //     res.status(500).json({ error: error.message });
+  //   }
+  // },
+
   getCertificateHistory: async (req, res) => {
     try {
       const schoolId = req.school._id.toString();
@@ -1837,7 +1903,7 @@ const clerkController = {
       const Certificate = require('../models/Certificate')(connection);
       const User = require('../models/User')(connection);
       const Class = require('../models/Class')(connection);
-
+  
       const certificates = await Certificate.find({ school: schoolId })
         .populate({
           path: 'student',
@@ -1850,7 +1916,7 @@ const clerkController = {
         })
         .populate('generatedBy', 'name email', User)
         .sort({ requestDate: -1 });
-
+  
       const certificatesWithPresignedUrls = await Promise.all(
         certificates.map(async (cert) => ({
           id: cert._id,
@@ -1863,8 +1929,8 @@ const clerkController = {
           status: cert.status,
           documentUrl: cert.documentUrl,
           signedDocumentUrl: cert.signedDocumentUrl,
-          documentPresignedUrl: cert.documentUrl ? await getPresignedUrl(cert.documentKey) : null,
-          signedDocumentPresignedUrl: cert.signedDocumentUrl ? await getPresignedUrl(cert.signedDocumentKey) : null,
+          documentPresignedUrl: cert.documentKey ? await getPresignedUrl(cert.documentKey) : null, // Check documentKey
+          signedDocumentPresignedUrl: cert.signedDocumentKey ? await getPresignedUrl(cert.signedDocumentKey) : null, // Check signedDocumentKey
           isSentToStudent: cert.isSentToStudent,
           issuedDate: cert.issuedDate || null,
           generatedBy: cert.generatedBy ? cert.generatedBy.name : null,
@@ -1884,7 +1950,7 @@ const clerkController = {
           schoolAddress: req.school?.address || 'N/A',
         }))
       );
-
+  
       res.json({
         status: 'success',
         count: certificates.length,
