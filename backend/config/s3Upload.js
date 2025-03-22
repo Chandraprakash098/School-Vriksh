@@ -27,6 +27,7 @@ const admissionStorage = multerS3({
     const fileKey = `admissions/${schoolId}/${fileName}`;
     cb(null, fileKey);
   },
+  acl: 'public-read',
 });
 
 const uploadDocuments = multer({
