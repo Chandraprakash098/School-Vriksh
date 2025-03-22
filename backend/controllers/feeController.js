@@ -609,6 +609,119 @@ const feesController = {
     }
   },
 
+  // getFeesByClassAndMonth: async (req, res) => {
+  //   try {
+  //     const { classId, month, year } = req.params;
+  //     const schoolId = req.school._id.toString();
+  //     const connection = req.connection;
+  //     const FeeModel = Fee(connection);
+  //     const UserModel = User(connection);
+  //     const PaymentModel = Payment(connection);
+
+  //     if (!req.user.permissions.canManageFees) {
+  //       return res.status(403).json({ message: 'Unauthorized: Only fee managers can view fees' });
+  //     }
+
+  //     let objectIdClassId;
+  //     try {
+  //       objectIdClassId = new mongoose.Types.ObjectId(classId);
+  //     } catch (error) {
+  //       return res.status(400).json({ message: 'Invalid class ID format' });
+  //     }
+
+  //     // Get all students in the class
+  //     const students = await UserModel.find({
+  //       'studentDetails.class': objectIdClassId,
+  //       school: schoolId,
+  //     }).select('_id name studentDetails.grNumber studentDetails.class');
+
+  //     // Get unique fee definitions for the month/year
+  //     const feeDefinitionsRaw = await FeeModel.find({
+  //       school: schoolId,
+  //       student: { $exists: false },
+  //       month: parseInt(month),
+  //       year: parseInt(year),
+  //     });
+
+  //     // Remove duplicates by fee type
+  //     const feeDefinitions = Array.from(
+  //       new Map(feeDefinitionsRaw.map(fee => [fee.type, fee])).values()
+  //     );
+
+  //     // Get student-specific fee records
+  //     const studentFees = await FeeModel.find({
+  //       student: { $in: students.map(s => s._id) },
+  //       school: schoolId,
+  //       month: parseInt(month),
+  //       year: parseInt(year),
+  //     });
+
+  //     // Get payment records
+  //     const paymentRecords = await PaymentModel.find({
+  //       student: { $in: students.map(s => s._id) },
+  //       school: schoolId,
+  //       status: 'completed',
+  //       'feesPaid.month': parseInt(month),
+  //       'feesPaid.year': parseInt(year),
+  //     });
+
+  //     // Create a map of paid fees
+  //     const paidFeesMap = new Map();
+  //     paymentRecords.forEach(payment => {
+  //       payment.feesPaid.forEach(feePaid => {
+  //         if (feePaid.month === parseInt(month) && feePaid.year === parseInt(year)) {
+  //           const key = `${payment.student.toString()}_${feePaid.type}`;
+  //           paidFeesMap.set(key, {
+  //             status: 'paid',
+  //             paymentDate: payment.paymentDate,
+  //           });
+  //         }
+  //       });
+  //     });
+
+  //     // Process student fee data
+  //     const feeData = students.map(student => {
+  //       const studentSpecificFees = studentFees.filter(fee =>
+  //         fee.student && fee.student.toString() === student._id.toString()
+  //       );
+
+  //       const feeSummary = {
+  //         studentId: student._id,
+  //         name: student.name,
+  //         grNumber: student.studentDetails.grNumber,
+  //         class: student.studentDetails.class,
+  //         fees: {},
+  //         total: 0,
+  //         allPaid: true,
+  //       };
+
+  //       feeDefinitions.forEach(def => {
+  //         const paidFee = studentSpecificFees.find(f => f.type === def.type);
+  //         const paymentInfo = paidFeesMap.get(`${student._id.toString()}_${def.type}`);
+
+  //         const status = paidFee ? paidFee.status : (paymentInfo ? paymentInfo.status : 'pending');
+  //         const paidDate = paidFee?.paymentDetails?.paymentDate || (paymentInfo ? paymentInfo.paymentDate : null);
+
+  //         feeSummary.fees[def.type] = {
+  //           amount: def.amount,
+  //           status,
+  //           paidDate,
+  //         };
+
+  //         feeSummary.total += def.amount;
+  //         if (status !== 'paid') feeSummary.allPaid = false;
+  //       });
+
+  //       return feeSummary;
+  //     });
+
+  //     res.json(feeData);
+  //   } catch (error) {
+  //     console.error('Error in getFeesByClassAndMonth:', error);
+  //     res.status(500).json({ error: error.message });
+  //   }
+  // },
+
   getFeesByClassAndMonth: async (req, res) => {
     try {
       const { classId, month, year } = req.params;
@@ -617,24 +730,27 @@ const feesController = {
       const FeeModel = Fee(connection);
       const UserModel = User(connection);
       const PaymentModel = Payment(connection);
-
+      const ClassModel = require('../models/Class')(connection); // Explicitly load Class model
+  
       if (!req.user.permissions.canManageFees) {
         return res.status(403).json({ message: 'Unauthorized: Only fee managers can view fees' });
       }
-
+  
       let objectIdClassId;
       try {
         objectIdClassId = new mongoose.Types.ObjectId(classId);
       } catch (error) {
         return res.status(400).json({ message: 'Invalid class ID format' });
       }
-
-      // Get all students in the class
+  
+      // Get all students in the class with populated class details
       const students = await UserModel.find({
         'studentDetails.class': objectIdClassId,
         school: schoolId,
-      }).select('_id name studentDetails.grNumber studentDetails.class');
-
+      })
+        .select('_id name studentDetails.grNumber studentDetails.class')
+        .populate('studentDetails.class', 'name division'); // Populate class with name and division
+  
       // Get unique fee definitions for the month/year
       const feeDefinitionsRaw = await FeeModel.find({
         school: schoolId,
@@ -642,12 +758,12 @@ const feesController = {
         month: parseInt(month),
         year: parseInt(year),
       });
-
+  
       // Remove duplicates by fee type
       const feeDefinitions = Array.from(
         new Map(feeDefinitionsRaw.map(fee => [fee.type, fee])).values()
       );
-
+  
       // Get student-specific fee records
       const studentFees = await FeeModel.find({
         student: { $in: students.map(s => s._id) },
@@ -655,7 +771,7 @@ const feesController = {
         month: parseInt(month),
         year: parseInt(year),
       });
-
+  
       // Get payment records
       const paymentRecords = await PaymentModel.find({
         student: { $in: students.map(s => s._id) },
@@ -664,7 +780,7 @@ const feesController = {
         'feesPaid.month': parseInt(month),
         'feesPaid.year': parseInt(year),
       });
-
+  
       // Create a map of paid fees
       const paidFeesMap = new Map();
       paymentRecords.forEach(payment => {
@@ -678,43 +794,47 @@ const feesController = {
           }
         });
       });
-
+  
       // Process student fee data
       const feeData = students.map(student => {
         const studentSpecificFees = studentFees.filter(fee =>
           fee.student && fee.student.toString() === student._id.toString()
         );
-
+  
         const feeSummary = {
           studentId: student._id,
           name: student.name,
           grNumber: student.studentDetails.grNumber,
-          class: student.studentDetails.class,
+          class: student.studentDetails.class ? {
+            _id: student.studentDetails.class._id,
+            name: student.studentDetails.class.name,
+            division: student.studentDetails.class.division
+          } : null,
           fees: {},
           total: 0,
           allPaid: true,
         };
-
+  
         feeDefinitions.forEach(def => {
           const paidFee = studentSpecificFees.find(f => f.type === def.type);
           const paymentInfo = paidFeesMap.get(`${student._id.toString()}_${def.type}`);
-
+  
           const status = paidFee ? paidFee.status : (paymentInfo ? paymentInfo.status : 'pending');
           const paidDate = paidFee?.paymentDetails?.paymentDate || (paymentInfo ? paymentInfo.paymentDate : null);
-
+  
           feeSummary.fees[def.type] = {
             amount: def.amount,
             status,
             paidDate,
           };
-
+  
           feeSummary.total += def.amount;
           if (status !== 'paid') feeSummary.allPaid = false;
         });
-
+  
         return feeSummary;
       });
-
+  
       res.json(feeData);
     } catch (error) {
       console.error('Error in getFeesByClassAndMonth:', error);
@@ -1705,6 +1825,7 @@ const feesController = {
   },
   
 
+
   // getStudentFeeHistory: async (req, res) => {
   //   try {
   //     const { grNumber } = req.params;
@@ -1714,12 +1835,10 @@ const feesController = {
   //     const FeeModel = Fee(connection);
   //     const PaymentModel = Payment(connection);
 
-  //     // Authorization check
   //     if (!req.user.permissions.canManageFees) {
   //       return res.status(403).json({ message: 'Unauthorized: Only fee managers can view fee history' });
   //     }
 
-  //     // Find the student by GR number
   //     const student = await UserModel.findOne({
   //       'studentDetails.grNumber': grNumber,
   //       school: schoolId,
@@ -1742,54 +1861,99 @@ const feesController = {
   //       });
   //     }
 
-  //     // Fetch all payment records for the student
   //     const payments = await PaymentModel.find({
   //       student: student._id,
   //       school: schoolId,
   //       status: 'completed',
   //     }).sort({ paymentDate: -1 });
 
-  //     // Fetch all fee records (both paid and pending)
   //     const fees = await FeeModel.find({
   //       student: student._id,
   //       school: schoolId,
   //     }).sort({ year: -1, month: -1 });
 
-  //     // Combine payment and fee data into a history format
-  //     const feeHistory = await Promise.all(payments.map(async (payment) => {
-  //       const feesPaidDetails = payment.feesPaid.map(feePaid => ({
-  //         type: feePaid.type,
-  //         month: feePaid.month,
-  //         year: feePaid.year,
-  //         amount: feePaid.amount,
-  //         status: 'paid',
-  //         paymentDetails: {
-  //           transactionId: payment.transactionId || 'N/A',
-  //           paymentDate: payment.paymentDate,
-  //           paymentMethod: payment.paymentMethod,
-  //           receiptNumber: payment.receiptNumber,
-  //         },
-  //       }));
+  //     // Group fees by month-year across all payments
+  //     const feesByMonthYear = {};
+  //     const receiptUrlsByMonthYear = {};
+  //     const paymentIdsByMonthYear = {}; // To store paymentId for each month-year
 
-  //       // Ensure receipt URL exists; regenerate if missing
-  //       if (!payment.receiptUrl) {
-  //         const feeSlip = await generateFeeSlip(student, payment, payment.feesPaid, schoolId);
-  //         payment.receiptUrl = feeSlip.pdfUrl;
-  //         await payment.save();
+  //     await Promise.all(payments.map(async (payment) => {
+  //       const uniqueFeeKeys = new Set();
+  //       const feesPaidDetails = payment.feesPaid
+  //         .filter(feePaid => {
+  //           const key = `${feePaid.type}-${feePaid.month}-${feePaid.year}`;
+  //           if (uniqueFeeKeys.has(key)) return false;
+  //           uniqueFeeKeys.add(key);
+  //           return true;
+  //         })
+  //         .map(feePaid => ({
+  //           type: feePaid.type,
+  //           month: feePaid.month,
+  //           year: feePaid.year,
+  //           amount: feePaid.amount,
+  //           status: 'paid',
+  //           paymentDetails: {
+  //             transactionId: payment.transactionId || 'N/A',
+  //             paymentDate: payment.paymentDate,
+  //             paymentMethod: payment.paymentMethod,
+  //             receiptNumber: payment.receiptNumber,
+  //             paymentId: payment._id.toString(), // Include paymentId in paymentDetails
+  //           },
+  //         }));
+
+  //       feesPaidDetails.forEach(fee => {
+  //         const key = `${fee.month}-${fee.year}`;
+  //         if (!feesByMonthYear[key]) feesByMonthYear[key] = [];
+  //         feesByMonthYear[key].push(fee);
+
+  //         // Store or update receipt URL and paymentId
+  //         if (payment.receiptUrls && payment.receiptUrls[key]) {
+  //           receiptUrlsByMonthYear[key] = payment.receiptUrls[key];
+  //         } else if (!receiptUrlsByMonthYear[key]) {
+  //           receiptUrlsByMonthYear[key] = payment.receiptUrl; // Fallback to single receiptUrl
+  //         }
+
+  //         // Use the latest paymentId for this month-year
+  //         if (!paymentIdsByMonthYear[key] || new Date(payment.paymentDate) > new Date(feesByMonthYear[key][0].paymentDetails.paymentDate)) {
+  //           paymentIdsByMonthYear[key] = payment._id.toString();
+  //         }
+  //       });
+
+  //       // Regenerate receipt if missing for any month-year
+  //       for (const [key, fees] of Object.entries(feesByMonthYear)) {
+  //         if (!receiptUrlsByMonthYear[key]) {
+  //           const [month, year] = key.split('-');
+  //           const feeSlip = await generateFeeSlip(student, payment, fees, schoolId, `${month}-${year}`);
+  //           receiptUrlsByMonthYear[key] = feeSlip.pdfUrl;
+
+  //           if (!payment.receiptUrls) payment.receiptUrls = {};
+  //           payment.receiptUrls[key] = feeSlip.pdfUrl;
+  //           await payment.save();
+  //         }
   //       }
-
-  //       return {
-  //         paymentId: payment._id,
-  //         receiptNumber: payment.receiptNumber,
-  //         amount: payment.amount,
-  //         paymentDate: payment.paymentDate,
-  //         paymentMethod: payment.paymentMethod,
-  //         receiptUrl: payment.receiptUrl,
-  //         fees: feesPaidDetails,
-  //       };
   //     }));
 
-  //     // Add pending fees to the history (those not linked to payments)
+  //     // Convert grouped fees into feeHistory format
+  //     const feeHistory = Object.entries(feesByMonthYear).map(([key, fees]) => {
+  //       const [month, year] = key.split('-');
+  //       const totalAmount = fees.reduce((sum, fee) => sum + fee.amount, 0);
+  //       const latestPayment = fees.reduce((latest, fee) => 
+  //         new Date(fee.paymentDetails.paymentDate) > new Date(latest.paymentDetails.paymentDate) ? fee : latest
+  //       );
+
+  //       return {
+  //         paymentId: paymentIdsByMonthYear[key], // Include paymentId
+  //         month: parseInt(month),
+  //         year: parseInt(year),
+  //         totalAmount,
+  //         paymentDate: latestPayment.paymentDetails.paymentDate,
+  //         paymentMethod: latestPayment.paymentDetails.paymentMethod,
+  //         receiptNumber: latestPayment.paymentDetails.receiptNumber,
+  //         receiptUrl: receiptUrlsByMonthYear[key],
+  //         fees,
+  //       };
+  //     });
+
   //     const paidFeeKeys = new Set(
   //       payments.flatMap(p => p.feesPaid.map(f => `${f.year}-${f.month}-${f.type}`))
   //     );
@@ -1812,7 +1976,10 @@ const feesController = {
   //         grNumber: student.studentDetails.grNumber,
   //         class: student.studentDetails.class,
   //       },
-  //       feeHistory: [...feeHistory, ...pendingFees.sort((a, b) => new Date(b.year, b.month - 1) - new Date(a.year, a.month - 1))],
+  //       feeHistory: [
+  //         ...feeHistory.sort((a, b) => new Date(b.year, b.month - 1) - new Date(a.year, a.month - 1)),
+  //         ...pendingFees.sort((a, b) => new Date(b.year, b.month - 1) - new Date(a.year, a.month - 1)),
+  //       ],
   //     });
   //   } catch (error) {
   //     console.error('Error fetching fee history:', error);
@@ -1825,23 +1992,30 @@ const feesController = {
       const { grNumber } = req.params;
       const schoolId = req.school._id.toString();
       const connection = req.connection;
-      const UserModel = User(connection);
-      const FeeModel = Fee(connection);
-      const PaymentModel = Payment(connection);
-
+      const getModel = require('../models/index'); // Adjust path to your index.js
+  
+      // Load models using getModel
+      const UserModel = getModel('User', connection);
+      const FeeModel = getModel('Fee', connection);
+      const PaymentModel = getModel('Payment', connection);
+      const ClassModel = getModel('Class', connection); // Explicitly load Class model
+  
       if (!req.user.permissions.canManageFees) {
         return res.status(403).json({ message: 'Unauthorized: Only fee managers can view fee history' });
       }
-
+  
+      // Query student with populated class details
       const student = await UserModel.findOne({
         'studentDetails.grNumber': grNumber,
         school: schoolId,
-      }).select('_id name studentDetails.grNumber studentDetails.class');
-
+      })
+        .select('_id name studentDetails.grNumber studentDetails.class')
+        .populate('studentDetails.class', 'name division'); // Populate class with name and division
+  
       if (!student) {
         return res.status(404).json({ message: 'Student not found' });
       }
-
+  
       if (student.studentDetails.isRTE) {
         return res.status(200).json({ 
           message: 'RTE students are exempted from fees', 
@@ -1849,28 +2023,32 @@ const feesController = {
             _id: student._id,
             name: student.name,
             grNumber: student.studentDetails.grNumber,
-            class: student.studentDetails.class,
+            class: student.studentDetails.class ? {
+              _id: student.studentDetails.class._id,
+              name: student.studentDetails.class.name,
+              division: student.studentDetails.class.division
+            } : null,
           },
           feeHistory: []
         });
       }
-
+  
       const payments = await PaymentModel.find({
         student: student._id,
         school: schoolId,
         status: 'completed',
       }).sort({ paymentDate: -1 });
-
+  
       const fees = await FeeModel.find({
         student: student._id,
         school: schoolId,
       }).sort({ year: -1, month: -1 });
-
+  
       // Group fees by month-year across all payments
       const feesByMonthYear = {};
       const receiptUrlsByMonthYear = {};
-      const paymentIdsByMonthYear = {}; // To store paymentId for each month-year
-
+      const paymentIdsByMonthYear = {};
+  
       await Promise.all(payments.map(async (payment) => {
         const uniqueFeeKeys = new Set();
         const feesPaidDetails = payment.feesPaid
@@ -1891,42 +2069,39 @@ const feesController = {
               paymentDate: payment.paymentDate,
               paymentMethod: payment.paymentMethod,
               receiptNumber: payment.receiptNumber,
-              paymentId: payment._id.toString(), // Include paymentId in paymentDetails
+              paymentId: payment._id.toString(),
             },
           }));
-
+  
         feesPaidDetails.forEach(fee => {
           const key = `${fee.month}-${fee.year}`;
           if (!feesByMonthYear[key]) feesByMonthYear[key] = [];
           feesByMonthYear[key].push(fee);
-
-          // Store or update receipt URL and paymentId
+  
           if (payment.receiptUrls && payment.receiptUrls[key]) {
             receiptUrlsByMonthYear[key] = payment.receiptUrls[key];
           } else if (!receiptUrlsByMonthYear[key]) {
-            receiptUrlsByMonthYear[key] = payment.receiptUrl; // Fallback to single receiptUrl
+            receiptUrlsByMonthYear[key] = payment.receiptUrl;
           }
-
-          // Use the latest paymentId for this month-year
+  
           if (!paymentIdsByMonthYear[key] || new Date(payment.paymentDate) > new Date(feesByMonthYear[key][0].paymentDetails.paymentDate)) {
             paymentIdsByMonthYear[key] = payment._id.toString();
           }
         });
-
-        // Regenerate receipt if missing for any month-year
+  
         for (const [key, fees] of Object.entries(feesByMonthYear)) {
           if (!receiptUrlsByMonthYear[key]) {
             const [month, year] = key.split('-');
             const feeSlip = await generateFeeSlip(student, payment, fees, schoolId, `${month}-${year}`);
             receiptUrlsByMonthYear[key] = feeSlip.pdfUrl;
-
+  
             if (!payment.receiptUrls) payment.receiptUrls = {};
             payment.receiptUrls[key] = feeSlip.pdfUrl;
             await payment.save();
           }
         }
       }));
-
+  
       // Convert grouped fees into feeHistory format
       const feeHistory = Object.entries(feesByMonthYear).map(([key, fees]) => {
         const [month, year] = key.split('-');
@@ -1934,9 +2109,9 @@ const feesController = {
         const latestPayment = fees.reduce((latest, fee) => 
           new Date(fee.paymentDetails.paymentDate) > new Date(latest.paymentDetails.paymentDate) ? fee : latest
         );
-
+  
         return {
-          paymentId: paymentIdsByMonthYear[key], // Include paymentId
+          paymentId: paymentIdsByMonthYear[key],
           month: parseInt(month),
           year: parseInt(year),
           totalAmount,
@@ -1947,7 +2122,7 @@ const feesController = {
           fees,
         };
       });
-
+  
       const paidFeeKeys = new Set(
         payments.flatMap(p => p.feesPaid.map(f => `${f.year}-${f.month}-${f.type}`))
       );
@@ -1962,13 +2137,17 @@ const feesController = {
           status: 'pending',
           paymentDetails: null,
         }));
-
+  
       res.status(200).json({
         student: {
           _id: student._id,
           name: student.name,
           grNumber: student.studentDetails.grNumber,
-          class: student.studentDetails.class,
+          class: student.studentDetails.class ? {
+            _id: student.studentDetails.class._id,
+            name: student.studentDetails.class.name,
+            division: student.studentDetails.class.division
+          } : null,
         },
         feeHistory: [
           ...feeHistory.sort((a, b) => new Date(b.year, b.month - 1) - new Date(a.year, a.month - 1)),
