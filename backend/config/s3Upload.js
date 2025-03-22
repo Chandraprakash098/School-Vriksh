@@ -1,4 +1,4 @@
-const { S3Client } = require('@aws-sdk/client-s3');
+const { S3Client, GetObjectCommand } = require('@aws-sdk/client-s3');
 const { Upload } = require('@aws-sdk/lib-storage');
 const multer = require('multer');
 const multerS3 = require('multer-s3');
@@ -27,7 +27,6 @@ const admissionStorage = multerS3({
     const fileKey = `admissions/${schoolId}/${fileName}`;
     cb(null, fileKey);
   },
-  acl: 'public-read',
 });
 
 const uploadDocuments = multer({
@@ -71,4 +70,14 @@ const deleteFromS3 = async (key) => {
   return s3Client.send(command);
 };
 
-module.exports = { uploadDocuments, uploadToS3, deleteFromS3, s3: s3Client };
+// New function to generate pre-signed URL
+const getPresignedUrl = async (key, expiresIn = 3600) => { // expiresIn = 1 hour by default
+  const command = new GetObjectCommand({
+    Bucket: BUCKET_NAME,
+    Key: key,
+  });
+  const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
+  return await getSignedUrl(s3Client, command, { expiresIn });
+};
+
+module.exports = { uploadDocuments, uploadToS3, deleteFromS3, getPresignedUrl, s3: s3Client };
