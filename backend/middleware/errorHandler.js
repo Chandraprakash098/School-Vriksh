@@ -25,6 +25,7 @@
 
 
 // middleware/errorHandler.js
+const multer= require('multer')
 const multerErrorHandler = (err, req, res, next) => {
   if (err instanceof multer.MulterError) {
     console.error('Multer error:', err.message, err.stack);

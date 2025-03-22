@@ -1962,54 +1962,138 @@ const clerkController = {
     }
   },
 
+  // generateCertificate: async (req, res) => {
+  //   try {
+  //     const { certificateId } = req.params;
+  //     const { status, comments, pdfData, certificateType } = req.body;
+
+  //     const schoolId = req.school._id.toString();
+  //     const connection = req.connection;
+  //     const Certificate = require('../models/Certificate')(connection);
+  //     const User = require('../models/User')(connection);
+
+  //     if (!mongoose.Types.ObjectId.isValid(certificateId)) {
+  //       return res.status(400).json({ message: 'Invalid certificate ID' });
+  //     }
+
+  //     const certificate = await Certificate.findOne({ _id: certificateId, school: schoolId });
+  //     if (!certificate) {
+  //       return res.status(404).json({ message: 'Certificate request not found' });
+  //     }
+
+  //     if (status === 'rejected') {
+  //       certificate.status = 'rejected';
+  //       certificate.comments = comments;
+  //       await certificate.save();
+  //       return res.json({ message: 'Certificate request rejected', certificate });
+  //     }
+
+  //     if (status !== 'generated') {
+  //       return res.status(400).json({ message: 'Invalid status for generation' });
+  //     }
+
+  //     if (!pdfData || !certificateType) {
+  //       return res.status(400).json({ message: 'PDF data and certificate type are required' });
+  //     }
+
+  //     const pdfBuffer = Buffer.from(pdfData, 'base64');
+  //     const certificateKey = `certificates/${schoolId}/${certificateId}/${certificateType}.pdf`;
+  //     const uploadResult = await uploadToS3(pdfBuffer, certificateKey);
+  //     const documentUrl = uploadResult.Location;
+  //     const presignedUrl = await getPresignedUrl(certificateKey);
+
+  //     certificate.documentUrl = documentUrl;
+  //     certificate.documentKey = certificateKey; // Store the S3 key
+  //     certificate.status = 'generated';
+  //     certificate.issuedDate = new Date();
+  //     certificate.generatedBy = req.user._id;
+  //     certificate.comments = comments;
+  //     await certificate.save();
+
+  //     res.json({
+  //       message: 'Certificate generated successfully',
+  //       certificate: {
+  //         ...certificate.toObject(),
+  //         documentPresignedUrl: presignedUrl,
+  //       },
+  //     });
+  //   } catch (error) {
+  //     console.error('Error in generateCertificate:', error);
+  //     res.status(500).json({ error: error.message });
+  //   }
+  // },
+
   generateCertificate: async (req, res) => {
     try {
       const { certificateId } = req.params;
       const { status, comments, pdfData, certificateType } = req.body;
-
+  
       const schoolId = req.school._id.toString();
       const connection = req.connection;
       const Certificate = require('../models/Certificate')(connection);
       const User = require('../models/User')(connection);
-
+  
       if (!mongoose.Types.ObjectId.isValid(certificateId)) {
         return res.status(400).json({ message: 'Invalid certificate ID' });
       }
-
+  
       const certificate = await Certificate.findOne({ _id: certificateId, school: schoolId });
       if (!certificate) {
         return res.status(404).json({ message: 'Certificate request not found' });
       }
-
+  
       if (status === 'rejected') {
         certificate.status = 'rejected';
         certificate.comments = comments;
         await certificate.save();
         return res.json({ message: 'Certificate request rejected', certificate });
       }
-
+  
       if (status !== 'generated') {
         return res.status(400).json({ message: 'Invalid status for generation' });
       }
-
+  
       if (!pdfData || !certificateType) {
         return res.status(400).json({ message: 'PDF data and certificate type are required' });
       }
-
-      const pdfBuffer = Buffer.from(pdfData, 'base64');
+  
+      let pdfBuffer;
+      try {
+        pdfBuffer = Buffer.from(pdfData, 'base64');
+      } catch (error) {
+        return res.status(400).json({ message: 'Invalid base64 PDF data', error: error.message });
+      }
+  
       const certificateKey = `certificates/${schoolId}/${certificateId}/${certificateType}.pdf`;
-      const uploadResult = await uploadToS3(pdfBuffer, certificateKey);
+      let uploadResult;
+      try {
+        uploadResult = await uploadToS3(pdfBuffer, certificateKey);
+      } catch (error) {
+        return res.status(500).json({ message: 'Failed to upload to S3', error: error.message });
+      }
+  
       const documentUrl = uploadResult.Location;
-      const presignedUrl = await getPresignedUrl(certificateKey);
-
+      let presignedUrl;
+      try {
+        presignedUrl = await getPresignedUrl(certificateKey);
+      } catch (error) {
+        return res.status(500).json({ message: 'Failed to generate pre-signed URL', error: error.message });
+      }
+  
       certificate.documentUrl = documentUrl;
-      certificate.documentKey = certificateKey; // Store the S3 key
+      certificate.documentKey = certificateKey;
       certificate.status = 'generated';
       certificate.issuedDate = new Date();
       certificate.generatedBy = req.user._id;
       certificate.comments = comments;
-      await certificate.save();
-
+  
+      try {
+        await certificate.save();
+      } catch (error) {
+        await deleteFromS3(certificateKey); // Cleanup on save failure
+        return res.status(500).json({ message: 'Failed to save certificate', error: error.message });
+      }
+  
       res.json({
         message: 'Certificate generated successfully',
         certificate: {
