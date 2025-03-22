@@ -1192,8 +1192,8 @@ const crypto = require('crypto');
 const { generateTrackingId } = require('../utils/helpers');
 const { encrypt, decrypt } = require('../utils/encryption');
 const { getOwnerConnection } = require('../config/database');
-const { uploadToS3, deleteFromS3 } = require('../config/s3Upload'); // Updated import for v3
-
+// const { uploadToS3, deleteFromS3 } = require('../config/s3Upload'); // Updated import for v3
+const { uploadDocuments, uploadToS3, deleteFromS3, getPresignedUrl } = require('../config/s3Upload'); // Added uploadDocuments
 const razorpay = new Razorpay({
   key_id: process.env.RAZORPAY_KEY_ID,
   key_secret: process.env.RAZORPAY_KEY_SECRET,
@@ -1665,156 +1665,297 @@ const admissionController = {
   // },
 
   
-submitApplication : async (req, res) => {
-  await uploadDocuments(req, res, async (err) => {
-    if (err) {
-      return res.status(400).json({ error: err.message });
+// submitApplication : async (req, res) => {
+//   await uploadDocuments(req, res, async (err) => {
+//     if (err) {
+//       return res.status(400).json({ error: err.message });
+//     }
+
+//     try {
+//       const {
+//         formUrl,
+//         studentDetails,
+//         parentDetails,
+//         admissionType,
+//         additionalResponses = {},
+//         razorpay_payment_id,
+//         razorpay_order_id,
+//         razorpay_signature,
+//       } = req.body;
+
+//       const connection = req.connection;
+//       const AdmissionForm = require('../models/AdmissionForm')(connection);
+//       const AdmissionApplication = require('../models/AdmissionApplication')(connection);
+
+//       if (!formUrl) {
+//         return res.status(400).json({ error: 'Form URL is missing' });
+//       }
+
+//       const form = await AdmissionForm.findOne({ formUrl, isActive: true });
+//       if (!form) {
+//         return res.status(404).json({ message: 'Form not found or inactive' });
+//       }
+
+//       if (admissionType === 'Regular') {
+//         if (!razorpay_payment_id || !razorpay_order_id || !razorpay_signature) {
+//           return res.status(400).json({
+//             error: 'Payment verification failed. Required payment details missing.',
+//           });
+//         }
+
+//         const ownerConnection = await getOwnerConnection();
+//         const School = require('../models/School')(ownerConnection);
+//         const school = await School.findById(form.school).select('paymentConfig');
+
+//         const decryptedKeyId = decrypt(school.paymentConfig.razorpayKeyId);
+//         const decryptedKeySecret = decrypt(school.paymentConfig.razorpayKeySecret);
+
+//         const razorpay = new Razorpay({
+//           key_id: decryptedKeyId,
+//           key_secret: decryptedKeySecret,
+//         });
+
+//         const body = razorpay_order_id + '|' + razorpay_payment_id;
+//         const expectedSignature = crypto
+//           .createHmac('sha256', decryptedKeySecret)
+//           .update(body.toString())
+//           .digest('hex');
+
+//         if (expectedSignature !== razorpay_signature) {
+//           return res.status(400).json({
+//             error: 'Payment verification failed. Invalid signature.',
+//           });
+//         }
+
+//         const payment = await razorpay.payments.fetch(razorpay_payment_id);
+//         if (payment.amount !== form.admissionFee * 100) {
+//           return res.status(400).json({
+//             error: 'Payment amount mismatch',
+//           });
+//         }
+//       }
+
+//       let parsedStudentDetails;
+//       let parsedParentDetails;
+//       try {
+//         parsedStudentDetails = JSON.parse(studentDetails);
+//         parsedParentDetails = JSON.parse(parentDetails);
+//       } catch (error) {
+//         return res.status(400).json({ error: 'Invalid JSON format in student or parent details' });
+//       }
+
+//       const schoolId = form.school;
+//       const trackingId = generateTrackingId(schoolId);
+
+//       const uploadedDocuments = [];
+//       try {
+//         for (const fileType in req.files) {
+//           const file = req.files[fileType][0];
+//           uploadedDocuments.push({
+//             type: fileType,
+//             documentUrl: file.location,
+//             key: file.key, // Required by the updated schema
+//             verified: false, // Default value as per schema
+//           });
+//         }
+//       } catch (error) {
+//         // Cleanup uploaded files on error
+//         for (const doc of uploadedDocuments) {
+//           await deleteFromS3(doc.key);
+//         }
+//         throw new Error('File upload failed: ' + error.message);
+//       }
+
+//       const application = new AdmissionApplication({
+//         school: schoolId,
+//         studentDetails: parsedStudentDetails,
+//         parentDetails: parsedParentDetails,
+//         admissionType,
+//         documents: uploadedDocuments,
+//         trackingId,
+//         status: 'pending',
+//         paymentStatus: admissionType === 'Regular' ? 'completed' : 'not_applicable',
+//         paymentDetails: admissionType === 'Regular' ? {
+//           transactionId: razorpay_payment_id,
+//           orderId: razorpay_order_id,
+//           amount: form.admissionFee,
+//           paidAt: new Date(),
+//         } : undefined,
+//         additionalResponses,
+//         clerkVerification: { status: 'pending' },
+//         feesVerification: { status: 'pending' },
+//       });
+
+//       await application.save();
+
+//       // Generate pre-signed URLs for response only (not stored in DB)
+//       const documentsWithPresignedUrls = await Promise.all(
+//         uploadedDocuments.map(async (doc) => ({
+//           type: doc.type,
+//           documentUrl: doc.documentUrl,
+//           key: doc.key,
+//           presignedUrl: await getPresignedUrl(doc.key),
+//         }))
+//       );
+
+//       res.status(201).json({
+//         message: 'Application submitted successfully',
+//         trackingId,
+//         nextSteps: getNextSteps(application),
+//         status: application.status,
+//         documents: documentsWithPresignedUrls, // Return pre-signed URLs in response
+//       });
+//     } catch (error) {
+//       // Cleanup uploaded files on error
+//       for (const doc of req.files ? Object.values(req.files).flat() : []) {
+//         await deleteFromS3(doc.key);
+//       }
+//       res.status(500).json({ error: error.message });
+//     }
+//   });
+// },
+
+
+submitApplication: async (req, res) => {
+  try {
+    const {
+      formUrl,
+      studentDetails,
+      parentDetails,
+      admissionType,
+      additionalResponses = {},
+      razorpay_payment_id,
+      razorpay_order_id,
+      razorpay_signature,
+    } = req.body;
+
+    const connection = req.connection;
+    const AdmissionForm = require('../models/AdmissionForm')(connection);
+    const AdmissionApplication = require('../models/AdmissionApplication')(connection);
+
+    if (!formUrl) {
+      return res.status(400).json({ error: 'Form URL is missing' });
     }
 
-    try {
-      const {
-        formUrl,
-        studentDetails,
-        parentDetails,
-        admissionType,
-        additionalResponses = {},
-        razorpay_payment_id,
-        razorpay_order_id,
-        razorpay_signature,
-      } = req.body;
+    const form = await AdmissionForm.findOne({ formUrl, isActive: true });
+    if (!form) {
+      return res.status(404).json({ message: 'Form not found or inactive' });
+    }
 
-      const connection = req.connection;
-      const AdmissionForm = require('../models/AdmissionForm')(connection);
-      const AdmissionApplication = require('../models/AdmissionApplication')(connection);
-
-      if (!formUrl) {
-        return res.status(400).json({ error: 'Form URL is missing' });
-      }
-
-      const form = await AdmissionForm.findOne({ formUrl, isActive: true });
-      if (!form) {
-        return res.status(404).json({ message: 'Form not found or inactive' });
-      }
-
-      if (admissionType === 'Regular') {
-        if (!razorpay_payment_id || !razorpay_order_id || !razorpay_signature) {
-          return res.status(400).json({
-            error: 'Payment verification failed. Required payment details missing.',
-          });
-        }
-
-        const ownerConnection = await getOwnerConnection();
-        const School = require('../models/School')(ownerConnection);
-        const school = await School.findById(form.school).select('paymentConfig');
-
-        const decryptedKeyId = decrypt(school.paymentConfig.razorpayKeyId);
-        const decryptedKeySecret = decrypt(school.paymentConfig.razorpayKeySecret);
-
-        const razorpay = new Razorpay({
-          key_id: decryptedKeyId,
-          key_secret: decryptedKeySecret,
+    if (admissionType === 'Regular') {
+      if (!razorpay_payment_id || !razorpay_order_id || !razorpay_signature) {
+        return res.status(400).json({
+          error: 'Payment verification failed. Required payment details missing.',
         });
-
-        const body = razorpay_order_id + '|' + razorpay_payment_id;
-        const expectedSignature = crypto
-          .createHmac('sha256', decryptedKeySecret)
-          .update(body.toString())
-          .digest('hex');
-
-        if (expectedSignature !== razorpay_signature) {
-          return res.status(400).json({
-            error: 'Payment verification failed. Invalid signature.',
-          });
-        }
-
-        const payment = await razorpay.payments.fetch(razorpay_payment_id);
-        if (payment.amount !== form.admissionFee * 100) {
-          return res.status(400).json({
-            error: 'Payment amount mismatch',
-          });
-        }
       }
 
-      let parsedStudentDetails;
-      let parsedParentDetails;
-      try {
-        parsedStudentDetails = JSON.parse(studentDetails);
-        parsedParentDetails = JSON.parse(parentDetails);
-      } catch (error) {
-        return res.status(400).json({ error: 'Invalid JSON format in student or parent details' });
-      }
+      const ownerConnection = await getOwnerConnection();
+      const School = require('../models/School')(ownerConnection);
+      const school = await School.findById(form.school).select('paymentConfig');
 
-      const schoolId = form.school;
-      const trackingId = generateTrackingId(schoolId);
+      const decryptedKeyId = decrypt(school.paymentConfig.razorpayKeyId);
+      const decryptedKeySecret = decrypt(school.paymentConfig.razorpayKeySecret);
 
-      const uploadedDocuments = [];
-      try {
-        for (const fileType in req.files) {
-          const file = req.files[fileType][0];
-          uploadedDocuments.push({
-            type: fileType,
-            documentUrl: file.location,
-            key: file.key, // Required by the updated schema
-            verified: false, // Default value as per schema
-          });
-        }
-      } catch (error) {
-        // Cleanup uploaded files on error
-        for (const doc of uploadedDocuments) {
-          await deleteFromS3(doc.key);
-        }
-        throw new Error('File upload failed: ' + error.message);
-      }
-
-      const application = new AdmissionApplication({
-        school: schoolId,
-        studentDetails: parsedStudentDetails,
-        parentDetails: parsedParentDetails,
-        admissionType,
-        documents: uploadedDocuments,
-        trackingId,
-        status: 'pending',
-        paymentStatus: admissionType === 'Regular' ? 'completed' : 'not_applicable',
-        paymentDetails: admissionType === 'Regular' ? {
-          transactionId: razorpay_payment_id,
-          orderId: razorpay_order_id,
-          amount: form.admissionFee,
-          paidAt: new Date(),
-        } : undefined,
-        additionalResponses,
-        clerkVerification: { status: 'pending' },
-        feesVerification: { status: 'pending' },
+      const razorpay = new Razorpay({
+        key_id: decryptedKeyId,
+        key_secret: decryptedKeySecret,
       });
 
-      await application.save();
+      const body = razorpay_order_id + '|' + razorpay_payment_id;
+      const expectedSignature = crypto
+        .createHmac('sha256', decryptedKeySecret)
+        .update(body.toString())
+        .digest('hex');
 
-      // Generate pre-signed URLs for response only (not stored in DB)
-      const documentsWithPresignedUrls = await Promise.all(
-        uploadedDocuments.map(async (doc) => ({
-          type: doc.type,
-          documentUrl: doc.documentUrl,
-          key: doc.key,
-          presignedUrl: await getPresignedUrl(doc.key),
-        }))
-      );
+      if (expectedSignature !== razorpay_signature) {
+        return res.status(400).json({
+          error: 'Payment verification failed. Invalid signature.',
+        });
+      }
 
-      res.status(201).json({
-        message: 'Application submitted successfully',
-        trackingId,
-        nextSteps: getNextSteps(application),
-        status: application.status,
-        documents: documentsWithPresignedUrls, // Return pre-signed URLs in response
-      });
+      const payment = await razorpay.payments.fetch(razorpay_payment_id);
+      if (payment.amount !== form.admissionFee * 100) {
+        return res.status(400).json({
+          error: 'Payment amount mismatch',
+        });
+      }
+    }
+
+    let parsedStudentDetails;
+    let parsedParentDetails;
+    try {
+      parsedStudentDetails = JSON.parse(studentDetails);
+      parsedParentDetails = JSON.parse(parentDetails);
     } catch (error) {
-      // Cleanup uploaded files on error
-      for (const doc of req.files ? Object.values(req.files).flat() : []) {
+      return res.status(400).json({ error: 'Invalid JSON format in student or parent details' });
+    }
+
+    const schoolId = form.school;
+    const trackingId = generateTrackingId(schoolId);
+
+    const uploadedDocuments = [];
+    try {
+      for (const fileType in req.files) {
+        const file = req.files[fileType][0];
+        uploadedDocuments.push({
+          type: fileType,
+          documentUrl: file.location,
+          key: file.key,
+          verified: false,
+        });
+      }
+    } catch (error) {
+      for (const doc of uploadedDocuments) {
         await deleteFromS3(doc.key);
       }
-      res.status(500).json({ error: error.message });
+      throw new Error('File upload failed: ' + error.message);
     }
-  });
-},
 
+    const application = new AdmissionApplication({
+      school: schoolId,
+      studentDetails: parsedStudentDetails,
+      parentDetails: parsedParentDetails,
+      admissionType,
+      documents: uploadedDocuments,
+      trackingId,
+      status: 'pending',
+      paymentStatus: admissionType === 'Regular' ? 'completed' : 'not_applicable',
+      paymentDetails: admissionType === 'Regular' ? {
+        transactionId: razorpay_payment_id,
+        orderId: razorpay_order_id,
+        amount: form.admissionFee,
+        paidAt: new Date(),
+      } : undefined,
+      additionalResponses,
+      clerkVerification: { status: 'pending' },
+      feesVerification: { status: 'pending' },
+    });
+
+    await application.save();
+
+    const documentsWithPresignedUrls = await Promise.all(
+      uploadedDocuments.map(async (doc) => ({
+        type: doc.type,
+        documentUrl: doc.documentUrl,
+        key: doc.key,
+        presignedUrl: await getPresignedUrl(doc.key),
+      }))
+    );
+
+    res.status(201).json({
+      message: 'Application submitted successfully',
+      trackingId,
+      nextSteps: getNextSteps(application),
+      status: application.status,
+      documents: documentsWithPresignedUrls,
+    });
+  } catch (error) {
+    for (const doc of req.files ? Object.values(req.files).flat() : []) {
+      await deleteFromS3(doc.key);
+    }
+    res.status(500).json({ error: error.message });
+  }
+},
 
   // deleteApplicationDocuments: async (applicationId) => {
   //   try {
