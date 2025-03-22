@@ -17,22 +17,122 @@ const storage = multer.memoryStorage(); // Store files in memory (we'll upload d
 const clerkController = {
 
  
+    // getDashboard: async (req, res) => {
+    //   try {
+    //     const schoolId = req.school._id.toString();
+    //     const clerkId = req.user._id;
+    //     const connection = req.connection;
+        
+    //     const AdmissionApplication = require('../models/AdmissionApplication')(connection);
+    //     const Certificate = require('../models/Certificate')(connection);
+    //     const User = require('../models/User')(connection);
+    //     const Leave = require('../models/Leave')(connection);
+  
+    //     // Current date (March 12, 2025, as per context)
+    //     const today = new Date('2025-03-12');
+    //     const startOfDay = new Date(today.setHours(0, 0, 0, 0));
+    //     const endOfDay = new Date(today.setHours(23, 59, 59, 999));
+  
+    //     // 1. Pending Verifications Count
+    //     const pendingVerifications = await AdmissionApplication.countDocuments({
+    //       school: schoolId,
+    //       $or: [
+    //         {
+    //           status: { $in: ['pending', 'document_verification'] },
+    //           'clerkVerification.status': 'pending',
+    //         },
+    //         {
+    //           status: 'approved',
+    //           'feesVerification.status': 'verified',
+    //           'clerkVerification.status': 'verified',
+    //         },
+    //       ],
+    //     });
+  
+    //     // 2. Pending Certificates Count
+    //     const pendingCertificates = await Certificate.countDocuments({
+    //       school: schoolId,
+    //       status: 'pending',
+    //     });
+  
+    //     // 3. Enrolled Students Today
+    //     const enrolledToday = await User.countDocuments({
+    //       school: schoolId,
+    //       role: 'student',
+    //       createdAt: { $gte: startOfDay, $lte: endOfDay },
+    //     });
+  
+    //     // 4. Leave Status Summary
+    //     const leaveSummary = await Leave.aggregate([
+    //       { $match: { school: schoolId, user: clerkId } },
+    //       {
+    //         $group: {
+    //           _id: '$status',
+    //           count: { $sum: 1 },
+    //         },
+    //       },
+    //     ]);
+  
+    //     const leaveStatus = {
+    //       pending: 0,
+    //       approved: 0,
+    //       rejected: 0,
+    //     };
+    //     leaveSummary.forEach(item => {
+    //       leaveStatus[item._id] = item.count;
+    //     });
+  
+    //     // 5. RTE Admissions Overview (current academic year assumed as 2025)
+    //     const rteStudents = await User.countDocuments({
+    //       school: schoolId,
+    //       'studentDetails.isRTE': true,
+    //       'studentDetails.admissionDate': {
+    //         $gte: new Date('2025-01-01'),
+    //         $lte: new Date('2025-12-31'),
+    //       },
+    //     });
+  
+    //     // 6. Total Number of Students
+    //     const totalStudents = await User.countDocuments({
+    //       school: schoolId,
+    //       role: 'student',
+    //     });
+  
+    //     // Compile dashboard data
+    //     const dashboardData = {
+    //       status: 'success',
+    //       timestamp: new Date(),
+    //       pendingVerifications,
+    //       pendingCertificates,
+          
+    //       totalStudents, // Added total number of students
+    //       leaveStatus,
+          
+    //     };
+  
+    //     res.json(dashboardData);
+    //   } catch (error) {
+    //     console.error('Error in getDashboard:', error);
+    //     res.status(500).json({ error: error.message });
+    //   }
+    // },
+
     getDashboard: async (req, res) => {
       try {
         const schoolId = req.school._id.toString();
-        const clerkId = req.user._id;
+        const clerkId = req.user._id.toString(); // Ensure string type
         const connection = req.connection;
         
         const AdmissionApplication = require('../models/AdmissionApplication')(connection);
         const Certificate = require('../models/Certificate')(connection);
         const User = require('../models/User')(connection);
         const Leave = require('../models/Leave')(connection);
-  
-        // Current date (March 12, 2025, as per context)
-        const today = new Date('2025-03-12');
+    
+        // Current date (March 21, 2025 as per system date)
+        const today = new Date('2025-03-21');
         const startOfDay = new Date(today.setHours(0, 0, 0, 0));
         const endOfDay = new Date(today.setHours(23, 59, 59, 999));
-  
+    
         // 1. Pending Verifications Count
         const pendingVerifications = await AdmissionApplication.countDocuments({
           school: schoolId,
@@ -48,41 +148,72 @@ const clerkController = {
             },
           ],
         });
-  
+    
         // 2. Pending Certificates Count
         const pendingCertificates = await Certificate.countDocuments({
           school: schoolId,
           status: 'pending',
         });
-  
+    
         // 3. Enrolled Students Today
         const enrolledToday = await User.countDocuments({
           school: schoolId,
           role: 'student',
           createdAt: { $gte: startOfDay, $lte: endOfDay },
         });
-  
-        // 4. Leave Status Summary
+    
+        // 4. Leave Status Summary - Enhanced with debugging
+        // First, let's verify if we have any leaves at all
+        const totalLeaves = await Leave.countDocuments({
+          school: schoolId,
+          user: clerkId
+        });
+    
+        console.log(`Total leaves found for clerk ${clerkId} in school ${schoolId}: ${totalLeaves}`);
+    
         const leaveSummary = await Leave.aggregate([
-          { $match: { school: schoolId, user: clerkId } },
+          { 
+            $match: { 
+              school: new mongoose.Types.ObjectId(schoolId), // Use 'new' keyword
+              user: new mongoose.Types.ObjectId(clerkId)
+            } 
+          },
           {
             $group: {
               _id: '$status',
               count: { $sum: 1 },
             },
           },
+          {
+            $project: {
+              status: '$_id',
+              count: 1,
+              _id: 0
+            }
+          }
         ]);
-  
+    
+        console.log('Leave summary aggregation result:', leaveSummary);
+    
+        // Initialize leave status object
         const leaveStatus = {
           pending: 0,
           approved: 0,
           rejected: 0,
+          total: 0
         };
+    
+        // Populate leave status counts
         leaveSummary.forEach(item => {
-          leaveStatus[item._id] = item.count;
+          if (item.status in leaveStatus) {
+            leaveStatus[item.status] = item.count;
+          }
         });
-  
-        // 5. RTE Admissions Overview (current academic year assumed as 2025)
+    
+        // Calculate total leaves
+        leaveStatus.total = leaveStatus.pending + leaveStatus.approved + leaveStatus.rejected;
+    
+        // 5. RTE Admissions Overview
         const rteStudents = await User.countDocuments({
           school: schoolId,
           'studentDetails.isRTE': true,
@@ -91,32 +222,33 @@ const clerkController = {
             $lte: new Date('2025-12-31'),
           },
         });
-  
+    
         // 6. Total Number of Students
         const totalStudents = await User.countDocuments({
           school: schoolId,
           role: 'student',
         });
-  
+    
         // Compile dashboard data
         const dashboardData = {
           status: 'success',
           timestamp: new Date(),
           pendingVerifications,
           pendingCertificates,
-          
-          totalStudents, // Added total number of students
+          enrolledToday,
+          totalStudents,
           leaveStatus,
-          
+          rteStudents,
+          debug: { totalLeaves } // Adding debug info
         };
-  
+    
         res.json(dashboardData);
       } catch (error) {
         console.error('Error in getDashboard:', error);
         res.status(500).json({ error: error.message });
       }
     },
-   
+
   getPendingVerifications: async (req, res) => {
     try {
       const schoolId = req.school._id.toString();
