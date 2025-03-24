@@ -2520,12 +2520,93 @@ const clerkController = {
     }
   },
 
+  // getPendingVerifications: async (req, res) => {
+  //   try {
+  //     const schoolId = req.school._id.toString();
+  //     const connection = req.connection;
+  //     const AdmissionApplication = require('../models/AdmissionApplication')(connection);
+
+  //     const applications = await AdmissionApplication.find({
+  //       school: schoolId,
+  //       $or: [
+  //         {
+  //           status: { $in: ['pending', 'document_verification'] },
+  //           'clerkVerification.status': 'pending',
+  //         },
+  //         {
+  //           status: 'approved',
+  //           'feesVerification.status': 'verified',
+  //           'clerkVerification.status': 'verified',
+  //         },
+  //       ],
+  //     }).sort({ createdAt: -1 });
+
+  //     const applicationsWithUrls = applications.map((app) => ({
+  //       id: app._id,
+  //       trackingId: app.trackingId,
+  //       studentDetails: {
+  //         name: app.studentDetails.name,
+  //         dob: app.studentDetails.dob,
+  //         gender: app.studentDetails.gender,
+  //         email: app.studentDetails.email,
+  //         mobile: app.studentDetails.mobile,
+  //         appliedClass: app.studentDetails.appliedClass,
+  //       },
+  //       parentDetails: {
+  //         name: app.parentDetails.name,
+  //         email: app.parentDetails.email,
+  //         mobile: app.parentDetails.mobile,
+  //         occupation: app.parentDetails.occupation,
+  //         address: {
+  //           street: app.parentDetails.address.street,
+  //           city: app.parentDetails.address.city,
+  //           state: app.parentDetails.address.state,
+  //           pincode: app.parentDetails.address.pincode,
+  //         },
+  //       },
+  //       admissionType: app.admissionType,
+  //       status: app.status,
+  //       submittedOn: app.createdAt,
+  //       documents: app.documents.map((doc) => ({
+  //         type: doc.type,
+  //         documentUrl: doc.documentUrl,
+  //         key: doc.key,
+  //         accessUrl: `/documents/${app._id}/${doc.key.split('/').pop()}`, // Permanent URL
+  //         verified: doc.verified,
+  //       })),
+  //       additionalResponses: app.additionalResponses ? Object.fromEntries(app.additionalResponses) : {},
+  //       clerkVerification: {
+  //         status: app.clerkVerification.status,
+  //         comments: app.clerkVerification.comments,
+  //       },
+  //       feesVerification: {
+  //         status: app.feesVerification.status,
+  //         receiptNumber: app.feesVerification.receiptNumber,
+  //         verifiedAt: app.feesVerification.verifiedAt,
+  //       },
+  //     }));
+
+  //     res.json({
+  //       status: 'success',
+  //       count: applications.length,
+  //       applications: applicationsWithUrls,
+  //     });
+  //   } catch (error) {
+  //     console.error('Error in getPendingVerifications:', error);
+  //     res.status(500).json({
+  //       status: 'error',
+  //       error: error.message,
+  //     });
+  //   }
+  // },
+
+
   getPendingVerifications: async (req, res) => {
     try {
       const schoolId = req.school._id.toString();
       const connection = req.connection;
       const AdmissionApplication = require('../models/AdmissionApplication')(connection);
-
+  
       const applications = await AdmissionApplication.find({
         school: schoolId,
         $or: [
@@ -2540,7 +2621,7 @@ const clerkController = {
           },
         ],
       }).sort({ createdAt: -1 });
-
+  
       const applicationsWithUrls = applications.map((app) => ({
         id: app._id,
         trackingId: app.trackingId,
@@ -2567,13 +2648,18 @@ const clerkController = {
         admissionType: app.admissionType,
         status: app.status,
         submittedOn: app.createdAt,
-        documents: app.documents.map((doc) => ({
-          type: doc.type,
-          documentUrl: doc.documentUrl,
-          key: doc.key,
-          accessUrl: `/documents/${app._id}/${doc.key.split('/').pop()}`, // Permanent URL
-          verified: doc.verified,
-        })),
+        documents: app.documents.map((doc) => {
+          if (!doc.key) {
+            console.error(`Missing key in application ${app._id}, document:`, doc);
+          }
+          return {
+            type: doc.type,
+            documentUrl: doc.documentUrl,
+            key: doc.key,
+            accessUrl: doc.key ? `/documents/${app._id}/${doc.key.split('/').pop()}` : null,
+            verified: doc.verified,
+          };
+        }),
         additionalResponses: app.additionalResponses ? Object.fromEntries(app.additionalResponses) : {},
         clerkVerification: {
           status: app.clerkVerification.status,
@@ -2585,7 +2671,7 @@ const clerkController = {
           verifiedAt: app.feesVerification.verifiedAt,
         },
       }));
-
+  
       res.json({
         status: 'success',
         count: applications.length,
