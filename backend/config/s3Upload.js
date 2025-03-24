@@ -1,4 +1,6 @@
-// const { S3Client, GetObjectCommand } = require('@aws-sdk/client-s3');
+
+
+// const { S3Client, GetObjectCommand, DeleteObjectCommand } = require('@aws-sdk/client-s3');
 // const { Upload } = require('@aws-sdk/lib-storage');
 // const multer = require('multer');
 // const multerS3 = require('multer-s3');
@@ -14,6 +16,7 @@
 
 // const BUCKET_NAME = process.env.AWS_S3_BUCKET_NAME;
 
+// // Admission Documents Upload (specific fields)
 // const admissionStorage = multerS3({
 //   s3: s3Client,
 //   bucket: BUCKET_NAME,
@@ -31,7 +34,7 @@
 
 // const uploadDocuments = multer({
 //   storage: admissionStorage,
-//   limits: { fileSize: 15 * 1024 * 1024 },
+//   limits: { fileSize: 15 * 1024 * 1024 }, // 15MB
 //   fileFilter: (req, file, cb) => {
 //     const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png'];
 //     if (allowedTypes.includes(file.mimetype)) {
@@ -48,6 +51,36 @@
 //   { name: 'rteCertificate', maxCount: 1 },
 // ]);
 
+// // Certificate Upload (single PDF file)
+// const certificateStorage = multerS3({
+//   s3: s3Client,
+//   bucket: BUCKET_NAME,
+//   metadata: (req, file, cb) => {
+//     cb(null, { fieldName: file.fieldname });
+//   },
+//   key: (req, file, cb) => {
+//     const schoolId = req.school?._id.toString() || 'unknown';
+//     const certificateId = req.params.certificateId || 'unknown';
+//     const fileExt = path.extname(file.originalname);
+//     const fileName = `${certificateId}_signed_${Date.now()}${fileExt}`;
+//     const fileKey = `certificates/${schoolId}/${fileName}`;
+//     cb(null, fileKey);
+//   },
+// });
+
+// const certificateUpload = multer({
+//   storage: certificateStorage,
+//   limits: { fileSize: 5 * 1024 * 1024 }, // 5MB for certificates
+//   fileFilter: (req, file, cb) => {
+//     if (file.mimetype === 'application/pdf') {
+//       cb(null, true);
+//     } else {
+//       cb(new Error('Invalid file type: Only PDFs are allowed for certificates'), false);
+//     }
+//   },
+// }).single('certificate'); // Single file upload with field name 'certificate'
+
+// // General-purpose buffer upload to S3
 // const uploadToS3 = async (buffer, key) => {
 //   const upload = new Upload({
 //     client: s3Client,
@@ -55,14 +88,14 @@
 //       Bucket: BUCKET_NAME,
 //       Key: key,
 //       Body: buffer,
-//       ContentType: 'application/pdf',
+//       ContentType: 'application/pdf', // Default to PDF, adjust if needed
 //     },
 //   });
 //   return upload.done();
 // };
 
+// // Delete object from S3
 // const deleteFromS3 = async (key) => {
-//   const { DeleteObjectCommand } = require('@aws-sdk/client-s3');
 //   const command = new DeleteObjectCommand({
 //     Bucket: BUCKET_NAME,
 //     Key: key,
@@ -70,8 +103,8 @@
 //   return s3Client.send(command);
 // };
 
-// // New function to generate pre-signed URL
-// const getPresignedUrl = async (key, expiresIn = 3600) => { // expiresIn = 1 hour by default
+// // Generate pre-signed URL
+// const getPresignedUrl = async (key, expiresIn = 3600) => {
 //   const command = new GetObjectCommand({
 //     Bucket: BUCKET_NAME,
 //     Key: key,
@@ -80,7 +113,7 @@
 //   return await getSignedUrl(s3Client, command, { expiresIn });
 // };
 
-// module.exports = { uploadDocuments, uploadToS3, deleteFromS3, getPresignedUrl, s3: s3Client };
+// module.exports = { uploadDocuments, certificateUpload, uploadToS3, deleteFromS3, getPresignedUrl, s3: s3Client };
 
 
 const { S3Client, GetObjectCommand, DeleteObjectCommand } = require('@aws-sdk/client-s3');
@@ -161,7 +194,7 @@ const certificateUpload = multer({
       cb(new Error('Invalid file type: Only PDFs are allowed for certificates'), false);
     }
   },
-}).single('certificate'); // Single file upload with field name 'certificate'
+}).single('certificate');
 
 // General-purpose buffer upload to S3
 const uploadToS3 = async (buffer, key) => {
@@ -186,14 +219,22 @@ const deleteFromS3 = async (key) => {
   return s3Client.send(command);
 };
 
-// Generate pre-signed URL
-const getPresignedUrl = async (key, expiresIn = 3600) => {
+// Fetch and stream S3 object
+const streamS3Object = async (key, res) => {
   const command = new GetObjectCommand({
     Bucket: BUCKET_NAME,
     Key: key,
   });
-  const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
-  return await getSignedUrl(s3Client, command, { expiresIn });
+
+  try {
+    const { Body, ContentType, ContentLength } = await s3Client.send(command);
+    res.set('Content-Type', ContentType);
+    res.set('Content-Length', ContentLength);
+    res.set('Content-Disposition', `inline; filename="${path.basename(key)}"`);
+    Body.pipe(res);
+  } catch (error) {
+    throw new Error(`Failed to stream file from S3: ${error.message}`);
+  }
 };
 
-module.exports = { uploadDocuments, certificateUpload, uploadToS3, deleteFromS3, getPresignedUrl, s3: s3Client };
+module.exports = { uploadDocuments, certificateUpload, uploadToS3, deleteFromS3, streamS3Object, s3: s3Client };
