@@ -43,15 +43,43 @@ router.get('/receipt/:paymentId/download', authMiddleware, feesController.downlo
 
 // router.get('/school-details', authMiddleware, feesController.getSchoolDetails);
 
+// router.get('/school-details', authMiddleware, async (req, res) => {
+//     try {
+//       if (!req.school) {
+//         return res.status(404).json({ message: 'School not found' });
+//       }
+  
+//       res.json({
+//         name: req.school.name || 'Unknown School',
+//         address: req.school.address || 'Unknown Address'
+//       });
+//     } catch (error) {
+//       console.error('Error fetching school details:', error);
+//       res.status(500).json({ error: error.message });
+//     }
+//   });
+
 router.get('/school-details', authMiddleware, async (req, res) => {
     try {
       if (!req.school) {
         return res.status(404).json({ message: 'School not found' });
       }
   
+      let logoUrl = null;
+      if (req.school.logoKey) {
+        const command = new GetObjectCommand({
+          Bucket: process.env.AWS_S3_BUCKET_NAME,
+          Key: req.school.logoKey,
+        });
+        logoUrl = await s3Client.getSignedUrlPromise('getObject', command.params); // Presigned URL
+        // Alternatively, if public access is enabled:
+        // logoUrl = `https://${process.env.AWS_S3_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${req.school.logoKey}`;
+      }
+  
       res.json({
         name: req.school.name || 'Unknown School',
-        address: req.school.address || 'Unknown Address'
+        address: req.school.address || 'Unknown Address',
+        logoUrl: logoUrl || null // Include logo URL or null if not set
       });
     } catch (error) {
       console.error('Error fetching school details:', error);

@@ -82,7 +82,8 @@ const schoolSchema = new mongoose.Schema({
     isPaymentConfigured: {
       type: Boolean,
       default: false
-    }
+    },
+    logoKey: { type: String } // New field for S3 logo key
   }
 }, { timestamps: true });
 

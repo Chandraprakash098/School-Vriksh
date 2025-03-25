@@ -237,4 +237,33 @@ const streamS3Object = async (key, res) => {
   }
 };
 
-module.exports = { uploadDocuments, certificateUpload, uploadToS3, deleteFromS3, streamS3Object, s3: s3Client };
+
+const logoStorage = multerS3({
+  s3: s3Client,
+  bucket: BUCKET_NAME,
+  metadata: (req, file, cb) => {
+    cb(null, { fieldName: file.fieldname });
+  },
+  key: (req, file, cb) => {
+    const schoolId = req.school?._id.toString() || 'unknown';
+    const fileExt = path.extname(file.originalname);
+    const fileName = `logo_${schoolId}_${Date.now()}${fileExt}`;
+    const fileKey = `logos/${schoolId}/${fileName}`;
+    cb(null, fileKey);
+  },
+});
+
+const uploadSchoolLogo = multer({
+  storage: logoStorage,
+  limits: { fileSize: 2 * 1024 * 1024 }, // 2MB for logos
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = ['image/jpeg', 'image/png'];
+    if (allowedTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error(`Invalid file type: ${file.mimetype}. Allowed: ${allowedTypes.join(', ')}`), false);
+    }
+  },
+}).single('logo');
+
+module.exports = { uploadDocuments, certificateUpload, uploadToS3, deleteFromS3, streamS3Object, s3: s3Client,uploadSchoolLogo };
