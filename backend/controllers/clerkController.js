@@ -2969,7 +2969,7 @@ const clerkController = {
       const User = require('../models/User')(connection);
       const Class = require('../models/Class')(connection);
 
-      // Find the student by GR number
+      
       const student = await User.findOne({
         school: schoolId,
         'studentDetails.grNumber': grNumber,
@@ -2980,7 +2980,7 @@ const clerkController = {
         return res.status(404).json({ message: 'Student not found with the given GR number' });
       }
 
-      // Find the corresponding admission application
+      
       const application = await AdmissionApplication.findOne({
         school: schoolId,
         grNumber,
@@ -2993,7 +2993,7 @@ const clerkController = {
         return res.status(404).json({ message: 'Admission application not found for this GR number' });
       }
 
-      // Map documents with access URLs
+      
       const documentsWithUrls = application.documents.map((doc) => ({
         type: doc.type,
         documentUrl: doc.documentUrl,
@@ -3002,7 +3002,7 @@ const clerkController = {
         verified: doc.verified,
       }));
 
-      // Prepare the response data
+      
       const admissionHistory = {
         student: {
           id: student._id,

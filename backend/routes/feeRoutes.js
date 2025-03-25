@@ -40,4 +40,6 @@ router.put('/fee-definitions/:year', authMiddleware, feesController.editFeesForY
 router.get('/classes', authMiddleware, feesController.getAvailableClasses);
 router.get('/total-earnings', authMiddleware, feesController.getTotalEarningsByYear);
 router.get('/receipt/:paymentId/download', authMiddleware, feesController.downloadReceipt);
+
+router.get('/school-details', authMiddleware, feesController.getSchoolDetails);
 module.exports = router;
