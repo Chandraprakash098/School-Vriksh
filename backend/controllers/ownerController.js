@@ -6,113 +6,113 @@ const mongoose = require('mongoose');
 const { encrypt, decrypt } = require('../utils/encryption');
 
 const ownerController = {
-  // registerSchool: async (req, res) => {
-  //   try {
-  //     const { 
-  //       name, 
-  //       address, 
-  //       contact, 
-  //       email, 
-  //       adminDetails, 
-  //       subscriptionDetails, 
-  //       rteQuota,
-  //       customFormFields,
-  //       razorpayKeyId,    // New field
-  //       razorpayKeySecret // New field
-  //     } = req.body;
+  registerSchool: async (req, res) => {
+    try {
+      const { 
+        name, 
+        address, 
+        contact, 
+        email, 
+        adminDetails, 
+        subscriptionDetails, 
+        rteQuota,
+        customFormFields,
+        razorpayKeyId,    // New field
+        razorpayKeySecret // New field
+      } = req.body;
 
-  // const logoFile = req.file;
+  
 
-  //     const ownerConnection = await getOwnerConnection();
-  //     // const School = ownerConnection.model('School', require('../models/School').schema);
-  //     // const School = require('../models/School').model(ownerConnection);
-  //     const School = require('../models/School')(ownerConnection);
+      const ownerConnection = await getOwnerConnection();
+      // const School = ownerConnection.model('School', require('../models/School').schema);
+      // const School = require('../models/School').model(ownerConnection);
+      const School = require('../models/School')(ownerConnection);
 
-  //     // Generate unique dbName for the school
+      // Generate unique dbName for the school
 
-  //     // Generate dbName from school name (sanitized)
-  //     const sanitizedName = name.toLowerCase()
-  //                              .replace(/\s+/g, '_') // Replace spaces with underscores
-  //                              .replace(/[^a-z0-9_]/g, '') // Remove special characters
-  //                              .substring(0, 16); // Limit length
+      // Generate dbName from school name (sanitized)
+      const sanitizedName = name.toLowerCase()
+                               .replace(/\s+/g, '_') // Replace spaces with underscores
+                               .replace(/[^a-z0-9_]/g, '') // Remove special characters
+                               .substring(0, 16); // Limit length
       
-  //     // Add a timestamp to make it unique in case of schools with the same name
-  //     const timestamp = Date.now().toString().slice(-6);
-  //     const dbName = `school_${sanitizedName}_${timestamp}`;
-  //     // const dbName = `school_db_${new mongoose.Types.ObjectId()}`;
+      // Add a timestamp to make it unique in case of schools with the same name
+      const timestamp = Date.now().toString().slice(-6);
+      const dbName = `school_${sanitizedName}_${timestamp}`;
+      // const dbName = `school_db_${new mongoose.Types.ObjectId()}`;
 
-  //     if (!razorpayKeyId || !razorpayKeySecret) {
-  //       return res.status(400).json({ error: 'Razorpay credentials are required' });
-  //     }
+      if (!razorpayKeyId || !razorpayKeySecret) {
+        return res.status(400).json({ error: 'Razorpay credentials are required' });
+      }
 
-  //     const encryptedKeyId = encrypt(razorpayKeyId);
-  //     const encryptedKeySecret = encrypt(razorpayKeySecret);
+      const encryptedKeyId = encrypt(razorpayKeyId);
+      const encryptedKeySecret = encrypt(razorpayKeySecret);
 
-  //     // Create new school in owner_db
-  //     const school = new School({
-  //       name,
-  //       address,
-  //       contact,
-  //       email,
-  //       dbName, // Assign unique database name
-  //       subscriptionStatus: 'active',
-  //       subscriptionDetails: {
-  //         plan: subscriptionDetails.plan,
-  //         startDate: new Date(),
-  //         endDate: subscriptionDetails.endDate,
-  //         paymentStatus: subscriptionDetails.paymentStatus,
-  //         amount: subscriptionDetails.amount
-  //       },
-  //       rteQuota,
-  //       customFormFields,
-  //       // paymentConfig: {
-  //       //   razorpayKeyId,
-  //       //   razorpayKeySecret,
-  //       //   isPaymentConfigured: true
-  //       // }
-  //       paymentConfig: {
-  //         razorpayKeyId: encryptedKeyId,
-  //         razorpayKeySecret: encryptedKeySecret,
-  //         isPaymentConfigured: true
-  //       },
-  // logoKey: logoFile ? logoFile.key : null
-  //     });
-  //     await school.save();
+      // Create new school in owner_db
+      const school = new School({
+        name,
+        address,
+        contact,
+        email,
+        dbName, // Assign unique database name
+        subscriptionStatus: 'active',
+        subscriptionDetails: {
+          plan: subscriptionDetails.plan,
+          startDate: new Date(),
+          endDate: subscriptionDetails.endDate,
+          paymentStatus: subscriptionDetails.paymentStatus,
+          amount: subscriptionDetails.amount
+        },
+        rteQuota,
+        customFormFields,
+        // paymentConfig: {
+        //   razorpayKeyId,
+        //   razorpayKeySecret,
+        //   isPaymentConfigured: true
+        // }
+        paymentConfig: {
+          razorpayKeyId: encryptedKeyId,
+          razorpayKeySecret: encryptedKeySecret,
+          isPaymentConfigured: true
+        },
+  
+      });
+      await school.save();
 
-  //     // Connect to the new school's database
-  //     const schoolConnection = await getSchoolConnection(school._id);
-  //     const User = require('../models/User')(schoolConnection);
+      // Connect to the new school's database
+      const schoolConnection = await getSchoolConnection(school._id);
+      const User = require('../models/User')(schoolConnection);
 
-  //     // Create admin account in the school's database
-  //     const admin = new User({
-  //       school: school._id,
-  //       name: adminDetails.name,
-  //       email: adminDetails.email,
-  //       password: await bcrypt.hash(adminDetails.password, 10),
-  //       role: 'admin',
-  //       status: 'active',
-  //       profile: {
-  //         phone: adminDetails.phone,
-  //         address: adminDetails.address
-  //       }
-  //     });
-  //     await admin.save();
+      // Create admin account in the school's database
+      const admin = new User({
+        school: school._id,
+        name: adminDetails.name,
+        email: adminDetails.email,
+        password: await bcrypt.hash(adminDetails.password, 10),
+        role: 'admin',
+        status: 'active',
+        profile: {
+          phone: adminDetails.phone,
+          address: adminDetails.address
+        }
+      });
+      await admin.save();
 
-  //     res.status(201).json({ 
-  //       message: 'School registered successfully',
-  //       school: {
-  //         ...school.toObject(),
-  //         paymentConfig: {
-  //           ...school.paymentConfig,
-  //           razorpayKeySecret: undefined // Don't expose secret
-  //         }
-  //       },
-  //       admin: { ...admin.toObject(), password: undefined }
-  //     });
-  //   } catch (error) {
-  //     res.status(500).json({ error: error.message });
-  //   }
-  // },
+      res.status(201).json({ 
+        message: 'School registered successfully',
+        school: {
+          ...school.toObject(),
+          paymentConfig: {
+            ...school.paymentConfig,
+            razorpayKeySecret: undefined // Don't expose secret
+          }
+        },
+        admin: { ...admin.toObject(), password: undefined }
+      });
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  },
 
 
   // registerSchool : async (req, res) => {
@@ -221,120 +221,120 @@ const ownerController = {
   // },
 
 
-  registerSchool: async (req, res) => {
-    try {
-        const { 
-            name, 
-            address, 
-            contact, 
-            email, 
-            adminDetails, 
-            subscriptionDetails, 
-            rteQuota,
-            customFormFields,
-            razorpayKeyId,    
-            razorpayKeySecret 
-        } = req.body;
+//   registerSchool: async (req, res) => {
+//     try {
+//         const { 
+//             name, 
+//             address, 
+//             contact, 
+//             email, 
+//             adminDetails, 
+//             subscriptionDetails, 
+//             rteQuota,
+//             customFormFields,
+//             razorpayKeyId,    
+//             razorpayKeySecret 
+//         } = req.body;
 
-        // Validate required fields
-        if (!name) {
-            return res.status(400).json({ error: 'School name is required' });
-        }
+//         // Validate required fields
+//         if (!name) {
+//             return res.status(400).json({ error: 'School name is required' });
+//         }
 
-        // Get the uploaded logo file from multer
-        const logoFile = req.file;
-        console.log('Logo File Details:', logoFile);
+//         // Get the uploaded logo file from multer
+//         const logoFile = req.file;
+//         console.log('Logo File Details:', logoFile);
 
-        const ownerConnection = await getOwnerConnection();
-        const School = require('../models/School')(ownerConnection);
+//         const ownerConnection = await getOwnerConnection();
+//         const School = require('../models/School')(ownerConnection);
 
-        // Generate unique dbName from school name (sanitized)
-        const sanitizedName = name.toString()
-                                .toLowerCase()
-                                .replace(/\s+/g, '_')
-                                .replace(/[^a-z0-9_]/g, '')
-                                .substring(0, 16);
+//         // Generate unique dbName from school name (sanitized)
+//         const sanitizedName = name.toString()
+//                                 .toLowerCase()
+//                                 .replace(/\s+/g, '_')
+//                                 .replace(/[^a-z0-9_]/g, '')
+//                                 .substring(0, 16);
         
-        const timestamp = Date.now().toString().slice(-6);
-        const dbName = `school_${sanitizedName}_${timestamp}`;
+//         const timestamp = Date.now().toString().slice(-6);
+//         const dbName = `school_${sanitizedName}_${timestamp}`;
 
-        if (!razorpayKeyId || !razorpayKeySecret) {
-            return res.status(400).json({ error: 'Razorpay credentials are required' });
-        }
+//         if (!razorpayKeyId || !razorpayKeySecret) {
+//             return res.status(400).json({ error: 'Razorpay credentials are required' });
+//         }
 
-        const encryptedKeyId = encrypt(razorpayKeyId);
-        const encryptedKeySecret = encrypt(razorpayKeySecret);
+//         const encryptedKeyId = encrypt(razorpayKeyId);
+//         const encryptedKeySecret = encrypt(razorpayKeySecret);
 
-        // Create new school in owner_db with logo key if uploaded
-        const school = new School({
-            name,
-            address,
-            contact,
-            email,
-            dbName,
-            subscriptionStatus: 'active',
-            subscriptionDetails: {
-                plan: subscriptionDetails.plan,
-                startDate: new Date(),
-                endDate: subscriptionDetails.endDate,
-                paymentStatus: subscriptionDetails.paymentStatus,
-                amount: subscriptionDetails.amount
-            },
-            rteQuota,
-            customFormFields,
-            paymentConfig: {
-                razorpayKeyId: encryptedKeyId,
-                razorpayKeySecret: encryptedKeySecret,
-                isPaymentConfigured: true,
-                logoKey: logoFile ? logoFile.key : null // Store S3 key if logo was uploaded
-            }
-        });
-        await school.save();
+//         // Create new school in owner_db with logo key if uploaded
+//         const school = new School({
+//             name,
+//             address,
+//             contact,
+//             email,
+//             dbName,
+//             subscriptionStatus: 'active',
+//             subscriptionDetails: {
+//                 plan: subscriptionDetails.plan,
+//                 startDate: new Date(),
+//                 endDate: subscriptionDetails.endDate,
+//                 paymentStatus: subscriptionDetails.paymentStatus,
+//                 amount: subscriptionDetails.amount
+//             },
+//             rteQuota,
+//             customFormFields,
+//             paymentConfig: {
+//                 razorpayKeyId: encryptedKeyId,
+//                 razorpayKeySecret: encryptedKeySecret,
+//                 isPaymentConfigured: true,
+//                 logoKey: logoFile ? logoFile.key : null // Store S3 key if logo was uploaded
+//             }
+//         });
+//         await school.save();
 
-        // Connect to the new school's database
-        const schoolConnection = await getSchoolConnection(school._id);
-        const User = require('../models/User')(schoolConnection);
+//         // Connect to the new school's database
+//         const schoolConnection = await getSchoolConnection(school._id);
+//         const User = require('../models/User')(schoolConnection);
 
-        // Create admin account in the school's database
-        const admin = new User({
-            school: school._id,
-            name: adminDetails.name,
-            email: adminDetails.email,
-            password: await bcrypt.hash(adminDetails.password, 10),
-            role: 'admin',
-            status: 'active',
-            profile: {
-                phone: adminDetails.phone,
-                address: adminDetails.address
-            }
-        });
-        await admin.save();
+//         // Create admin account in the school's database
+//         const admin = new User({
+//             school: school._id,
+//             name: adminDetails.name,
+//             email: adminDetails.email,
+//             password: await bcrypt.hash(adminDetails.password, 10),
+//             role: 'admin',
+//             status: 'active',
+//             profile: {
+//                 phone: adminDetails.phone,
+//                 address: adminDetails.address
+//             }
+//         });
+//         await admin.save();
 
-        // Construct the logo URL if logo was uploaded
-        let logoUrl = null;
-        if (logoFile) {
-            logoUrl = `https://${process.env.AWS_S3_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${logoFile.key}`;
-        }
+//         // Construct the logo URL if logo was uploaded
+//         let logoUrl = null;
+//         if (logoFile) {
+//             logoUrl = `https://${process.env.AWS_S3_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${logoFile.key}`;
+//         }
 
-        res.status(201).json({ 
-            message: 'School registered successfully',
-            school: {
-                ...school.toObject(),
-                paymentConfig: {
-                    ...school.paymentConfig,
-                    razorpayKeySecret: undefined,
-                    logoKey: logoFile ? logoFile.key : null,
-                    logoUrl: logoUrl // Include public URL in response
-                }
-            },
-            admin: { ...admin.toObject(), password: undefined },
-            logoUploadStatus: logoFile ? 'Uploaded successfully' : 'No logo uploaded'
-        });
-    } catch (error) {
-        console.error('School Registration Error:', error);
-        res.status(500).json({ error: error.message });
-    }
-},
+//         res.status(201).json({ 
+//             message: 'School registered successfully',
+//             school: {
+//                 ...school.toObject(),
+//                 paymentConfig: {
+//                     ...school.paymentConfig,
+//                     razorpayKeySecret: undefined,
+//                     logoKey: logoFile ? logoFile.key : null,
+//                     logoUrl: logoUrl // Include public URL in response
+//                 }
+//             },
+//             admin: { ...admin.toObject(), password: undefined },
+//             logoUploadStatus: logoFile ? 'Uploaded successfully' : 'No logo uploaded'
+//         });
+//     } catch (error) {
+//         console.error('School Registration Error:', error);
+//         res.status(500).json({ error: error.message });
+//     }
+// },
  
   
   getSchoolAdmins: async (req, res) => {

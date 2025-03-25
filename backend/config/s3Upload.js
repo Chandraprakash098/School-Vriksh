@@ -238,141 +238,96 @@ const streamS3Object = async (key, res) => {
 };
 
 
+
+
 // const logoStorage = multerS3({
 //   s3: s3Client,
 //   bucket: BUCKET_NAME,
 //   metadata: (req, file, cb) => {
-//     cb(null, { fieldName: file.fieldname });
+//       cb(null, { 
+//           fieldName: file.fieldname,
+//           uploadedAt: new Date().toISOString()
+//       });
 //   },
 //   key: (req, file, cb) => {
-//     const schoolId = req.school?._id.toString() || 'unknown';
-//     const fileExt = path.extname(file.originalname);
-//     const fileName = `logo_${schoolId}_${Date.now()}${fileExt}`;
-//     const fileKey = `logos/${schoolId}/${fileName}`;
-//     cb(null, fileKey);
-//   },
+//       const sanitizedName = req.body.name 
+//           ? req.body.name.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '')
+//           : 'unknown';
+//       const timestamp = Date.now();
+//       const fileExt = path.extname(file.originalname);
+//       const fileName = `logo_${sanitizedName}_${timestamp}${fileExt}`;
+//       const fileKey = `logos/${sanitizedName}/${fileName}`;
+//       console.log('Generated S3 key:', fileKey); // Log the key
+//       cb(null, fileKey);
+//   }
 // });
 
 // const uploadSchoolLogo = multer({
 //   storage: logoStorage,
-//   limits: { fileSize: 2 * 1024 * 1024 }, // 2MB for logos
+//   limits: { 
+//       fileSize: 2 * 1024 * 1024 // 2MB limit
+//   },
 //   fileFilter: (req, file, cb) => {
-//     const allowedTypes = ['image/jpeg', 'image/png'];
-//     if (allowedTypes.includes(file.mimetype)) {
-//       cb(null, true);
-//     } else {
-//       cb(new Error(`Invalid file type: ${file.mimetype}. Allowed: ${allowedTypes.join(', ')}`), false);
-//     }
+//       const allowedTypes = ['image/jpeg', 'image/png', 'image/jpg'];
+//       if (allowedTypes.includes(file.mimetype)) {
+//           cb(null, true);
+//       } else {
+//           cb(new Error(`Invalid file type: ${file.mimetype}. Allowed: ${allowedTypes.join(', ')}`), false);
+//       }
 //   }
 // }).single('logo');
 
 // const preserveBodyWithLogo = (req, res, next) => {
-//   console.log('Request body:', req.body);
-//   console.log('Request headers:', req.headers);
-//   console.log('Request file:', req.file);
+//   console.log('Raw request body:', req.body);
+//   console.log('Uploaded file:', req.file);
 
-//   if (!req.body || Object.keys(req.body).length === 0) {
-//     try {
-//       // Try parsing from x-school-data header
-//       const schoolData = req.headers['x-school-data'];
-//       if (schoolData) {
-//         req.body = JSON.parse(schoolData);
+//   try {
+//       // If body is empty but file exists, Multer has already parsed it
+//       if (!req.body || Object.keys(req.body).length === 0) {
+//           return next(); // Skip if no additional processing needed
 //       }
-//     } catch (error) {
-//       console.error('Error parsing x-school-data:', error);
-//     }
+
+//       const processNestedData = (body) => {
+//           const result = {};
+//           Object.keys(body).forEach(key => {
+//               try {
+//                   result[key] = typeof body[key] === 'string' && body[key].startsWith('{')
+//                       ? JSON.parse(body[key])
+//                       : body[key];
+//               } catch (parseError) {
+//                   result[key] = body[key];
+//               }
+//           });
+//           return result;
+//       };
+
+//       req.body = processNestedData(req.body);
+//       console.log('Processed request body:', req.body);
+//       next();
+//   } catch (error) {
+//       console.error('Body processing error:', error);
+//       res.status(400).json({ 
+//           error: 'Invalid request data', 
+//           message: error.message 
+//       });
+//   }
+// };
+
+// const handleMulterErrors = (err, req, res, next) => {
+//   console.error('Multer error details:', err);
+//   if (err instanceof multer.MulterError) {
+//       return res.status(400).json({
+//           error: 'File upload error',
+//           message: err.message,
+//           code: err.code
+//       });
+//   } else if (err) {
+//       return res.status(500).json({
+//           error: 'Upload failed',
+//           message: err.message
+//       });
 //   }
 //   next();
 // };
 
-const logoStorage = multerS3({
-  s3: s3Client,
-  bucket: BUCKET_NAME,
-  metadata: (req, file, cb) => {
-      cb(null, { 
-          fieldName: file.fieldname,
-          uploadedAt: new Date().toISOString()
-      });
-  },
-  key: (req, file, cb) => {
-      const sanitizedName = req.body.name 
-          ? req.body.name.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '')
-          : 'unknown';
-      const timestamp = Date.now();
-      const fileExt = path.extname(file.originalname);
-      const fileName = `logo_${sanitizedName}_${timestamp}${fileExt}`;
-      const fileKey = `logos/${sanitizedName}/${fileName}`;
-      console.log('Generated S3 key:', fileKey); // Log the key
-      cb(null, fileKey);
-  }
-});
-
-const uploadSchoolLogo = multer({
-  storage: logoStorage,
-  limits: { 
-      fileSize: 2 * 1024 * 1024 // 2MB limit
-  },
-  fileFilter: (req, file, cb) => {
-      const allowedTypes = ['image/jpeg', 'image/png', 'image/jpg'];
-      if (allowedTypes.includes(file.mimetype)) {
-          cb(null, true);
-      } else {
-          cb(new Error(`Invalid file type: ${file.mimetype}. Allowed: ${allowedTypes.join(', ')}`), false);
-      }
-  }
-}).single('logo');
-
-const preserveBodyWithLogo = (req, res, next) => {
-  console.log('Raw request body:', req.body);
-  console.log('Uploaded file:', req.file);
-
-  try {
-      // If body is empty but file exists, Multer has already parsed it
-      if (!req.body || Object.keys(req.body).length === 0) {
-          return next(); // Skip if no additional processing needed
-      }
-
-      const processNestedData = (body) => {
-          const result = {};
-          Object.keys(body).forEach(key => {
-              try {
-                  result[key] = typeof body[key] === 'string' && body[key].startsWith('{')
-                      ? JSON.parse(body[key])
-                      : body[key];
-              } catch (parseError) {
-                  result[key] = body[key];
-              }
-          });
-          return result;
-      };
-
-      req.body = processNestedData(req.body);
-      console.log('Processed request body:', req.body);
-      next();
-  } catch (error) {
-      console.error('Body processing error:', error);
-      res.status(400).json({ 
-          error: 'Invalid request data', 
-          message: error.message 
-      });
-  }
-};
-
-const handleMulterErrors = (err, req, res, next) => {
-  console.error('Multer error details:', err);
-  if (err instanceof multer.MulterError) {
-      return res.status(400).json({
-          error: 'File upload error',
-          message: err.message,
-          code: err.code
-      });
-  } else if (err) {
-      return res.status(500).json({
-          error: 'Upload failed',
-          message: err.message
-      });
-  }
-  next();
-};
-
-module.exports = { uploadDocuments, certificateUpload, uploadToS3, deleteFromS3, streamS3Object, s3: s3Client,uploadSchoolLogo,preserveBodyWithLogo,handleMulterErrors };
+module.exports = { uploadDocuments, certificateUpload, uploadToS3, deleteFromS3, streamS3Object, s3: s3Client };
