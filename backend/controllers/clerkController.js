@@ -2959,6 +2959,99 @@ const clerkController = {
     }
   },
 
+
+  getAdmissionHistoryByGRNumber: async (req, res) => {
+    try {
+      const { grNumber } = req.params;
+      const schoolId = req.school._id.toString();
+      const connection = req.connection;
+      const AdmissionApplication = require('../models/AdmissionApplication')(connection);
+      const User = require('../models/User')(connection);
+      const Class = require('../models/Class')(connection);
+
+      // Find the student by GR number
+      const student = await User.findOne({
+        school: schoolId,
+        'studentDetails.grNumber': grNumber,
+        role: 'student',
+      }).select('name email studentDetails');
+
+      if (!student) {
+        return res.status(404).json({ message: 'Student not found with the given GR number' });
+      }
+
+      // Find the corresponding admission application
+      const application = await AdmissionApplication.findOne({
+        school: schoolId,
+        grNumber,
+      })
+        .populate('assignedClass', 'name division', Class)
+        .populate('clerkVerification.verifiedBy', 'name', User)
+        .populate('feesVerification.verifiedBy', 'name', User);
+
+      if (!application) {
+        return res.status(404).json({ message: 'Admission application not found for this GR number' });
+      }
+
+      // Map documents with access URLs
+      const documentsWithUrls = application.documents.map((doc) => ({
+        type: doc.type,
+        documentUrl: doc.documentUrl,
+        key: doc.key,
+        accessUrl: `/documents/${application._id}/${doc.key.split('/').pop()}`,
+        verified: doc.verified,
+      }));
+
+      // Prepare the response data
+      const admissionHistory = {
+        student: {
+          id: student._id,
+          name: student.name,
+          email: student.email,
+          grNumber: student.studentDetails.grNumber,
+          class: application.assignedClass
+            ? `${application.assignedClass.name}${application.assignedClass.division ? ' ' + application.assignedClass.division : ''}`
+            : 'Not assigned',
+          admissionType: student.studentDetails.admissionType,
+          dob: student.studentDetails.dob,
+          gender: student.studentDetails.gender,
+          parentDetails: student.studentDetails.parentDetails,
+        },
+        application: {
+          id: application._id,
+          trackingId: application.trackingId,
+          admissionType: application.admissionType,
+          status: application.status,
+          submittedOn: application.createdAt,
+          documents: documentsWithUrls,
+          clerkVerification: {
+            status: application.clerkVerification.status,
+            verifiedBy: application.clerkVerification.verifiedBy?.name || 'N/A',
+            verifiedAt: application.clerkVerification.verifiedAt,
+            comments: application.clerkVerification.comments,
+          },
+          feesVerification: {
+            status: application.feesVerification.status,
+            verifiedBy: application.feesVerification.verifiedBy?.name || 'N/A',
+            verifiedAt: application.feesVerification.verifiedAt,
+            receiptNumber: application.feesVerification.receiptNumber,
+            comments: application.feesVerification.comments,
+          },
+          paymentDetails: application.paymentDetails || { note: 'RTE - No payment required' },
+          additionalResponses: application.additionalResponses ? Object.fromEntries(application.additionalResponses) : {},
+        },
+      };
+
+      res.json({
+        status: 'success',
+        admissionHistory,
+      });
+    } catch (error) {
+      console.error('Error in getAdmissionHistoryByGRNumber:', error);
+      res.status(500).json({ error: error.message });
+    }
+  },
+
   getStudentsByClass: async (req, res) => {
     try {
       const { classId } = req.params;

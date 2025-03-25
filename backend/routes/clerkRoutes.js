@@ -95,4 +95,6 @@ router.get('/application/:applicationId/documents', clerkController.viewApplicat
 
 router.post('/register-existing-student', clerkController.registerExistingStudent);
 
+
+router.get('/admission-history/:grNumber', clerkController.getAdmissionHistoryByGRNumber);
 module.exports = router;
