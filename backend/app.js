@@ -104,6 +104,7 @@ const authRoutes = require('./routes/authRoutes');
 const admissionRoutes = require('./routes/admissionRoutes');
 const { multerErrorHandler } = require('./middleware/errorHandler');
 const { initializeConnections } = require('./config/database');
+const multer = require('multer')
 
 const app = express();
 
@@ -111,6 +112,7 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
 app.use(multerErrorHandler);
 
 // Routes
