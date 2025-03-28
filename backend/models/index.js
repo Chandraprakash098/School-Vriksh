@@ -1,26 +1,4 @@
-// const mongoose = require('mongoose');
 
-// const models = {
-//     User: require('../models/User'),
-//     Class: require('../models/Class'),
-//     Subject: require('../models/Subject'),
-//     Syllabus: require('../models/Syllabus'),
-//     TeacherAssignment: require('../models/TeacherAssignment'),
-//     Timetable: require('../models/Timetable'),
-//     Attendance: require('../models/Attendance'),
-//     Exam: require('../models/Exam'),
-//     Result: require('../models/Results'),
-//     Announcement: require('../models/Announcement'),
-//     Meeting: require('../models/Meeting'),
-//     SubjectMarks: require('../models/SubjectMarks'),
-//     ClassResult: require('../models/ClassResult'),
-//     School: require('../models/School'),
-//   };
-  
-//   const getModel = (name, connection) => models[name](connection);
-//   module.exports = getModel;
-
-// models/index.js
 console.log('Loading models/index.js');
 
 const models = {
@@ -42,6 +20,7 @@ const models = {
   SubjectMarks: require('../models/SubjectMarks'),
   ClassResult: require('../models/ClassResult'),
   School: require('../models/School'),
+  StudyMaterial:require('../models/StudyMaterial')
 };
 
 console.log('Loaded models:', Object.keys(models).map(name => ({
@@ -79,3 +58,4 @@ const getModel = (name, connection) => {
 };
 
 module.exports = getModel;
+

@@ -10,5 +10,7 @@ const attendanceSchema = new mongoose.Schema({
   markedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
 }, { timestamps: true });
 
-// module.exports = mongoose.model('Attendance', attendanceSchema);
+
+attendanceSchema.index({ school: 1, class: 1, user: 1, date: 1 }, { unique: true }); // Prevents duplicate attendance records
 module.exports = (connection) => connection.model('Attendance', attendanceSchema);
+

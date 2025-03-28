@@ -1,4 +1,6 @@
 
+
+
 // const mongoose = require('mongoose');
 
 // const examSchema = new mongoose.Schema({
@@ -33,7 +35,14 @@
 //     student: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
 //     marksObtained: Number,
 //     remarks: String
-//   }]
+//   }],
+//   status: { type: String, enum: ['draft', 'submittedToClassTeacher', 'submittedToAdmin', 'published'], default: 'draft' },
+//   marksEnteredBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+//   marksEnteredAt: Date,
+//   submittedToClassTeacherAt: Date,
+//   submittedToAdminAt: Date,
+//   publishedAt: Date,
+//   publishedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
 // }, { 
 //   timestamps: true,
 //   validate: {
@@ -48,6 +57,7 @@
 // });
 
 // module.exports = (connection) => connection.model('Exam', examSchema);
+
 
 
 const mongoose = require('mongoose');
@@ -68,7 +78,7 @@ const examSchema = new mongoose.Schema({
   startTime: { type: String, required: true },
   endTime: { type: String, required: true },
   duration: { type: Number, required: true },
-  totalMarks: { type: Number, required: true },
+  totalMarks: { type: Number, required: true }, // e.g., 100 for each subject
   seatingArrangement: [{
     classroom: String,
     capacity: Number,
@@ -85,7 +95,11 @@ const examSchema = new mongoose.Schema({
     marksObtained: Number,
     remarks: String
   }],
-  status: { type: String, enum: ['draft', 'submittedToClassTeacher', 'submittedToAdmin', 'published'], default: 'draft' },
+  status: { 
+    type: String, 
+    enum: ['draft', 'submittedToClassTeacher', 'submittedToAdmin', 'published'], 
+    default: 'draft' 
+  },
   marksEnteredBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   marksEnteredAt: Date,
   submittedToClassTeacherAt: Date,

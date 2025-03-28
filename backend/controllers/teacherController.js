@@ -1,32 +1,32 @@
 
-// const TeacherSchedule = require('../models/TeacherSchedule');
-// const Homework = require('../models/Homework');
-// const Attendance = require('../models/Attendance');
-// const ParentCommunication = require('../models/ParentCommunication');
-// const StudyMaterial = require('../models/StudyMaterial');
-// const Exam = require('../models/Exam');
-// const Result = require('../models/Results');
-// const ProgressReport = require('../models/ProgressReport');
-// const Announcement = require('../models/Announcement');
-// const Leave = require('../models/Leave');
-// const User = require('../models/User');
+// const mongoose = require('mongoose');
 
 // const teacherController = {
 //   // View schedule
 //   getSchedule: async (req, res) => {
 //     try {
 //       const { teacherId } = req.params;
+//       const schoolId = req.school._id.toString(); // Use req.school from auth middleware
+//       const connection = req.connection;
+//       const TeacherSchedule = require('../models/TeacherSchedule')(connection);
+//       const Class = require('../models/Class')(connection);
+
 //       const currentDate = new Date();
-      
+
 //       const schedule = await TeacherSchedule.findOne({
 //         teacher: teacherId,
-//         academicYear: getCurrentAcademicYear()
+//         school: schoolId, // Add school filter
+//         academicYear: getCurrentAcademicYear(),
 //       })
-//       .populate('schedule.periods.class', 'name division')
-//       .lean();
+//         .populate('schedule.periods.class', 'name division', Class)
+//         .lean();
+
+//       if (!schedule) {
+//         return res.status(404).json({ message: 'Schedule not found' });
+//       }
 
 //       // Get any substitutions for today
-//       const todaySubstitutions = schedule.substitutions.filter(sub => 
+//       const todaySubstitutions = schedule.substitutions.filter(sub =>
 //         isSameDay(sub.date, currentDate)
 //       );
 
@@ -39,46 +39,48 @@
 //   // Assign homework
 //   assignHomework: async (req, res) => {
 //     try {
-//       const { schoolId, classId } = req.school;
+//       const schoolId = req.school._id.toString();
+//       const { classId } = req.params; // Use classId from params
 //       const homeworkData = req.body;
+//       const connection = req.connection;
+//       const Homework = require('../models/Homework')(connection);
 
 //       const homework = new Homework({
 //         school: schoolId,
-//         class: classId,
+//         class: classId, // Use classId instead of homeworkData.classId
 //         ...homeworkData,
-//         assignedBy: req.user._id
+//         assignedBy: req.user._id,
 //       });
 
 //       await homework.save();
-
-//       // Notify students and parents
-//       await notifyHomeworkAssigned(homework);
-
 //       res.status(201).json(homework);
 //     } catch (error) {
 //       res.status(500).json({ error: error.message });
 //     }
 //   },
 
- 
+
 
 //   markAttendance: async (req, res) => {
 //     try {
-//       const { schoolId, classId } = req.params;
+//       const { classId } = req.params; // Removed schoolId from params
 //       const { date, attendanceData } = req.body;
 //       const teacherId = req.user._id;
-  
-//       // Verify if the teacher has permission to take attendance for this class
+//       const schoolId = req.school._id.toString(); // Use req.school
+//       const connection = req.connection;
+//       const User = require('../models/User')(connection);
+//       const Attendance = require('../models/Attendance')(connection);
+
 //       const teacher = await User.findById(teacherId);
-//       if (!teacher || !teacher.permissions.canTakeAttendance.includes(classId)) {
-//         return res.status(403).json({ 
-//           message: 'You do not have permission to mark attendance for this class. Only assigned class teachers can mark attendance.'
+//       if (!teacher || !teacher.permissions.canTakeAttendance.some(id => id.toString() === classId)) {
+//         return res.status(403).json({
+//           message: 'You do not have permission to mark attendance for this class. Only assigned class teachers can mark attendance.',
 //         });
 //       }
-  
+
 //       const session = await mongoose.startSession();
 //       session.startTransaction();
-  
+
 //       try {
 //         const attendancePromises = attendanceData.map(async (student) => {
 //           const attendance = new Attendance({
@@ -88,19 +90,13 @@
 //             date,
 //             status: student.status,
 //             type: 'student',
-//             markedBy: teacherId
+//             markedBy: teacherId,
 //           });
 //           return attendance.save({ session });
 //         });
-  
+
 //         const attendanceRecords = await Promise.all(attendancePromises);
-  
-//         // Notify parents of absent students
-//         const absentStudents = attendanceRecords.filter(record => 
-//           record.status === 'absent'
-//         );
-//         await notifyAbsentStudents(absentStudents);
-  
+
 //         await session.commitTransaction();
 //         res.json(attendanceRecords);
 //       } catch (error) {
@@ -114,12 +110,13 @@
 //     }
 //   },
 
-//   // Mark own attendance for teacher
 //   markOwnAttendance: async (req, res) => {
 //     try {
-//       const { schoolId } = req.params;
+//       const schoolId = req.school._id.toString(); // Use req.school instead of req.params
 //       const { date, status, remarks } = req.body;
 //       const teacherId = req.user._id;
+//       const connection = req.connection;
+//       const Attendance = require('../models/Attendance')(connection);
 
 //       const attendance = new Attendance({
 //         school: schoolId,
@@ -128,7 +125,7 @@
 //         status,
 //         remarks,
 //         type: 'teacher',
-//         markedBy: teacherId
+//         markedBy: teacherId,
 //       });
 
 //       await attendance.save();
@@ -138,20 +135,23 @@
 //     }
 //   },
 
-//   // Upload study materials
 //   uploadStudyMaterial: async (req, res) => {
 //     try {
-//       const { schoolId, classId } = req.params;
+//       const { classId } = req.params; // Removed schoolId from params
 //       const { title, description, subject, type, fileUrl } = req.body;
 //       const teacherId = req.user._id;
+//       const schoolId = req.school._id.toString();
+//       const connection = req.connection;
+//       const StudyMaterial = require('../models/StudyMaterial')(connection);
 
-//       // Verify if teacher teaches this class
-//       const isAssigned = await verifyTeacherClassAssignment(teacherId, classId);
+//       // Verify if teacher teaches this class (updated to use dynamic User model)
+//       const isAssigned = await verifyTeacherClassAssignment(teacherId, classId, connection);
 //       if (!isAssigned) {
 //         return res.status(403).json({ message: 'You are not authorized to upload materials for this class' });
 //       }
 
 //       const material = new StudyMaterial({
+//         school: schoolId, // Add school field
 //         title,
 //         description,
 //         class: classId,
@@ -159,13 +159,13 @@
 //         type,
 //         fileUrl,
 //         uploadedBy: teacherId,
-//         isActive: true
+//         isActive: true,
 //       });
 
 //       await material.save();
 
-//       // Notify students about new material
-//       await notifyNewStudyMaterial(material);
+//       // Notify students about new material (implement notifyNewStudyMaterial if needed)
+//       // await notifyNewStudyMaterial(material);
 
 //       res.status(201).json(material);
 //     } catch (error) {
@@ -173,21 +173,24 @@
 //     }
 //   },
 
-//   // Enter and verify student marks
 //   enterStudentMarks: async (req, res) => {
 //     try {
 //       const { examId } = req.params;
 //       const { studentsMarks } = req.body;
 //       const teacherId = req.user._id;
+//       const schoolId = req.school._id.toString();
+//       const connection = req.connection;
+//       const Exam = require('../models/Exam')(connection);
+//       const Subject = require('../models/Subject')(connection);
 
-//       const exam = await Exam.findById(examId);
+//       const exam = await Exam.findOne({ _id: examId, school: schoolId });
 //       if (!exam) {
 //         return res.status(404).json({ message: 'Exam not found' });
 //       }
 
 //       // Verify teacher permission for this subject/class
 //       const subjectInfo = await Subject.findById(exam.subject);
-//       const isAuthorized = subjectInfo.teachers.some(t => 
+//       const isAuthorized = subjectInfo.teachers.some(t =>
 //         t.teacher.toString() === teacherId.toString()
 //       );
 
@@ -199,7 +202,7 @@
 //       const results = studentsMarks.map(entry => ({
 //         student: entry.studentId,
 //         marks: entry.marks,
-//         remarks: entry.remarks || ''
+//         remarks: entry.remarks || '',
 //       }));
 
 //       exam.results = results;
@@ -213,41 +216,50 @@
 //     }
 //   },
 
-//   // Generate progress reports
 //   generateProgressReport: async (req, res) => {
 //     try {
 //       const { classId } = req.params;
 //       const { month, year, studentId } = req.body;
 //       const teacherId = req.user._id;
+//       const schoolId = req.school._id.toString();
+//       const connection = req.connection;
+//       const Class = require('../models/Class')(connection);
+//       const Attendance = require('../models/Attendance')(connection);
+//       const Exam = require('../models/Exam')(connection);
+//       const Subject = require('../models/Subject')(connection);
+//       const ProgressReport = require('../models/ProgressReport')(connection);
 
 //       // Verify if teacher is class teacher
-//       const classInfo = await Class.findById(classId);
-//       if (classInfo.classTeacher.toString() !== teacherId.toString()) {
+//       const classInfo = await Class.findOne({ _id: classId, school: schoolId });
+//       if (!classInfo || classInfo.classTeacher.toString() !== teacherId.toString()) {
 //         return res.status(403).json({ message: 'Only class teachers can generate progress reports' });
 //       }
 
 //       // Get attendance for the month
 //       const startDate = new Date(year, month - 1, 1);
 //       const endDate = new Date(year, month, 0);
-      
+
 //       const attendance = await Attendance.find({
+//         school: schoolId,
 //         class: classId,
 //         user: studentId,
-//         date: { $gte: startDate, $lte: endDate }
+//         date: { $gte: startDate, $lte: endDate },
 //       });
 
 //       // Get exam results for the period
 //       const exams = await Exam.find({
+//         school: schoolId,
 //         class: classId,
-//         date: { $gte: startDate, $lte: endDate }
+//         date: { $gte: startDate, $lte: endDate },
 //       }).select('name subject results');
 
 //       // Get subjects for the class
-//       const subjects = await Subject.find({ class: classId })
+//       const subjects = await Subject.find({ school: schoolId, class: classId })
 //         .populate('teachers.teacher', 'name');
 
 //       // Compile report
 //       const report = new ProgressReport({
+//         school: schoolId, // Add school field
 //         student: studentId,
 //         class: classId,
 //         month,
@@ -257,7 +269,7 @@
 //           totalDays: attendance.length,
 //           present: attendance.filter(a => a.status === 'present').length,
 //           absent: attendance.filter(a => a.status === 'absent').length,
-//           late: attendance.filter(a => a.status === 'late').length
+//           late: attendance.filter(a => a.status === 'late').length,
 //         },
 //         subjects: subjects.map(subject => {
 //           const subjectExams = exams.filter(e => e.subject.toString() === subject._id.toString());
@@ -270,16 +282,16 @@
 //             name: subject.name,
 //             teacher: subject.teachers[0]?.teacher,
 //             performance: studentResults,
-//             comments: ''  // To be filled by teacher
+//             comments: '', // To be filled by teacher
 //           };
 //         }),
-//         generatedBy: teacherId
+//         generatedBy: teacherId,
 //       });
 
 //       await report.save();
 
-//       // Notify student and parents
-//       await notifyProgressReport(report);
+//       // Notify student and parents (implement notifyProgressReport if needed)
+//       // await notifyProgressReport(report);
 
 //       res.status(201).json(report);
 //     } catch (error) {
@@ -287,12 +299,13 @@
 //     }
 //   },
 
-//   // Create announcement
 //   createAnnouncement: async (req, res) => {
 //     try {
-//       const { schoolId } = req.params;
+//       const schoolId = req.school._id.toString(); // Use req.school instead of req.params
 //       const { title, content, targetGroups, validFrom, validUntil, attachments } = req.body;
 //       const teacherId = req.user._id;
+//       const connection = req.connection;
+//       const Announcement = require('../models/Announcement')(connection);
 
 //       const announcement = new Announcement({
 //         school: schoolId,
@@ -303,13 +316,13 @@
 //         validFrom,
 //         validUntil,
 //         attachments,
-//         createdBy: teacherId
+//         createdBy: teacherId,
 //       });
 
 //       await announcement.save();
 
-//       // Notify target groups
-//       await notifyAnnouncementTargets(announcement);
+//       // Notify target groups (implement notifyAnnouncementTargets if needed)
+//       // await notifyAnnouncementTargets(announcement);
 
 //       res.status(201).json(announcement);
 //     } catch (error) {
@@ -317,12 +330,14 @@
 //     }
 //   },
 
-//   // Request leave
+
 //   requestLeave: async (req, res) => {
 //     try {
-//       const { schoolId } = req.params;
+//       const schoolId = req.school._id.toString();
 //       const { reason, startDate, endDate, type } = req.body;
 //       const teacherId = req.user._id;
+//       const connection = req.connection;
+//       const Leave = require('../models/Leave')(connection);
 
 //       const leave = new Leave({
 //         school: schoolId,
@@ -330,46 +345,81 @@
 //         reason,
 //         startDate,
 //         endDate,
-//         type, // 'sick', 'casual', 'vacation'
+//         type,
 //         status: 'pending',
-//         appliedOn: new Date()
+//         appliedOn: new Date(),
 //       });
 
 //       await leave.save();
-
-//       // Notify admin about leave request
-//       await notifyLeaveRequest(leave);
-
 //       res.status(201).json(leave);
 //     } catch (error) {
 //       res.status(500).json({ error: error.message });
 //     }
 //   },
 
-//   // Communicate with parents
+//   getLeaveStatus: async (req, res) => {
+//     try {
+//       const schoolId = req.school._id.toString();
+//       const teacherId = req.user._id;
+//       const connection = req.connection;
+//       const Leave = require('../models/Leave')(connection);
+
+//       const leaves = await Leave.find({ school: schoolId, user: teacherId })
+//         .sort({ appliedOn: -1 })
+//         .lean();
+
+//       res.json({
+//         status: 'success',
+//         count: leaves.length,
+//         leaves: leaves.map(leave => ({
+//           id: leave._id,
+//           reason: leave.reason,
+//           startDate: leave.startDate,
+//           endDate: leave.endDate,
+//           type: leave.type,
+//           status: leave.status,
+//           appliedOn: leave.appliedOn,
+//           reviewedBy: leave.reviewedBy,
+//           reviewedAt: leave.reviewedAt,
+//           comments: leave.comments,
+//         })),
+//       });
+//     } catch (error) {
+//       res.status(500).json({ error: error.message });
+//     }
+//   },
+
 //   communicateWithParent: async (req, res) => {
 //     try {
-//       const { schoolId, studentId } = req.params;
+//       const { studentId } = req.params; // Removed schoolId from params
 //       const { subject, message, type } = req.body;
+//       const schoolId = req.school._id.toString();
+//       const connection = req.connection;
+//       const User = require('../models/User')(connection);
+//       const ParentCommunication = require('../models/ParentCommunication')(connection);
 
 //       // Get student's parent
-//       const student = await User.findById(studentId)
-//         .select('profile.parentId');
-      
+//       const student = await User.findOne({ _id: studentId, school: schoolId })
+//         .select('studentDetails.parentDetails');
+
+//       if (!student || !student.studentDetails.parentDetails) {
+//         return res.status(404).json({ message: 'Student or parent details not found' });
+//       }
+
 //       const communication = new ParentCommunication({
 //         school: schoolId,
 //         student: studentId,
-//         parent: student.profile.parentId,
+//         parent: null, // Assuming parent is a separate User; adjust if parentDetails contains a User ID
 //         teacher: req.user._id,
 //         subject,
 //         message,
-//         type
+//         type,
 //       });
 
 //       await communication.save();
 
-//       // Notify parent
-//       await notifyParent(communication);
+//       // Notify parent (implement notifyParent if needed)
+//       // await notifyParent(communication);
 
 //       res.status(201).json(communication);
 //     } catch (error) {
@@ -377,174 +427,313 @@
 //     }
 //   },
 
+//   // enterSubjectMarks: async (req, res) => {
+//   //   try {
+//   //     const { examId } = req.params;
+//   //     const { studentsMarks } = req.body;
+//   //     const teacherId = req.user._id;
+//   //     const schoolId = req.school._id.toString();
+//   //     const connection = req.connection;
+//   //     const Exam = require('../models/Exam')(connection);
+//   //     const SubjectMarks = require('../models/SubjectMarks')(connection);
+//   //     const User = require('../models/User')(connection);
+
+//   //     // Verify exam exists
+//   //     const exam = await Exam.findOne({ _id: examId, school: schoolId });
+//   //     if (!exam) {
+//   //       return res.status(404).json({ message: 'Exam not found' });
+//   //     }
+
+//   //     // Verify teacher permission for this subject/class
+//   //     const teacher = await User.findById(teacherId);
+//   //     const hasPermission = teacher.permissions.canEnterMarks.some(
+//   //       p => p.class.toString() === exam.class.toString()
+//   //     );
+
+//   //     if (!hasPermission) {
+//   //       return res.status(403).json({ message: 'Not authorized to enter marks for this class' });
+//   //     }
+
+//   //     // Create or update subject marks
+//   //     let subjectMarks = await SubjectMarks.findOne({
+//   //       exam: examId,
+//   //       teacher: teacherId,
+//   //       class: exam.class,
+//   //       school: schoolId, // Add school filter
+//   //     });
+
+//   //     if (!subjectMarks) {
+//   //       subjectMarks = new SubjectMarks({
+//   //         school: schoolId,
+//   //         exam: examId,
+//   //         subject: teacher.permissions.canEnterMarks.find(
+//   //           p => p.class.toString() === exam.class.toString()
+//   //         ).subject,
+//   //         class: exam.class,
+//   //         teacher: teacherId,
+//   //         students: studentsMarks,
+//   //       });
+//   //     } else {
+//   //       subjectMarks.students = studentsMarks;
+//   //       subjectMarks.status = 'draft';
+//   //     }
+
+//   //     await subjectMarks.save();
+
+//   //     res.json(subjectMarks);
+//   //   } catch (error) {
+//   //     res.status(500).json({ error: error.message });
+//   //   }
+//   // },
+
 //   enterSubjectMarks: async (req, res) => {
 //     try {
 //       const { examId } = req.params;
-//       const { studentsMarks } = req.body;
+//       const { studentsMarks } = req.body; // [{ studentId, marks, remarks }]
 //       const teacherId = req.user._id;
+//       const schoolId = req.school._id.toString();
+//       const connection = req.connection;
+//       const Exam = require('../models/Exam')(connection);
+//       const Subject = require('../models/Subject')(connection);
 
-//       // Verify exam exists
-//       const exam = await Exam.findById(examId);
-//       if (!exam) {
-//         return res.status(404).json({ message: 'Exam not found' });
-//       }
+//       const exam = await Exam.findOne({ _id: examId, school: schoolId });
+//       if (!exam) return res.status(404).json({ message: 'Exam not found' });
 
 //       // Verify teacher permission for this subject/class
-//       const teacher = await User.findById(teacherId);
-//       const hasPermission = teacher.permissions.canEnterMarks.some(
-//         p => p.class.toString() === exam.class.toString()
-//       );
+//       const subject = await Subject.findById(exam.subject);
+//       const isAuthorized = subject.teachers.some(t => t.teacher.toString() === teacherId.toString());
+//       if (!isAuthorized) return res.status(403).json({ message: 'Not authorized to enter marks for this exam' });
 
-//       if (!hasPermission) {
-//         return res.status(403).json({ message: 'Not authorized to enter marks for this class' });
-//       }
+//       exam.results = studentsMarks.map(entry => ({
+//         student: entry.studentId,
+//         marksObtained: entry.marks,
+//         remarks: entry.remarks || ''
+//       }));
+//       exam.marksEnteredBy = teacherId;
+//       exam.marksEnteredAt = new Date();
+//       exam.status = 'draft';
 
-//       // Create or update subject marks
-//       let subjectMarks = await SubjectMarks.findOne({
-//         exam: examId,
-//         teacher: teacherId,
-//         class: exam.class
-//       });
-
-//       if (!subjectMarks) {
-//         subjectMarks = new SubjectMarks({
-//           exam: examId,
-//           subject: teacher.permissions.canEnterMarks.find(
-//             p => p.class.toString() === exam.class.toString()
-//           ).subject,
-//           class: exam.class,
-//           teacher: teacherId,
-//           students: studentsMarks
-//         });
-//       } else {
-//         subjectMarks.students = studentsMarks;
-//         subjectMarks.status = 'draft';
-//       }
-
-//       await subjectMarks.save();
-
-//       res.json(subjectMarks);
+//       await exam.save();
+//       res.json({ message: 'Marks entered successfully', exam });
 //     } catch (error) {
 //       res.status(500).json({ error: error.message });
 //     }
 //   },
 
-//   // For subject teachers to submit marks to class teacher
+//   // submitMarksToClassTeacher: async (req, res) => {
+//   //   try {
+//   //     const { examId } = req.params;
+//   //     const teacherId = req.user._id;
+//   //     const schoolId = req.school._id.toString();
+//   //     const connection = req.connection;
+//   //     const SubjectMarks = require('../models/SubjectMarks')(connection);
+//   //     const ClassResult = require('../models/ClassResult')(connection);
+//   //     const Class = require('../models/Class')(connection);
+
+//   //     const subjectMarks = await SubjectMarks.findOne({
+//   //       exam: examId,
+//   //       teacher: teacherId,
+//   //       school: schoolId,
+//   //     });
+
+//   //     if (!subjectMarks) {
+//   //       return res.status(404).json({ message: 'Marks not found' });
+//   //     }
+
+//   //     subjectMarks.status = 'submitted';
+//   //     subjectMarks.submittedAt = new Date();
+//   //     await subjectMarks.save();
+
+//   //     // Update class result status
+//   //     await ClassResult.findOneAndUpdate(
+//   //       { exam: examId, class: subjectMarks.class, school: schoolId },
+//   //       {
+//   //         $addToSet: { subjectMarks: subjectMarks._id },
+//   //         $setOnInsert: {
+//   //           classTeacher: (await Class.findById(subjectMarks.class)).classTeacher,
+//   //         },
+//   //       },
+//   //       { upsert: true }
+//   //     );
+
+//   //     res.json({ message: 'Marks submitted to class teacher successfully' });
+//   //   } catch (error) {
+//   //     res.status(500).json({ error: error.message });
+//   //   }
+//   // },
+
 //   submitMarksToClassTeacher: async (req, res) => {
 //     try {
 //       const { examId } = req.params;
 //       const teacherId = req.user._id;
+//       const schoolId = req.school._id.toString();
+//       const connection = req.connection;
+//       const Exam = require('../models/Exam')(connection);
+//       const Class = require('../models/Class')(connection);
 
-//       const subjectMarks = await SubjectMarks.findOne({
-//         exam: examId,
-//         teacher: teacherId
-//       });
-
-//       if (!subjectMarks) {
-//         return res.status(404).json({ message: 'Marks not found' });
+//       const exam = await Exam.findOne({ _id: examId, school: schoolId });
+//       if (!exam) return res.status(404).json({ message: 'Exam not found' });
+//       if (exam.marksEnteredBy.toString() !== teacherId.toString()) {
+//         return res.status(403).json({ message: 'Not authorized to submit these marks' });
+//       }
+//       if (exam.status !== 'draft') {
+//         return res.status(400).json({ message: 'Marks already submitted or in invalid state' });
 //       }
 
-//       subjectMarks.status = 'submitted';
-//       subjectMarks.submittedAt = new Date();
-//       await subjectMarks.save();
+//       const classInfo = await Class.findById(exam.class);
+//       if (!classInfo.classTeacher) {
+//         return res.status(400).json({ message: 'No class teacher assigned to this class' });
+//       }
 
-//       // Update class result status
-//       await ClassResult.findOneAndUpdate(
-//         { exam: examId, class: subjectMarks.class },
-//         { 
-//           $addToSet: { subjectMarks: subjectMarks._id },
-//           $setOnInsert: { 
-//             classTeacher: (await Class.findById(subjectMarks.class)).classTeacher 
-//           }
-//         },
-//         { upsert: true }
-//       );
+//       exam.status = 'submittedToClassTeacher';
+//       exam.submittedToClassTeacherAt = new Date();
+//       await exam.save();
 
-//       res.json({ message: 'Marks submitted to class teacher successfully' });
+//       res.json({ message: 'Marks submitted to class teacher successfully', exam });
 //     } catch (error) {
 //       res.status(500).json({ error: error.message });
 //     }
 //   },
 
-//   // For class teachers to review subject marks
+
+
 //   reviewSubjectMarks: async (req, res) => {
 //     try {
-//       const { examId } = req.params;
+//       const { classId, examId } = req.params;
 //       const teacherId = req.user._id;
-
-//       // Get class result and verify class teacher
-//       const classResult = await ClassResult.findOne({ exam: examId })
-//         .populate('subjectMarks')
-//         .populate('class');
-
-//       if (!classResult || classResult.class.classTeacher.toString() !== teacherId) {
+//       const schoolId = req.school._id.toString();
+//       const connection = req.connection;
+//       const Exam = require('../models/Exam')(connection);
+//       const Class = require('../models/Class')(connection);
+//       const Subject = require('../models/Subject')(connection);
+  
+//       const classInfo = await Class.findOne({ _id: classId, school: schoolId });
+//       if (!classInfo || classInfo.classTeacher.toString() !== teacherId.toString()) {
 //         return res.status(403).json({ message: 'Not authorized as class teacher' });
 //       }
-
-//       // Get all submitted subject marks
-//       const subjectMarks = await SubjectMarks.find({
-//         _id: { $in: classResult.subjectMarks },
-//         status: 'submitted'
-//       }).populate('subject').populate('students.student');
-
-//       res.json(subjectMarks);
+  
+//       const query = {
+//         school: schoolId,
+//         class: classId,
+//         status: 'submittedToClassTeacher'
+//       };
+  
+//       // If examId is provided, filter by _id instead of examDate
+//       if (examId) {
+//         query._id = examId;
+//       }
+  
+//       const exams = await Exam.find(query)
+//         .populate('subject', 'name')
+//         .populate('results.student', 'name')
+//         .lean();
+  
+//       res.json(exams);
 //     } catch (error) {
 //       res.status(500).json({ error: error.message });
 //     }
 //   },
 
-//   // For class teachers to submit compiled results to admin
+
+
 //   submitResultsToAdmin: async (req, res) => {
 //     try {
-//       const { examId } = req.params;
+//       const { classId, examId } = req.params;
 //       const teacherId = req.user._id;
-
-//       const classResult = await ClassResult.findOne({ 
-//         exam: examId,
-//         classTeacher: teacherId
-//       });
-
-//       if (!classResult) {
-//         return res.status(404).json({ message: 'Class result not found' });
+//       const schoolId = req.school._id.toString();
+//       const connection = req.connection;
+//       const Exam = require('../models/Exam')(connection);
+//       const Class = require('../models/Class')(connection);
+//       const Subject = require('../models/Subject')(connection); // Load Subject model explicitly
+  
+//       const classInfo = await Class.findOne({ _id: classId, school: schoolId });
+//       if (!classInfo || classInfo.classTeacher.toString() !== teacherId.toString()) {
+//         return res.status(403).json({ message: 'Not authorized as class teacher' });
 //       }
-
+  
+//       // Modified query: Use _id instead of examDate when examId is provided
+//       const query = {
+//         school: schoolId,
+//         class: classId,
+//         status: 'submittedToClassTeacher'
+//       };
+  
+//       // If examId is provided, filter by _id
+//       if (examId) {
+//         query._id = examId;
+//       }
+  
+//       const exams = await Exam.find(query);
+  
+//       if (!exams.length) {
+//         return res.status(404).json({ message: 'No submitted marks found for this class and exam' });
+//       }
+  
 //       // Verify all subjects have submitted marks
-//       const allSubjectsSubmitted = await verifyAllSubjectsSubmitted(examId, classResult.class);
-//       if (!allSubjectsSubmitted) {
-//         return res.status(400).json({ message: 'All subject marks not yet submitted' });
+//       const subjects = await Subject.find({ class: classId });
+//       if (exams.length !== subjects.length) {
+//         return res.status(400).json({ message: 'Not all subjects have submitted marks' });
 //       }
-
-//       classResult.status = 'submitted';
-//       classResult.submittedAt = new Date();
-//       await classResult.save();
-
-//       res.json({ message: 'Results submitted to admin successfully' });
+  
+//       const session = await connection.startSession();
+//       session.startTransaction();
+  
+//       try {
+//         for (const exam of exams) {
+//           exam.status = 'submittedToAdmin';
+//           exam.submittedToAdminAt = new Date();
+//           await exam.save({ session });
+//         }
+  
+//         await session.commitTransaction();
+//         res.json({ message: 'Results submitted to admin successfully' });
+//       } catch (error) {
+//         await session.abortTransaction();
+//         throw error;
+//       } finally {
+//         session.endSession();
+//       }
 //     } catch (error) {
 //       res.status(500).json({ error: error.message });
 //     }
-//   }
+//   },
 // };
 
+// // Helper Functions
+// const verifyTeacherClassAssignment = async (teacherId, classId, connection) => {
+//   const User = require('../models/User')(connection);
 
-// const verifyTeacherClassAssignment = async (teacherId, classId) => {
 //   // Get teacher details to check permissions
 //   const teacher = await User.findById(teacherId);
 //   if (!teacher) return false;
 
 //   // Check if teacher is the class teacher (for attendance)
-//   if (teacher.permissions.canTakeAttendance.includes(classId)) {
+//   if (teacher.permissions.canTakeAttendance.some(id => id.toString() === classId)) {
 //     return true;
 //   }
 
 //   // Check if teacher is assigned to teach any subject in this class
-//   const hasSubjectPermission = teacher.permissions.canEnterMarks.some(entry => 
-//     entry.class.toString() === classId.toString()
+//   const hasSubjectPermission = teacher.permissions.canEnterMarks.some(entry =>
+//     entry.class.toString() === classId
 //   );
 
 //   return hasSubjectPermission;
 // };
 
-// // Helper to get current academic year
+// const verifyAllSubjectsSubmitted = async (examId, classId, connection) => {
+//   const Subject = require('../models/Subject')(connection);
+//   const SubjectMarks = require('../models/SubjectMarks')(connection);
+
+//   const subjects = await Subject.find({ class: classId });
+//   const submittedMarks = await SubjectMarks.find({
+//     exam: examId,
+//     class: classId,
+//     status: 'submitted',
+//   });
+
+//   return subjects.length === submittedMarks.length;
+// };
+
 // const getCurrentAcademicYear = () => {
 //   const now = new Date();
 //   const year = now.getFullYear();
@@ -552,13 +741,12 @@
 
 //   // Assuming academic year starts in July
 //   if (month < 6) { // Before July
-//     return `${year-1}-${year}`;
+//     return `${year - 1}-${year}`;
 //   } else { // July onwards
-//     return `${year}-${year+1}`;
+//     return `${year}-${year + 1}`;
 //   }
 // };
 
-// // Helper to check if two dates are the same day
 // const isSameDay = (date1, date2) => {
 //   const d1 = new Date(date1);
 //   const d2 = new Date(date2);
@@ -570,14 +758,75 @@
 // module.exports = teacherController;
 
 
+
+
 const mongoose = require('mongoose');
+const { uploadToS3 } = require('../config/s3Upload'); // Import S3 upload utility
+const path = require('path');
 
 const teacherController = {
+  // Get classes where the teacher is assigned (class teacher or subject teacher)
+  getAssignedClasses: async (req, res) => {
+    try {
+      const teacherId = req.user._id;
+      const schoolId = req.school._id.toString();
+      const connection = req.connection;
+      const Class = require('../models/Class')(connection);
+      const Subject = require('../models/Subject')(connection);
+
+      // Find classes where the teacher is the class teacher
+      const classTeacherClasses = await Class.find({
+        school: schoolId,
+        classTeacher: teacherId,
+      }).select('name division _id');
+
+      // Find classes where the teacher is a subject teacher
+      const subjectClasses = await Subject.find({
+        school: schoolId,
+        'teachers.teacher': teacherId,
+      })
+        .populate('class', 'name division')
+        .lean();
+
+      const subjectTeacherClasses = subjectClasses.map((subject) => ({
+        _id: subject.class._id,
+        name: subject.class.name,
+        division: subject.class.division,
+        subject: subject.name,
+      }));
+
+      // Combine and deduplicate classes
+      const allClasses = [
+        ...classTeacherClasses.map((c) => ({
+          _id: c._id,
+          name: c.name,
+          division: c.division,
+          role: 'classTeacher',
+        })),
+        ...subjectTeacherClasses.map((c) => ({
+          _id: c._id,
+          name: c.name,
+          division: c.division,
+          role: 'subjectTeacher',
+          subject: c.subject,
+        })),
+      ];
+
+      const uniqueClasses = Array.from(
+        new Map(allClasses.map((item) => [item._id.toString(), item])).values()
+      );
+
+      res.json(uniqueClasses);
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  },
+
   // View schedule
   getSchedule: async (req, res) => {
     try {
       const { teacherId } = req.params;
-      const schoolId = req.school._id.toString(); // Use req.school from auth middleware
+      const schoolId = req.school._id.toString();
       const connection = req.connection;
       const TeacherSchedule = require('../models/TeacherSchedule')(connection);
       const Class = require('../models/Class')(connection);
@@ -586,7 +835,7 @@ const teacherController = {
 
       const schedule = await TeacherSchedule.findOne({
         teacher: teacherId,
-        school: schoolId, // Add school filter
+        school: schoolId,
         academicYear: getCurrentAcademicYear(),
       })
         .populate('schedule.periods.class', 'name division', Class)
@@ -596,8 +845,7 @@ const teacherController = {
         return res.status(404).json({ message: 'Schedule not found' });
       }
 
-      // Get any substitutions for today
-      const todaySubstitutions = schedule.substitutions.filter(sub =>
+      const todaySubstitutions = schedule.substitutions.filter((sub) =>
         isSameDay(sub.date, currentDate)
       );
 
@@ -607,92 +855,122 @@ const teacherController = {
     }
   },
 
-  // Assign homework
-  assignHomework: async (req, res) => {
+  // Get subjects taught by the teacher in a specific class
+  getSubjectsForClass: async (req, res) => {
     try {
+      const { classId } = req.params;
+      const teacherId = req.user._id;
       const schoolId = req.school._id.toString();
-      const { classId } = req.params; // Use classId from params
-      const homeworkData = req.body;
       const connection = req.connection;
-      const Homework = require('../models/Homework')(connection);
+      const Subject = require('../models/Subject')(connection);
 
-      const homework = new Homework({
+      const subjects = await Subject.find({
         school: schoolId,
-        class: classId, // Use classId instead of homeworkData.classId
-        ...homeworkData,
-        assignedBy: req.user._id,
-      });
+        class: classId,
+        'teachers.teacher': teacherId,
+      }).select('name _id');
 
-      await homework.save();
-      res.status(201).json(homework);
+      res.json(subjects);
     } catch (error) {
       res.status(500).json({ error: error.message });
     }
   },
 
+  // List students of a class (for class teachers only)
+  getClassStudents: async (req, res) => {
+    try {
+      const { classId } = req.params;
+      const teacherId = req.user._id;
+      const schoolId = req.school._id.toString();
+      const connection = req.connection;
+      const Class = require('../models/Class')(connection);
+      const User = require('../models/User')(connection);
 
+      const classInfo = await Class.findOne({
+        _id: classId,
+        school: schoolId,
+        classTeacher: teacherId,
+      }).populate('students', 'name rollNumber');
+
+      if (!classInfo) {
+        return res.status(403).json({
+          message: 'You are not the class teacher of this class',
+        });
+      }
+
+      res.json(classInfo.students);
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  },
 
   markAttendance: async (req, res) => {
     try {
-      const { classId } = req.params; // Removed schoolId from params
-      const { date, attendanceData } = req.body;
+      const { classId } = req.params;
+      const { date, month, year, attendanceData } = req.body; // [{ studentId, status }]
       const teacherId = req.user._id;
-      const schoolId = req.school._id.toString(); // Use req.school
+      const schoolId = req.school._id.toString();
       const connection = req.connection;
       const User = require('../models/User')(connection);
       const Attendance = require('../models/Attendance')(connection);
-
+  
       const teacher = await User.findById(teacherId);
-      if (!teacher || !teacher.permissions.canTakeAttendance.some(id => id.toString() === classId)) {
+      if (
+        !teacher ||
+        !teacher.permissions.canTakeAttendance.some((id) => id.toString() === classId)
+      ) {
         return res.status(403).json({
-          message: 'You do not have permission to mark attendance for this class. Only assigned class teachers can mark attendance.',
+          message:
+            'You do not have permission to mark attendance for this class. Only assigned class teachers can mark attendance.',
         });
       }
-
-      const session = await mongoose.startSession();
-      session.startTransaction();
-
-      try {
-        const attendancePromises = attendanceData.map(async (student) => {
-          const attendance = new Attendance({
+  
+      const attendanceDate = new Date(year, month - 1, date);
+  
+      // Prepare bulk write operations
+      const bulkOps = attendanceData.map((student) => ({
+        insertOne: {
+          document: {
             school: schoolId,
             class: classId,
-            user: student.userId,
-            date,
+            user: student.studentId,
+            date: attendanceDate,
             status: student.status,
             type: 'student',
             markedBy: teacherId,
-          });
-          return attendance.save({ session });
-        });
-
-        const attendanceRecords = await Promise.all(attendancePromises);
-
-        await session.commitTransaction();
-        res.json(attendanceRecords);
-      } catch (error) {
-        await session.abortTransaction();
-        throw error;
-      } finally {
-        session.endSession();
-      }
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          },
+        },
+      }));
+  
+      // Execute bulk write
+      const result = await Attendance.bulkWrite(bulkOps, { ordered: false });
+  
+      res.json({
+        message: 'Attendance marked successfully',
+        insertedCount: result.insertedCount,
+      });
     } catch (error) {
       res.status(500).json({ error: error.message });
     }
   },
 
+  // Mark teacher's own attendance
   markOwnAttendance: async (req, res) => {
     try {
-      const schoolId = req.school._id.toString(); // Use req.school instead of req.params
-      const { date, status, remarks } = req.body;
+      const schoolId = req.school._id.toString();
+      const { date, month, year, status, remarks } = req.body;
       const teacherId = req.user._id;
       const connection = req.connection;
       const Attendance = require('../models/Attendance')(connection);
+
+      const attendanceDate = new Date(year, month - 1, date);
 
       const attendance = new Attendance({
         school: schoolId,
         user: teacherId,
-        date,
+        date: attendanceDate,
         status,
         remarks,
         type: 'teacher',
@@ -706,203 +984,73 @@ const teacherController = {
     }
   },
 
-  uploadStudyMaterial: async (req, res) => {
-    try {
-      const { classId } = req.params; // Removed schoolId from params
-      const { title, description, subject, type, fileUrl } = req.body;
-      const teacherId = req.user._id;
-      const schoolId = req.school._id.toString();
-      const connection = req.connection;
-      const StudyMaterial = require('../models/StudyMaterial')(connection);
-
-      // Verify if teacher teaches this class (updated to use dynamic User model)
-      const isAssigned = await verifyTeacherClassAssignment(teacherId, classId, connection);
-      if (!isAssigned) {
-        return res.status(403).json({ message: 'You are not authorized to upload materials for this class' });
-      }
-
-      const material = new StudyMaterial({
-        school: schoolId, // Add school field
-        title,
-        description,
-        class: classId,
-        subject,
-        type,
-        fileUrl,
-        uploadedBy: teacherId,
-        isActive: true,
-      });
-
-      await material.save();
-
-      // Notify students about new material (implement notifyNewStudyMaterial if needed)
-      // await notifyNewStudyMaterial(material);
-
-      res.status(201).json(material);
-    } catch (error) {
-      res.status(500).json({ error: error.message });
-    }
-  },
-
-  enterStudentMarks: async (req, res) => {
-    try {
-      const { examId } = req.params;
-      const { studentsMarks } = req.body;
-      const teacherId = req.user._id;
-      const schoolId = req.school._id.toString();
-      const connection = req.connection;
-      const Exam = require('../models/Exam')(connection);
-      const Subject = require('../models/Subject')(connection);
-
-      const exam = await Exam.findOne({ _id: examId, school: schoolId });
-      if (!exam) {
-        return res.status(404).json({ message: 'Exam not found' });
-      }
-
-      // Verify teacher permission for this subject/class
-      const subjectInfo = await Subject.findById(exam.subject);
-      const isAuthorized = subjectInfo.teachers.some(t =>
-        t.teacher.toString() === teacherId.toString()
-      );
-
-      if (!isAuthorized) {
-        return res.status(403).json({ message: 'Unauthorized to enter marks for this exam' });
-      }
-
-      // Update student marks
-      const results = studentsMarks.map(entry => ({
-        student: entry.studentId,
-        marks: entry.marks,
-        remarks: entry.remarks || '',
-      }));
-
-      exam.results = results;
-      exam.marksEnteredBy = teacherId;
-      exam.marksEnteredAt = new Date();
-
-      await exam.save();
-      res.json(exam);
-    } catch (error) {
-      res.status(500).json({ error: error.message });
-    }
-  },
-
-  generateProgressReport: async (req, res) => {
+  getAttendanceHistory: async (req, res) => {
     try {
       const { classId } = req.params;
-      const { month, year, studentId } = req.body;
+      const { date, month, year } = req.query;
       const teacherId = req.user._id;
       const schoolId = req.school._id.toString();
       const connection = req.connection;
       const Class = require('../models/Class')(connection);
       const Attendance = require('../models/Attendance')(connection);
-      const Exam = require('../models/Exam')(connection);
-      const Subject = require('../models/Subject')(connection);
-      const ProgressReport = require('../models/ProgressReport')(connection);
-
-      // Verify if teacher is class teacher
-      const classInfo = await Class.findOne({ _id: classId, school: schoolId });
-      if (!classInfo || classInfo.classTeacher.toString() !== teacherId.toString()) {
-        return res.status(403).json({ message: 'Only class teachers can generate progress reports' });
+      const User = require('../models/User')(connection);
+  
+      const classInfo = await Class.findOne({
+        _id: classId,
+        school: schoolId,
+        classTeacher: teacherId,
+      });
+  
+      if (!classInfo) {
+        return res.status(403).json({
+          message: 'You are not the class teacher of this class',
+        });
       }
-
-      // Get attendance for the month
-      const startDate = new Date(year, month - 1, 1);
-      const endDate = new Date(year, month, 0);
-
-      const attendance = await Attendance.find({
+  
+      // Construct the date range in UTC
+      const attendanceDate = new Date(Date.UTC(year, month - 1, date));
+      const startOfDay = new Date(Date.UTC(year, month - 1, date, 0, 0, 0, 0));
+      const endOfDay = new Date(Date.UTC(year, month - 1, date, 23, 59, 59, 999));
+  
+      const attendanceRecords = await Attendance.find({
         school: schoolId,
         class: classId,
-        user: studentId,
-        date: { $gte: startDate, $lte: endDate },
-      });
-
-      // Get exam results for the period
-      const exams = await Exam.find({
-        school: schoolId,
-        class: classId,
-        date: { $gte: startDate, $lte: endDate },
-      }).select('name subject results');
-
-      // Get subjects for the class
-      const subjects = await Subject.find({ school: schoolId, class: classId })
-        .populate('teachers.teacher', 'name');
-
-      // Compile report
-      const report = new ProgressReport({
-        school: schoolId, // Add school field
-        student: studentId,
-        class: classId,
-        month,
-        year,
-        academicYear: getCurrentAcademicYear(),
-        attendanceSummary: {
-          totalDays: attendance.length,
-          present: attendance.filter(a => a.status === 'present').length,
-          absent: attendance.filter(a => a.status === 'absent').length,
-          late: attendance.filter(a => a.status === 'late').length,
+        date: {
+          $gte: startOfDay,
+          $lte: endOfDay,
         },
-        subjects: subjects.map(subject => {
-          const subjectExams = exams.filter(e => e.subject.toString() === subject._id.toString());
-          const studentResults = subjectExams.map(exam => {
-            const result = exam.results.find(r => r.student.toString() === studentId);
-            return result ? { exam: exam.name, marks: result.marks } : null;
-          }).filter(Boolean);
-
-          return {
-            name: subject.name,
-            teacher: subject.teachers[0]?.teacher,
-            performance: studentResults,
-            comments: '', // To be filled by teacher
-          };
-        }),
-        generatedBy: teacherId,
+        type: 'student',
+      })
+        .populate('user', 'name rollNumber')
+        .lean();
+  
+      if (!attendanceRecords.length) {
+        return res.status(404).json({
+          message: 'No attendance records found for the specified date',
+        });
+      }
+  
+      const formattedAttendance = attendanceRecords.map((record) => ({
+        studentId: record.user._id,
+        name: record.user.name,
+        rollNumber: record.user.rollNumber,
+        status: record.status,
+        date: record.date,
+        markedBy: record.markedBy,
+      }));
+  
+      res.json({
+        classId,
+        date: attendanceDate,
+        attendance: formattedAttendance,
       });
-
-      await report.save();
-
-      // Notify student and parents (implement notifyProgressReport if needed)
-      // await notifyProgressReport(report);
-
-      res.status(201).json(report);
-    } catch (error) {
-      res.status(500).json({ error: error.message });
-    }
-  },
-
-  createAnnouncement: async (req, res) => {
-    try {
-      const schoolId = req.school._id.toString(); // Use req.school instead of req.params
-      const { title, content, targetGroups, validFrom, validUntil, attachments } = req.body;
-      const teacherId = req.user._id;
-      const connection = req.connection;
-      const Announcement = require('../models/Announcement')(connection);
-
-      const announcement = new Announcement({
-        school: schoolId,
-        title,
-        content,
-        targetGroups, // Array of target groups: ['students', 'parents']
-        priority: 'normal',
-        validFrom,
-        validUntil,
-        attachments,
-        createdBy: teacherId,
-      });
-
-      await announcement.save();
-
-      // Notify target groups (implement notifyAnnouncementTargets if needed)
-      // await notifyAnnouncementTargets(announcement);
-
-      res.status(201).json(announcement);
     } catch (error) {
       res.status(500).json({ error: error.message });
     }
   },
 
 
-  requestLeave: async (req, res) => {
+    requestLeave: async (req, res) => {
     try {
       const schoolId = req.school._id.toString();
       const { reason, startDate, endDate, type } = req.body;
@@ -998,65 +1146,196 @@ const teacherController = {
     }
   },
 
+  // Assign homework with file upload
+  assignHomework: async (req, res) => {
+    try {
+      const schoolId = req.school._id.toString();
+      const { classId } = req.params;
+      const { title, description, dueDate, subject } = req.body;
+      const files = req.files; // Expecting files from multer
+      const connection = req.connection;
+      const Homework = require('../models/Homework')(connection);
+
+      const attachments = [];
+      if (files && files.length > 0) {
+        for (const file of files) {
+          const fileKey = `homework/${schoolId}/${classId}/${Date.now()}_${file.originalname}`;
+          await uploadToS3(file.buffer, fileKey);
+          attachments.push({
+            fileName: file.originalname,
+            fileUrl: `https://${process.env.AWS_S3_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${fileKey}`,
+            fileType: file.mimetype,
+          });
+        }
+      }
+
+      const homework = new Homework({
+        school: schoolId,
+        class: classId,
+        subject,
+        title,
+        description,
+        assignedBy: req.user._id,
+        dueDate,
+        attachments,
+      });
+
+      await homework.save();
+      res.status(201).json(homework);
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  },
+
+
+
+  uploadStudyMaterial: async (req, res) => {
+    try {
+      console.log('Request received at uploadStudyMaterial');
+      console.log('req.file:', req.file);
+      console.log('req.body:', req.body);
+      console.log('req.params:', req.params);
+      console.log('req.dbConnection type:', typeof req.dbConnection);
+      console.log('req.dbConnection:', req.dbConnection.name);
+      console.log('req.connection:', req.connection instanceof require('net').Socket ? 'Socket' : 'Unexpected');
+  
+      const { classId } = req.params;
+      const { title, description, subject, type } = req.body;
+      const file = req.file;
+      const teacherId = req.user._id;
+      const schoolId = req.school._id.toString();
+      const connection = req.dbConnection; // Use dbConnection for this route
+      const StudyMaterial = require('../models/StudyMaterial')(connection);
+      const { uploadToS3 } = require('../config/s3Upload');
+  
+      if (!file) {
+        return res.status(400).json({ message: 'No file uploaded.' });
+      }
+  
+      const isAssigned = await verifyTeacherClassAssignment(teacherId, classId, connection);
+      if (!isAssigned) {
+        return res.status(403).json({
+          message: 'You are not authorized to upload materials for this class',
+        });
+      }
+  
+      const fileExt = path.extname(file.originalname);
+      const fileName = `file_${Date.now()}${fileExt}`;
+      const fileKey = `study-materials/${schoolId}/${classId}/${fileName}`;
+  
+      await uploadToS3(file.buffer, fileKey, file.mimetype);
+      const fileUrl = `https://${process.env.AWS_S3_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${fileKey}`;
+  
+      const attachments = [{
+        fileName: file.originalname,
+        fileUrl: fileUrl,
+        fileType: file.mimetype,
+      }];
+  
+      const material = new StudyMaterial({
+        school: schoolId,
+        title,
+        description,
+        class: classId,
+        subject,
+        type,
+        fileUrl: fileUrl,
+        attachments,
+        uploadedBy: teacherId,
+        isActive: true,
+      });
+  
+      await material.save();
+      res.status(201).json(material);
+    } catch (error) {
+      console.error('Error in uploadStudyMaterial:', error.stack);
+      res.status(500).json({ error: error.message });
+    }
+  },
+
+
+  // Get students of a class for entering marks
+  getClassStudentsForSubject: async (req, res) => {
+    try {
+      const { classId } = req.params;
+      const teacherId = req.user._id;
+      const schoolId = req.school._id.toString();
+      const connection = req.connection;
+      const Class = require('../models/Class')(connection);
+      const User = require('../models/User')(connection);
+      const Subject = require('../models/Subject')(connection);
+
+      // Check if the teacher is a subject teacher for this class
+      const isSubjectTeacher = await Subject.findOne({
+        school: schoolId,
+        class: classId,
+        'teachers.teacher': teacherId,
+      });
+
+      // Check if the teacher is the class teacher
+      const isClassTeacher = await Class.findOne({
+        _id: classId,
+        school: schoolId,
+        classTeacher: teacherId,
+      });
+
+      if (!isSubjectTeacher && !isClassTeacher) {
+        return res.status(403).json({
+          message: 'You are not authorized to view students of this class',
+        });
+      }
+
+      const classInfo = await Class.findById(classId).populate('students', 'name rollNumber');
+
+      if (!classInfo) {
+        return res.status(404).json({ message: 'Class not found' });
+      }
+
+      res.json(classInfo.students);
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  },
+
+
+  // Other existing methods remain unchanged for brevity
   // enterSubjectMarks: async (req, res) => {
   //   try {
   //     const { examId } = req.params;
   //     const { studentsMarks } = req.body;
   //     const teacherId = req.user._id;
   //     const schoolId = req.school._id.toString();
-  //     const connection = req.connection;
+  //     const connection = req.dbConnection;
   //     const Exam = require('../models/Exam')(connection);
-  //     const SubjectMarks = require('../models/SubjectMarks')(connection);
-  //     const User = require('../models/User')(connection);
+  //     const Subject = require('../models/Subject')(connection);
 
-  //     // Verify exam exists
   //     const exam = await Exam.findOne({ _id: examId, school: schoolId });
-  //     if (!exam) {
-  //       return res.status(404).json({ message: 'Exam not found' });
-  //     }
+  //     if (!exam) return res.status(404).json({ message: 'Exam not found' });
 
-  //     // Verify teacher permission for this subject/class
-  //     const teacher = await User.findById(teacherId);
-  //     const hasPermission = teacher.permissions.canEnterMarks.some(
-  //       p => p.class.toString() === exam.class.toString()
+  //     const subject = await Subject.findById(exam.subject);
+  //     const isAuthorized = subject.teachers.some((t) =>
+  //       t.teacher.toString() === teacherId.toString()
   //     );
+  //     if (!isAuthorized)
+  //       return res.status(403).json({ message: 'Not authorized to enter marks for this exam' });
 
-  //     if (!hasPermission) {
-  //       return res.status(403).json({ message: 'Not authorized to enter marks for this class' });
-  //     }
+  //     exam.results = studentsMarks.map((entry) => ({
+  //       student: entry.studentId,
+  //       marksObtained: entry.marks,
+  //       remarks: entry.remarks || '',
+  //     }));
+  //     exam.marksEnteredBy = teacherId;
+  //     exam.marksEnteredAt = new Date();
+  //     exam.status = 'draft';
 
-  //     // Create or update subject marks
-  //     let subjectMarks = await SubjectMarks.findOne({
-  //       exam: examId,
-  //       teacher: teacherId,
-  //       class: exam.class,
-  //       school: schoolId, // Add school filter
-  //     });
-
-  //     if (!subjectMarks) {
-  //       subjectMarks = new SubjectMarks({
-  //         school: schoolId,
-  //         exam: examId,
-  //         subject: teacher.permissions.canEnterMarks.find(
-  //           p => p.class.toString() === exam.class.toString()
-  //         ).subject,
-  //         class: exam.class,
-  //         teacher: teacherId,
-  //         students: studentsMarks,
-  //       });
-  //     } else {
-  //       subjectMarks.students = studentsMarks;
-  //       subjectMarks.status = 'draft';
-  //     }
-
-  //     await subjectMarks.save();
-
-  //     res.json(subjectMarks);
+  //     await exam.save();
+  //     res.json({ message: 'Marks entered successfully', exam });
   //   } catch (error) {
   //     res.status(500).json({ error: error.message });
   //   }
   // },
 
+  // Enter marks for a subject (by subject teacher)
   enterSubjectMarks: async (req, res) => {
     try {
       const { examId } = req.params;
@@ -1070,15 +1349,27 @@ const teacherController = {
       const exam = await Exam.findOne({ _id: examId, school: schoolId });
       if (!exam) return res.status(404).json({ message: 'Exam not found' });
 
-      // Verify teacher permission for this subject/class
       const subject = await Subject.findById(exam.subject);
-      const isAuthorized = subject.teachers.some(t => t.teacher.toString() === teacherId.toString());
-      if (!isAuthorized) return res.status(403).json({ message: 'Not authorized to enter marks for this exam' });
+      const isAuthorized = subject.teachers.some((t) =>
+        t.teacher.toString() === teacherId.toString()
+      );
+      if (!isAuthorized) {
+        return res.status(403).json({ message: 'Not authorized to enter marks for this exam' });
+      }
 
-      exam.results = studentsMarks.map(entry => ({
+      // Validate marks
+      for (const entry of studentsMarks) {
+        if (entry.marks > exam.totalMarks || entry.marks < 0) {
+          return res.status(400).json({
+            message: `Marks for student ${entry.studentId} must be between 0 and ${exam.totalMarks}`,
+          });
+        }
+      }
+
+      exam.results = studentsMarks.map((entry) => ({
         student: entry.studentId,
         marksObtained: entry.marks,
-        remarks: entry.remarks || ''
+        remarks: entry.remarks || '',
       }));
       exam.marksEnteredBy = teacherId;
       exam.marksEnteredAt = new Date();
@@ -1096,38 +1387,29 @@ const teacherController = {
   //     const { examId } = req.params;
   //     const teacherId = req.user._id;
   //     const schoolId = req.school._id.toString();
-  //     const connection = req.connection;
-  //     const SubjectMarks = require('../models/SubjectMarks')(connection);
-  //     const ClassResult = require('../models/ClassResult')(connection);
+  //     const connection = req.dbConnection;
+  //     const Exam = require('../models/Exam')(connection);
   //     const Class = require('../models/Class')(connection);
 
-  //     const subjectMarks = await SubjectMarks.findOne({
-  //       exam: examId,
-  //       teacher: teacherId,
-  //       school: schoolId,
-  //     });
-
-  //     if (!subjectMarks) {
-  //       return res.status(404).json({ message: 'Marks not found' });
+  //     const exam = await Exam.findOne({ _id: examId, school: schoolId });
+  //     if (!exam) return res.status(404).json({ message: 'Exam not found' });
+  //     if (exam.marksEnteredBy.toString() !== teacherId.toString()) {
+  //       return res.status(403).json({ message: 'Not authorized to submit these marks' });
+  //     }
+  //     if (exam.status !== 'draft') {
+  //       return res.status(400).json({ message: 'Marks already submitted or in invalid state' });
   //     }
 
-  //     subjectMarks.status = 'submitted';
-  //     subjectMarks.submittedAt = new Date();
-  //     await subjectMarks.save();
+  //     const classInfo = await Class.findById(exam.class);
+  //     if (!classInfo.classTeacher) {
+  //       return res.status(400).json({ message: 'No class teacher assigned to this class' });
+  //     }
 
-  //     // Update class result status
-  //     await ClassResult.findOneAndUpdate(
-  //       { exam: examId, class: subjectMarks.class, school: schoolId },
-  //       {
-  //         $addToSet: { subjectMarks: subjectMarks._id },
-  //         $setOnInsert: {
-  //           classTeacher: (await Class.findById(subjectMarks.class)).classTeacher,
-  //         },
-  //       },
-  //       { upsert: true }
-  //     );
+  //     exam.status = 'submittedToClassTeacher';
+  //     exam.submittedToClassTeacherAt = new Date();
+  //     await exam.save();
 
-  //     res.json({ message: 'Marks submitted to class teacher successfully' });
+  //     res.json({ message: 'Marks submitted to class teacher successfully', exam });
   //   } catch (error) {
   //     res.status(500).json({ error: error.message });
   //   }
@@ -1144,6 +1426,7 @@ const teacherController = {
 
       const exam = await Exam.findOne({ _id: examId, school: schoolId });
       if (!exam) return res.status(404).json({ message: 'Exam not found' });
+
       if (exam.marksEnteredBy.toString() !== teacherId.toString()) {
         return res.status(403).json({ message: 'Not authorized to submit these marks' });
       }
@@ -1166,7 +1449,37 @@ const teacherController = {
     }
   },
 
+  // reviewSubjectMarks: async (req, res) => {
+  //   try {
+  //     const { classId, examId } = req.params;
+  //     const teacherId = req.user._id;
+  //     const schoolId = req.school._id.toString();
+  //     const connection = req.connection;
+  //     const Exam = require('../models/Exam')(connection);
+  //     const Class = require('../models/Class')(connection);
 
+  //     const classInfo = await Class.findOne({ _id: classId, school: schoolId });
+  //     if (!classInfo || classInfo.classTeacher.toString() !== teacherId.toString()) {
+  //       return res.status(403).json({ message: 'Not authorized as class teacher' });
+  //     }
+
+  //     const query = {
+  //       school: schoolId,
+  //       class: classId,
+  //       status: 'submittedToClassTeacher',
+  //     };
+  //     if (examId) query._id = examId;
+
+  //     const exams = await Exam.find(query)
+  //       .populate('subject', 'name')
+  //       .populate('results.student', 'name')
+  //       .lean();
+
+  //     res.json(exams);
+  //   } catch (error) {
+  //     res.status(500).json({ error: error.message });
+  //   }
+  // },
 
   reviewSubjectMarks: async (req, res) => {
     try {
@@ -1174,9 +1487,11 @@ const teacherController = {
       const teacherId = req.user._id;
       const schoolId = req.school._id.toString();
       const connection = req.connection;
+      
+      // Explicitly register all models with the connection
       const Exam = require('../models/Exam')(connection);
       const Class = require('../models/Class')(connection);
-      const Subject = require('../models/Subject')(connection);
+      const Subject = require('../models/Subject')(connection); // Add this line
   
       const classInfo = await Class.findOne({ _id: classId, school: schoolId });
       if (!classInfo || classInfo.classTeacher.toString() !== teacherId.toString()) {
@@ -1186,13 +1501,9 @@ const teacherController = {
       const query = {
         school: schoolId,
         class: classId,
-        status: 'submittedToClassTeacher'
+        status: 'submittedToClassTeacher',
       };
-  
-      // If examId is provided, filter by _id instead of examDate
-      if (examId) {
-        query._id = examId;
-      }
+      if (examId) query._id = examId;
   
       const exams = await Exam.find(query)
         .populate('subject', 'name')
@@ -1205,59 +1516,160 @@ const teacherController = {
     }
   },
 
+  // submitResultsToAdmin: async (req, res) => {
+  //   try {
+  //     const { classId, examId } = req.params;
+  //     const teacherId = req.user._id;
+  //     const schoolId = req.school._id.toString();
+  //     const connection = req.dbConnection;
+  //     const Exam = require('../models/Exam')(connection);
+  //     const Class = require('../models/Class')(connection);
+  //     const Subject = require('../models/Subject')(connection);
+
+  //     const classInfo = await Class.findOne({ _id: classId, school: schoolId });
+  //     if (!classInfo || classInfo.classTeacher.toString() !== teacherId.toString()) {
+  //       return res.status(403).json({ message: 'Not authorized as class teacher' });
+  //     }
+
+  //     const query = {
+  //       school: schoolId,
+  //       class: classId,
+  //       status: 'submittedToClassTeacher',
+  //     };
+  //     if (examId) query._id = examId;
+
+  //     const exams = await Exam.find(query);
+  //     if (!exams.length) {
+  //       return res.status(404).json({ message: 'No submitted marks found for this class and exam' });
+  //     }
+
+  //     const subjects = await Subject.find({ class: classId });
+  //     if (exams.length !== subjects.length) {
+  //       return res.status(400).json({ message: 'Not all subjects have submitted marks' });
+  //     }
+
+  //     const session = await connection.startSession();
+  //     session.startTransaction();
+
+  //     try {
+  //       for (const exam of exams) {
+  //         exam.status = 'submittedToAdmin';
+  //         exam.submittedToAdminAt = new Date();
+  //         await exam.save({ session });
+  //       }
+
+  //       await session.commitTransaction();
+  //       res.json({ message: 'Results submitted to admin successfully' });
+  //     } catch (error) {
+  //       await session.abortTransaction();
+  //       throw error;
+  //     } finally {
+  //       session.endSession();
+  //     }
+  //   } catch (error) {
+  //     res.status(500).json({ error: error.message });
+  //   }
+  // },
 
 
-  submitResultsToAdmin: async (req, res) => {
+  // Compile marks for all subjects, calculate totals and percentages, and submit to admin (by class teacher)
+  compileAndSubmitResults: async (req, res) => {
     try {
-      const { classId, examId } = req.params;
+      const { classId, examType } = req.params; // examType to identify the exam (e.g., "Midterm")
       const teacherId = req.user._id;
       const schoolId = req.school._id.toString();
       const connection = req.connection;
       const Exam = require('../models/Exam')(connection);
       const Class = require('../models/Class')(connection);
-      const Subject = require('../models/Subject')(connection); // Load Subject model explicitly
-  
+      const Subject = require('../models/Subject')(connection);
+      const User = require('../models/User')(connection);
+
+      // Verify that the teacher is the class teacher
       const classInfo = await Class.findOne({ _id: classId, school: schoolId });
       if (!classInfo || classInfo.classTeacher.toString() !== teacherId.toString()) {
         return res.status(403).json({ message: 'Not authorized as class teacher' });
       }
-  
-      // Modified query: Use _id instead of examDate when examId is provided
-      const query = {
+
+      // Get all subjects for the class
+      const subjects = await Subject.find({ class: classId });
+      if (!subjects.length) {
+        return res.status(404).json({ message: 'No subjects found for this class' });
+      }
+
+      // Get all exams for the given examType and class
+      const exams = await Exam.find({
         school: schoolId,
         class: classId,
-        status: 'submittedToClassTeacher'
-      };
-  
-      // If examId is provided, filter by _id
-      if (examId) {
-        query._id = examId;
-      }
-  
-      const exams = await Exam.find(query);
-  
-      if (!exams.length) {
-        return res.status(404).json({ message: 'No submitted marks found for this class and exam' });
-      }
-  
-      // Verify all subjects have submitted marks
-      const subjects = await Subject.find({ class: classId });
+        examType: examType,
+        status: 'submittedToClassTeacher',
+      }).populate('subject', 'name');
+
+      // Check if all subjects have submitted marks
       if (exams.length !== subjects.length) {
-        return res.status(400).json({ message: 'Not all subjects have submitted marks' });
+        return res.status(400).json({
+          message: `Not all subjects have submitted marks. Expected: ${subjects.length}, Found: ${exams.length}`,
+        });
       }
-  
+
+      // Get all students in the class
+      const students = await User.find({ _id: { $in: classInfo.students } })
+        .select('name rollNumber')
+        .lean();
+
+      // Compile marks for each student
+      const compiledResults = students.map((student) => {
+        const studentResult = {
+          rollNumber: student.rollNumber,
+          name: student.name,
+          studentId: student._id,
+          subjects: {},
+          totalMarks: 0,
+          percentage: 0,
+        };
+
+        // Initialize marks for each subject
+        subjects.forEach((subject) => {
+          studentResult.subjects[subject.name] = 0; // Default to 0
+        });
+
+        // Populate marks from each exam
+        exams.forEach((exam) => {
+          const result = exam.results.find(
+            (r) => r.student.toString() === student._id.toString()
+          );
+          if (result) {
+            studentResult.subjects[exam.subject.name] = result.marksObtained;
+            studentResult.totalMarks += result.marksObtained;
+          }
+        });
+
+        // Calculate percentage (total marks out of 500 for 5 subjects, each out of 100)
+        const maxTotalMarks = subjects.length * 100; // e.g., 500 for 5 subjects
+        studentResult.percentage = (studentResult.totalMarks / maxTotalMarks) * 100;
+
+        return studentResult;
+      });
+
+      // Update exam statuses to 'submittedToAdmin'
       const session = await connection.startSession();
       session.startTransaction();
-  
+
       try {
         for (const exam of exams) {
           exam.status = 'submittedToAdmin';
           exam.submittedToAdminAt = new Date();
           await exam.save({ session });
         }
-  
+
         await session.commitTransaction();
-        res.json({ message: 'Results submitted to admin successfully' });
+
+        // Return the compiled results (similar to the marksheet)
+        res.json({
+          message: 'Results compiled and submitted to admin successfully',
+          class: `${classInfo.name} ${classInfo.division}`,
+          examType: examType,
+          results: compiledResults,
+        });
       } catch (error) {
         await session.abortTransaction();
         throw error;
@@ -1273,57 +1685,34 @@ const teacherController = {
 // Helper Functions
 const verifyTeacherClassAssignment = async (teacherId, classId, connection) => {
   const User = require('../models/User')(connection);
-
-  // Get teacher details to check permissions
   const teacher = await User.findById(teacherId);
   if (!teacher) return false;
 
-  // Check if teacher is the class teacher (for attendance)
-  if (teacher.permissions.canTakeAttendance.some(id => id.toString() === classId)) {
+  if (teacher.permissions.canTakeAttendance.some((id) => id.toString() === classId)) {
     return true;
   }
 
-  // Check if teacher is assigned to teach any subject in this class
-  const hasSubjectPermission = teacher.permissions.canEnterMarks.some(entry =>
-    entry.class.toString() === classId
+  const hasSubjectPermission = teacher.permissions.canEnterMarks.some(
+    (entry) => entry.class.toString() === classId
   );
-
   return hasSubjectPermission;
-};
-
-const verifyAllSubjectsSubmitted = async (examId, classId, connection) => {
-  const Subject = require('../models/Subject')(connection);
-  const SubjectMarks = require('../models/SubjectMarks')(connection);
-
-  const subjects = await Subject.find({ class: classId });
-  const submittedMarks = await SubjectMarks.find({
-    exam: examId,
-    class: classId,
-    status: 'submitted',
-  });
-
-  return subjects.length === submittedMarks.length;
 };
 
 const getCurrentAcademicYear = () => {
   const now = new Date();
   const year = now.getFullYear();
   const month = now.getMonth();
-
-  // Assuming academic year starts in July
-  if (month < 6) { // Before July
-    return `${year - 1}-${year}`;
-  } else { // July onwards
-    return `${year}-${year + 1}`;
-  }
+  return month < 6 ? `${year - 1}-${year}` : `${year}-${year + 1}`;
 };
 
 const isSameDay = (date1, date2) => {
   const d1 = new Date(date1);
   const d2 = new Date(date2);
-  return d1.getFullYear() === d2.getFullYear() &&
-         d1.getMonth() === d2.getMonth() &&
-         d1.getDate() === d2.getDate();
+  return (
+    d1.getFullYear() === d2.getFullYear() &&
+    d1.getMonth() === d2.getMonth() &&
+    d1.getDate() === d2.getDate()
+  );
 };
 
 module.exports = teacherController;
