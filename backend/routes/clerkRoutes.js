@@ -97,4 +97,6 @@ router.post('/register-existing-student', clerkController.registerExistingStuden
 
 
 router.get('/admission-history/:grNumber', clerkController.getAdmissionHistoryByGRNumber);
+
+router.post('/upgrade-student-class', clerkController.upgradeStudentClass);
 module.exports = router;

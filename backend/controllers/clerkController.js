@@ -2520,85 +2520,6 @@ const clerkController = {
     }
   },
 
-  // getPendingVerifications: async (req, res) => {
-  //   try {
-  //     const schoolId = req.school._id.toString();
-  //     const connection = req.connection;
-  //     const AdmissionApplication = require('../models/AdmissionApplication')(connection);
-
-  //     const applications = await AdmissionApplication.find({
-  //       school: schoolId,
-  //       $or: [
-  //         {
-  //           status: { $in: ['pending', 'document_verification'] },
-  //           'clerkVerification.status': 'pending',
-  //         },
-  //         {
-  //           status: 'approved',
-  //           'feesVerification.status': 'verified',
-  //           'clerkVerification.status': 'verified',
-  //         },
-  //       ],
-  //     }).sort({ createdAt: -1 });
-
-  //     const applicationsWithUrls = applications.map((app) => ({
-  //       id: app._id,
-  //       trackingId: app.trackingId,
-  //       studentDetails: {
-  //         name: app.studentDetails.name,
-  //         dob: app.studentDetails.dob,
-  //         gender: app.studentDetails.gender,
-  //         email: app.studentDetails.email,
-  //         mobile: app.studentDetails.mobile,
-  //         appliedClass: app.studentDetails.appliedClass,
-  //       },
-  //       parentDetails: {
-  //         name: app.parentDetails.name,
-  //         email: app.parentDetails.email,
-  //         mobile: app.parentDetails.mobile,
-  //         occupation: app.parentDetails.occupation,
-  //         address: {
-  //           street: app.parentDetails.address.street,
-  //           city: app.parentDetails.address.city,
-  //           state: app.parentDetails.address.state,
-  //           pincode: app.parentDetails.address.pincode,
-  //         },
-  //       },
-  //       admissionType: app.admissionType,
-  //       status: app.status,
-  //       submittedOn: app.createdAt,
-  //       documents: app.documents.map((doc) => ({
-  //         type: doc.type,
-  //         documentUrl: doc.documentUrl,
-  //         key: doc.key,
-  //         accessUrl: `/documents/${app._id}/${doc.key.split('/').pop()}`, // Permanent URL
-  //         verified: doc.verified,
-  //       })),
-  //       additionalResponses: app.additionalResponses ? Object.fromEntries(app.additionalResponses) : {},
-  //       clerkVerification: {
-  //         status: app.clerkVerification.status,
-  //         comments: app.clerkVerification.comments,
-  //       },
-  //       feesVerification: {
-  //         status: app.feesVerification.status,
-  //         receiptNumber: app.feesVerification.receiptNumber,
-  //         verifiedAt: app.feesVerification.verifiedAt,
-  //       },
-  //     }));
-
-  //     res.json({
-  //       status: 'success',
-  //       count: applications.length,
-  //       applications: applicationsWithUrls,
-  //     });
-  //   } catch (error) {
-  //     console.error('Error in getPendingVerifications:', error);
-  //     res.status(500).json({
-  //       status: 'error',
-  //       error: error.message,
-  //     });
-  //   }
-  // },
 
 
   getPendingVerifications: async (req, res) => {
@@ -3658,6 +3579,119 @@ const clerkController = {
       res.status(500).json({ error: error.message });
     }
   },
+
+
+// Add this to clerkController object
+upgradeStudentClass: async (req, res) => {
+  try {
+    const { studentId, newClassId } = req.body;
+    const schoolId = req.school._id.toString();
+    const connection = req.connection;
+    const User = require('../models/User')(connection);
+    const Class = require('../models/Class')(connection);
+
+    // Validate input
+    if (!mongoose.Types.ObjectId.isValid(studentId) || !mongoose.Types.ObjectId.isValid(newClassId)) {
+      return res.status(400).json({ message: 'Invalid student or class ID' });
+    }
+
+    // Find the student
+    const student = await User.findOne({
+      _id: studentId,
+      school: schoolId,
+      role: 'student'
+    });
+    
+    if (!student) {
+      return res.status(404).json({ message: 'Student not found' });
+    }
+
+    // Find current class and new class
+    const currentClass = await Class.findOne({
+      _id: student.studentDetails.class,
+      school: schoolId
+    });
+
+    const newClass = await Class.findOne({
+      _id: newClassId,
+      school: schoolId
+    });
+
+    if (!newClass) {
+      return res.status(404).json({ message: 'New class not found' });
+    }
+
+    // Check class capacity
+    if (newClass.students.length >= newClass.capacity) {
+      return res.status(400).json({ message: 'New class is at full capacity' });
+    }
+
+    // Extract class numbers from names (e.g., "Class 1" -> 1, "Class 2" -> 2)
+    const getClassNumber = (className) => {
+      if (!className) return 0;
+      const match = className.match(/\d+/); // Extract first number from string
+      return match ? parseInt(match[0]) : 0;
+    };
+
+    const currentClassNum = getClassNumber(currentClass?.name);
+    const newClassNum = getClassNumber(newClass.name);
+
+    // Check if it's a logical upgrade
+    if (newClassNum <= currentClassNum) {
+      return res.status(400).json({ 
+        message: 'New class must be higher than current class' 
+      });
+    }
+
+    // Update student class
+    student.studentDetails.class = newClassId;
+    student.studentDetails.admissionDate = new Date(); // Update admission date to new class
+    await student.save();
+
+    // Update class records
+    if (currentClass) {
+      await Class.findByIdAndUpdate(
+        currentClass._id,
+        { $pull: { students: student._id } }
+      );
+    }
+
+    await Class.findByIdAndUpdate(
+      newClassId,
+      { $push: { students: student._id } }
+    );
+
+    // Send notification
+    const notificationResult = await sendAdmissionNotification(
+      student.email,
+      student.studentDetails?.mobile || '',
+      student.name,
+      null, // No password change
+      req.school.name,
+      `${newClass.name}${newClass.division ? ' ' + newClass.division : ''}`,
+      student.studentDetails.grNumber,
+      'Class Upgrade Notification'
+    );
+
+    res.json({
+      message: 'Student class upgraded successfully',
+      student: {
+        id: student._id,
+        name: student.name,
+        grNumber: student.studentDetails.grNumber,
+        previousClass: currentClass ? `${currentClass.name}${currentClass.division ? ' ' + currentClass.division : ''}` : 'N/A',
+        newClass: `${newClass.name}${newClass.division ? ' ' + newClass.division : ''}`
+      },
+      notificationStatus: {
+        emailSent: notificationResult.emailSent,
+        smsSent: notificationResult.smsSent
+      }
+    });
+  } catch (error) {
+    console.error('Error in upgradeStudentClass:', error);
+    res.status(500).json({ error: error.message });
+  }
+},
 };
 
 const sendCertificateNotification = async (email, mobile, studentName, certificateType, documentUrl) => {
@@ -3668,4 +3702,20 @@ const sendCertificateNotification = async (email, mobile, studentName, certifica
   };
 };
 
-module.exports = { clerkController, upload };
+const sendAdmissionNotification1 = async (email, mobile, studentName, password, schoolName, className, grNumber = null, notificationType = 'Admission') => {
+  let message = '';
+  if (notificationType === 'Class Upgrade Notification') {
+    message = `Dear ${studentName}, your class has been upgraded to ${className} at ${schoolName}. Your GR Number remains ${grNumber}.`;
+  } else {
+    message = `Dear ${studentName}, your admission to ${schoolName} in class ${className} is confirmed. Your credentials - Email: ${email}, Password: ${password}${grNumber ? ', GR Number: ' + grNumber : ''}`;
+  }
+  
+  return {
+    emailSent: true,
+    smsSent: true,
+    error: null,
+    message // Optional: for debugging
+  };
+};
+
+module.exports = { clerkController, upload,sendAdmissionNotification };

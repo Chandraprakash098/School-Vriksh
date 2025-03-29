@@ -43,21 +43,6 @@ router.get('/receipt/:paymentId/download', authMiddleware, feesController.downlo
 
 // router.get('/school-details', authMiddleware, feesController.getSchoolDetails);
 
-// router.get('/school-details', authMiddleware, async (req, res) => {
-//     try {
-//       if (!req.school) {
-//         return res.status(404).json({ message: 'School not found' });
-//       }
-  
-//       res.json({
-//         name: req.school.name || 'Unknown School',
-//         address: req.school.address || 'Unknown Address'
-//       });
-//     } catch (error) {
-//       console.error('Error fetching school details:', error);
-//       res.status(500).json({ error: error.message });
-//     }
-//   });
 
 router.get('/school-details', authMiddleware, async (req, res) => {
     try {
