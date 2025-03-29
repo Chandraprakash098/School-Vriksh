@@ -1399,6 +1399,65 @@ const feesController = {
       res.status(500).json({ error: error.message });
     }
   },
+
+
+  requestLeave: async (req, res) => {
+    try {
+      const schoolId = req.school._id.toString();
+      const { reason, startDate, endDate, type } = req.body;
+      const clerkId = req.user._id;
+      const connection = req.connection;
+      const Leave = require('../models/Leave')(connection);
+
+      const leave = new Leave({
+        school: schoolId,
+        user: clerkId,
+        reason,
+        startDate,
+        endDate,
+        type,
+        status: 'pending',
+        appliedOn: new Date(),
+      });
+
+      await leave.save();
+      res.status(201).json(leave);
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  },
+
+  getLeaveStatus: async (req, res) => {
+    try {
+      const schoolId = req.school._id.toString();
+      const clerkId = req.user._id;
+      const connection = req.connection;
+      const Leave = require('../models/Leave')(connection);
+
+      const leaves = await Leave.find({ school: schoolId, user: clerkId })
+        .sort({ appliedOn: -1 })
+        .lean();
+
+      res.json({
+        status: 'success',
+        count: leaves.length,
+        leaves: leaves.map((leave) => ({
+          id: leave._id,
+          reason: leave.reason,
+          startDate: leave.startDate,
+          endDate: leave.endDate,
+          type: leave.type,
+          status: leave.status,
+          appliedOn: leave.appliedOn,
+          reviewedBy: leave.reviewedBy,
+          reviewedAt: leave.reviewedAt,
+          comments: leave.comments,
+        })),
+      });
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  },
 };
 
 module.exports = feesController;

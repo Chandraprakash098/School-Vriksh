@@ -31,6 +31,8 @@ router.post('/pay-for-student', authMiddleware, feesController.payFeesForStudent
 // New route for fee history
 router.get('/history/:grNumber', authMiddleware, feesController.getStudentFeeHistory);
 
+router.post('/leave-requests', authMiddleware, feesController.requestLeave);
+router.get('/leave-status', authMiddleware, feesController.getLeaveStatus);
 // Razorpay payment verification (used by both student and fee manager)
 router.post('/verify-payment', authMiddleware, feesController.verifyPayment);
 router.post('/define-fees', authMiddleware, feesController.defineFeesForYear);
