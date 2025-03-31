@@ -175,4 +175,27 @@ router.post(
   teacherController.compileAndSubmitResults
 );
 
+
+// New Progress Workflow Routes
+router.post(
+  '/classes/:classId/subjects/:subjectId/progress',
+  [auth, roleCheck(['teacher'])],
+  teacherController.enterSubjectProgress
+);
+router.post(
+  '/classes/:classId/subjects/:subjectId/submit-progress-to-class-teacher',
+  [auth, roleCheck(['teacher'])],
+  teacherController.submitProgressToClassTeacher
+);
+router.get(
+  '/classes/:classId/subjects/:subjectId/review-progress',
+  [auth, roleCheck(['teacher'])],
+  teacherController.reviewStudentProgress
+);
+router.post(
+  '/classes/:classId/compile-and-submit-progress',
+  [auth, roleCheck(['teacher'])],
+  teacherController.compileAndSubmitProgressReports
+);
+
 module.exports = router;

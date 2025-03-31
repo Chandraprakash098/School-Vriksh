@@ -765,6 +765,401 @@ const { uploadToS3 } = require('../config/s3Upload'); // Import S3 upload utilit
 const path = require('path');
 
 const teacherController = {
+
+  //new Controoler
+
+
+  // enterSubjectProgress: async (req, res) => {
+  //   try {
+  //     const { classId, subjectId } = req.params;
+  //     const { studentProgress } = req.body; // Array of { studentId, grade, feedback }
+  //     const teacherId = req.user._id;
+  //     const schoolId = req.school._id.toString();
+  //     const connection = req.connection;
+  //     const ProgressReport = require('../models/ProgressReport')(connection);
+  //     const Subject = require('../models/Subject')(connection);
+  //     const Class = require('../models/Class')(connection);
+
+  //     // Verify teacher is assigned to the subject
+  //     const subject = await Subject.findOne({
+  //       _id: subjectId,
+  //       school: schoolId,
+  //       'teachers.teacher': teacherId,
+  //     });
+  //     if (!subject) {
+  //       return res.status(403).json({ message: 'Not authorized to enter progress for this subject' });
+  //     }
+
+  //     const classInfo = await Class.findOne({ _id: classId, school: schoolId });
+  //     if (!classInfo) {
+  //       return res.status(404).json({ message: 'Class not found' });
+  //     }
+
+  //     const academicYear = getCurrentAcademicYear();
+  //     const progressReports = [];
+
+  //     // Process each student's progress
+  //     for (const progress of studentProgress) {
+  //       const { studentId, grade, feedback } = progress;
+
+  //       // Check if a progress report already exists for this student, subject, and academic year
+  //       let progressReport = await ProgressReport.findOne({
+  //         school: schoolId,
+  //         class: classId,
+  //         student: studentId,
+  //         subject: subjectId,
+  //         academicYear,
+  //       });
+
+  //       if (progressReport) {
+  //         // Update existing progress report
+  //         progressReport.grade = grade;
+  //         progressReport.feedback = feedback;
+  //         progressReport.enteredBy = teacherId;
+  //         progressReport.updatedAt = new Date();
+  //       } else {
+  //         // Create a new progress report
+  //         progressReport = new ProgressReport({
+  //           school: schoolId,
+  //           class: classId,
+  //           student: studentId,
+  //           subject: subjectId,
+  //           grade,
+  //           feedback,
+  //           enteredBy: teacherId,
+  //           academicYear,
+  //           status: 'draft',
+  //         });
+  //       }
+
+  //       await progressReport.save();
+  //       progressReports.push(progressReport);
+  //     }
+
+  //     res.status(201).json({
+  //       message: 'Progress reports saved successfully',
+  //       progressReports,
+  //     });
+  //   } catch (error) {
+  //     res.status(500).json({ error: error.message });
+  //   }
+  // },
+
+  enterSubjectProgress: async (req, res) => {
+    try {
+      const { classId, subjectId } = req.params;
+      const { studentProgress } = req.body;
+      const teacherId = req.user._id;
+      const schoolId = req.school._id.toString();
+      const connection = req.connection;
+      const ProgressReport = require('../models/ProgressReport')(connection);
+      const Subject = require('../models/Subject')(connection);
+      const Class = require('../models/Class')(connection);
+      const User = require('../models/User')(connection);
+  
+      const subject = await Subject.findOne({
+        _id: subjectId,
+        school: schoolId,
+        'teachers.teacher': teacherId,
+      });
+      if (!subject) {
+        return res.status(403).json({ message: 'Not authorized to enter progress for this subject' });
+      }
+  
+      const classInfo = await Class.findOne({ _id: classId, school: schoolId });
+      if (!classInfo) {
+        return res.status(404).json({ message: 'Class not found' });
+      }
+  
+      const academicYear = getCurrentAcademicYear();
+      const progressReports = [];
+  
+      for (const progress of studentProgress) {
+        const { studentId, grade, feedback } = progress;
+  
+        // Validate student exists
+        const student = await User.findById(studentId);
+        if (!student) {
+          console.log(`Student ${studentId} not found in User collection`);
+          continue; // Skip invalid students or handle as needed
+        }
+  
+        let progressReport = await ProgressReport.findOne({
+          school: schoolId,
+          class: classId,
+          student: studentId,
+          subject: subjectId,
+          academicYear,
+        });
+  
+        if (progressReport) {
+          progressReport.grade = grade;
+          progressReport.feedback = feedback;
+          progressReport.enteredBy = teacherId;
+          progressReport.updatedAt = new Date();
+        } else {
+          progressReport = new ProgressReport({
+            school: schoolId,
+            class: classId,
+            student: studentId,
+            subject: subjectId,
+            grade,
+            feedback,
+            enteredBy: teacherId,
+            academicYear,
+            status: 'draft',
+          });
+        }
+  
+        await progressReport.save();
+        progressReports.push(progressReport);
+      }
+  
+      res.status(201).json({
+        message: 'Progress reports saved successfully',
+        progressReports,
+      });
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  },
+
+  // Subject teacher submits progress to class teacher
+  submitProgressToClassTeacher: async (req, res) => {
+    try {
+      const { classId, subjectId } = req.params; // No studentId needed
+      const teacherId = req.user._id;
+      const schoolId = req.school._id.toString();
+      const connection = req.connection;
+      const ProgressReport = require('../models/ProgressReport')(connection);
+      const Subject = require('../models/Subject')(connection);
+  
+      // Verify that the teacher is assigned to the subject in this class
+      const subject = await Subject.findOne({
+        _id: subjectId,
+        school: schoolId,
+        class: classId,
+        'teachers.teacher': teacherId,
+      });
+  
+      if (!subject) {
+        return res.status(403).json({
+          message: 'You are not authorized to submit progress for this subject in this class',
+        });
+      }
+  
+      // Find all draft progress reports for this subject
+      const academicYear = getCurrentAcademicYear();
+      const progressReports = await ProgressReport.find({
+        school: schoolId,
+        class: classId,
+        subject: subjectId,
+        academicYear,
+        enteredBy: teacherId,
+        status: 'draft',
+      });
+  
+      if (!progressReports.length) {
+        return res.status(404).json({
+          message: 'No draft progress reports found for this subject',
+        });
+      }
+  
+      // Update all draft progress reports to 'submittedToClassTeacher'
+      const result = await ProgressReport.updateMany(
+        {
+          school: schoolId,
+          class: classId,
+          subject: subjectId,
+          academicYear,
+          enteredBy: teacherId,
+          status: 'draft',
+        },
+        {
+          $set: {
+            status: 'submittedToClassTeacher',
+            submittedToClassTeacherAt: new Date(),
+          },
+        }
+      );
+  
+      res.json({
+        message: 'Progress reports submitted to class teacher successfully',
+        updatedCount: result.modifiedCount,
+      });
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  },
+
+  // Class teacher reviews progress reports for a student
+  reviewStudentProgress: async (req, res) => {
+    try {
+      const { classId, subjectId } = req.params; // Changed from studentId to subjectId
+      const teacherId = req.user._id;
+      const schoolId = req.school._id.toString();
+      const connection = req.connection;
+      const ProgressReport = require('../models/ProgressReport')(connection);
+      const Class = require('../models/Class')(connection);
+      const Subject = require('../models/Subject')(connection);
+  
+      // Verify that the teacher is the class teacher
+      const classInfo = await Class.findOne({
+        _id: classId,
+        school: schoolId,
+        classTeacher: teacherId,
+      });
+  
+      if (!classInfo) {
+        return res.status(403).json({
+          message: 'You are not the class teacher of this class',
+        });
+      }
+  
+      const academicYear = getCurrentAcademicYear();
+      const progressReports = await ProgressReport.find({
+        school: schoolId,
+        class: classId,
+        subject: subjectId, // Filter by subject instead of student
+        academicYear,
+        status: 'submittedToClassTeacher',
+      })
+        .populate('subject', 'name')
+        .populate('student', 'name rollNumber') // Populate student details instead of enteredBy
+        .populate('enteredBy', 'name')
+        .lean();
+  
+      res.json(progressReports);
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  },
+
+
+
+  compileAndSubmitProgressReports: async (req, res) => {
+    try {
+      const { classId } = req.params;
+      const teacherId = req.user._id;
+      const schoolId = req.school._id.toString();
+      const connection = req.connection;
+      const ProgressReport = require('../models/ProgressReport')(connection);
+      const Class = require('../models/Class')(connection);
+      const Subject = require('../models/Subject')(connection);
+      const User = require('../models/User')(connection);
+  
+      // Validate classId
+      if (!classId || classId.length !== 24 || !/^[0-9a-fA-F]{24}$/.test(classId)) {
+        return res.status(400).json({ message: 'Invalid classId format. Must be a 24-character hexadecimal string.' });
+      }
+  
+      console.log('Received classId:', classId);
+      console.log('classId length:', classId.length);
+      console.log('teacherId:', teacherId);
+      console.log('schoolId:', schoolId);
+  
+      // Verify that the teacher is the class teacher
+      const classInfo = await Class.findOne({
+        _id: classId,
+        school: schoolId,
+        classTeacher: teacherId,
+      });
+      console.log('Class found:', classInfo ? classInfo : 'Not found');
+  
+      if (!classInfo) {
+        return res.status(403).json({
+          message: 'You are not the class teacher of this class',
+        });
+      }
+  
+      const subjects = await Subject.find({ class: classId });
+      if (!subjects.length) {
+        return res.status(404).json({ message: 'No subjects found for this class' });
+      }
+  
+      const students = await User.find({ _id: { $in: classInfo.students } })
+        .select('name rollNumber')
+        .lean();
+  
+      const academicYear = getCurrentAcademicYear();
+      console.log('academicYear:', academicYear);
+  
+      const compiledReports = [];
+      for (const student of students) {
+        const progressReports = await ProgressReport.find({
+          school: schoolId,
+          class: classId,
+          student: student._id,
+          academicYear,
+          status: 'submittedToClassTeacher',
+        })
+          .populate('subject', 'name')
+          .populate('enteredBy', 'name')
+          .lean();
+  
+        if (progressReports.length !== subjects.length) {
+          return res.status(400).json({
+            message: `Not all subjects have submitted progress reports for student ${student.name}. Expected: ${subjects.length}, Found: ${progressReports.length}`,
+          });
+        }
+  
+        const studentReport = {
+          studentId: student._id,
+          studentName: student.name,
+          rollNumber: student.rollNumber,
+          class: `${classInfo.name} ${classInfo.division}`,
+          academicYear,
+          subjects: progressReports.map((report) => ({
+            subject: report.subject.name,
+            grade: report.grade,
+            feedback: report.feedback,
+            teacher: report.enteredBy.name,
+          })),
+        };
+        compiledReports.push(studentReport);
+      }
+  
+      const session = await connection.startSession();
+      session.startTransaction();
+  
+      try {
+        await ProgressReport.updateMany(
+          {
+            school: schoolId,
+            class: classId,
+            academicYear,
+            status: 'submittedToClassTeacher',
+          },
+          {
+            $set: {
+              status: 'submittedToAdmin',
+              submittedToAdminAt: new Date(),
+            },
+          },
+          { session }
+        );
+  
+        await session.commitTransaction();
+  
+        res.json({
+          message: 'Progress reports compiled and submitted to admin successfully',
+          class: `${classInfo.name} ${classInfo.division}`,
+          academicYear,
+          reports: compiledReports,
+        });
+      } catch (error) {
+        await session.abortTransaction();
+        throw error;
+      } finally {
+        session.endSession();
+      }
+    } catch (error) {
+      console.error('Error in compileAndSubmitProgressReports:', error);
+      res.status(500).json({ error: error.message });
+    }
+  },
+
+
   // Get classes where the teacher is assigned (class teacher or subject teacher)
   getAssignedClasses: async (req, res) => {
     try {
@@ -1449,37 +1844,7 @@ const teacherController = {
     }
   },
 
-  // reviewSubjectMarks: async (req, res) => {
-  //   try {
-  //     const { classId, examId } = req.params;
-  //     const teacherId = req.user._id;
-  //     const schoolId = req.school._id.toString();
-  //     const connection = req.connection;
-  //     const Exam = require('../models/Exam')(connection);
-  //     const Class = require('../models/Class')(connection);
-
-  //     const classInfo = await Class.findOne({ _id: classId, school: schoolId });
-  //     if (!classInfo || classInfo.classTeacher.toString() !== teacherId.toString()) {
-  //       return res.status(403).json({ message: 'Not authorized as class teacher' });
-  //     }
-
-  //     const query = {
-  //       school: schoolId,
-  //       class: classId,
-  //       status: 'submittedToClassTeacher',
-  //     };
-  //     if (examId) query._id = examId;
-
-  //     const exams = await Exam.find(query)
-  //       .populate('subject', 'name')
-  //       .populate('results.student', 'name')
-  //       .lean();
-
-  //     res.json(exams);
-  //   } catch (error) {
-  //     res.status(500).json({ error: error.message });
-  //   }
-  // },
+  
 
   reviewSubjectMarks: async (req, res) => {
     try {

@@ -144,4 +144,9 @@ router.get('/progress/:studentId', auth, studentController.getMonthlyProgress);
 // Event notifications
 router.get('/events/:studentId', auth, studentController.getEventNotifications);
 
+// Add this route
+router.get('/homework/:studentId', auth, studentController.getAssignedHomework);
+// Add this route
+router.get('/certificates/:studentId/:certificateId/:documentKey', auth, studentController.downloadCertificate);
+
 module.exports = router;

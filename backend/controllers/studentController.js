@@ -1501,6 +1501,53 @@ const studentController = {
     }
   },
 
+  getAssignedHomework: async (req, res) => {
+    try {
+      const { studentId } = req.params;
+      const schoolId = req.school._id.toString();
+      const connection = req.connection;
+      const User = require('../models/User')(connection);
+      const Homework = require('../models/Homework')(connection);
+  
+      const student = await User.findOne({ _id: studentId, school: schoolId }).select('studentDetails.class');
+      if (!student || !student.studentDetails || !student.studentDetails.class) {
+        return res.status(404).json({ message: 'Student class not found' });
+      }
+  
+      const homework = await Homework.find({
+        school: schoolId,
+        class: student.studentDetails.class,
+      })
+        .populate('assignedBy', 'name', User)
+        .sort({ dueDate: 1 });
+  
+      const formattedHomework = homework.map(hw => {
+        const studentSubmission = hw.submissions.find(sub => sub.student.toString() === studentId);
+        return {
+          id: hw._id,
+          title: hw.title,
+          description: hw.description,
+          subject: hw.subject,
+          assignedBy: hw.assignedBy ? hw.assignedBy.name : 'Unknown',
+          assignedDate: hw.assignedDate,
+          dueDate: hw.dueDate,
+          attachments: hw.attachments,
+          submission: studentSubmission ? {
+            status: studentSubmission.status,
+            submissionDate: studentSubmission.submissionDate,
+            files: studentSubmission.files,
+            grade: studentSubmission.grade,
+            feedback: studentSubmission.feedback,
+          } : null,
+        };
+      });
+  
+      res.json(formattedHomework);
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  },
+
   // Submit homework
   submitHomework: async (req, res) => {
     try {
@@ -1699,405 +1746,6 @@ const studentController = {
     }
   },
 
- 
-
-
-  // getFeeTypes: async (req, res) => {
-  //   try {
-  //     const { studentId } = req.params;
-  //     const { month, year } = req.query;
-  //     const schoolId = req.school._id.toString();
-  //     const connection = req.connection;
-  //     const FeeModel = Fee(connection);
-  //     const UserModel = User(connection);
-
-  //     const student = await UserModel.findById(studentId);
-  //     if (!student) return res.status(404).json({ message: 'Student not found' });
-
-  //     if (student.studentDetails.isRTE) 
-  //       return res.json({ message: 'RTE students are exempted from fees', isRTE: true, feeTypes: [] });
-
-  //     const feeDefinitions = await FeeModel.find({
-  //       school: schoolId,
-  //       student: { $exists: false }, // Fee definitions don't have a student assigned yet
-  //       month: parseInt(month),
-  //       year: parseInt(year)
-  //     });
-
-  //     const paidFees = await FeeModel.find({
-  //       student: studentId,
-  //       school: schoolId,
-  //       status: 'paid',
-  //       month: parseInt(month),
-  //       year: parseInt(year)
-  //     }).select('type');
-
-  //     const paidFeeTypes = paidFees.map(fee => fee.type);
-
-  //     const feeTypesWithStatus = feeDefinitions.map(fee => ({
-  //       type: fee.type,
-  //       label: fee.type.charAt(0).toUpperCase() + fee.type.slice(1) + ' Fee',
-  //       amount: fee.amount,
-  //       description: fee.description,
-  //       isPaid: paidFeeTypes.includes(fee.type)
-  //     }));
-
-  //     res.json({
-  //       feeTypes: feeTypesWithStatus,
-  //       studentName: student.name,
-  //       grNumber: student.studentDetails.grNumber,
-  //       class: student.studentDetails.class,
-  //       month: parseInt(month),
-  //       year: parseInt(year)
-  //     });
-  //   } catch (error) {
-  //     res.status(500).json({ error: error.message });
-  //   }
-  // },
-
-  // payFeesByType: async (req, res) => {
-  //   try {
-  //     const { studentId } = req.params;
-  //     const { feeType, month, year, paymentMethod } = req.body;
-  //     const schoolId = req.school._id.toString();
-  //     const connection = req.connection;
-  //     const FeeModel = Fee(connection);
-  //     const PaymentModel = Payment(connection);
-  //     const UserModel = User(connection);
-
-  //     const student = await UserModel.findById(studentId);
-  //     if (!student) return res.status(404).json({ message: 'Student not found' });
-
-  //     if (student.studentDetails.isRTE) 
-  //       return res.status(400).json({ message: 'RTE students are exempted from fees' });
-
-  //     const feeDefinition = await FeeModel.findOne({
-  //       school: schoolId,
-  //       type: feeType,
-  //       month: parseInt(month),
-  //       year: parseInt(year),
-  //       student: { $exists: false } // Fetch the fee definition
-  //     });
-
-  //     if (!feeDefinition) return res.status(404).json({ message: 'Fee type not defined for this month' });
-
-  //     const existingFee = await FeeModel.findOne({
-  //       student: studentId,
-  //       school: schoolId,
-  //       type: feeType,
-  //       month: parseInt(month),
-  //       year: parseInt(year)
-  //     });
-
-  //     if (existingFee && existingFee.status === 'paid') 
-  //       return res.status(400).json({ message: 'This fee is already paid for the selected month' });
-
-  //     let fee = existingFee;
-  //     if (!fee) {
-  //       fee = new FeeModel({
-  //         school: schoolId,
-  //         student: studentId,
-  //         grNumber: student.studentDetails.grNumber,
-  //         type: feeType,
-  //         amount: feeDefinition.amount,
-  //         dueDate: feeDefinition.dueDate,
-  //         month: parseInt(month),
-  //         year: parseInt(year),
-  //         status: 'pending',
-  //         description: feeDefinition.description
-  //       });
-  //       await fee.save();
-  //     }
-
-  //     if (paymentMethod === 'cash') 
-  //       return res.status(403).json({ message: 'Students cannot pay via cash. Contact the fee manager.' });
-
-  //     const options = { amount: fee.amount * 100, currency: 'INR', receipt: `fee_${fee._id}` };
-  //     const order = await razorpay.orders.create(options);
-
-  //     const payment = new PaymentModel({
-  //       school: schoolId,
-  //       student: studentId,
-  //       amount: fee.amount,
-  //       feeType,
-  //       paymentMethod,
-  //       feeId: fee._id,
-  //       status: 'pending',
-  //       orderId: order.id,
-  //     });
-
-  //     await payment.save();
-
-  //     res.json({
-  //       orderId: order.id,
-  //       amount: fee.amount * 100,
-  //       currency: 'INR',
-  //       key: process.env.RAZORPAY_KEY_ID,
-  //       payment,
-  //       message: 'Payment initiated. Proceed with Razorpay checkout.',
-  //     });
-  //   } catch (error) {
-  //     res.status(500).json({ error: error.message });
-  //   }
-  // },
-
-  // // Verify payment (for student panel)
-  // verifyPayment: async (req, res) => {
-  //   try {
-  //     const { razorpay_payment_id, razorpay_order_id, razorpay_signature } = req.body;
-  //     const schoolId = req.school._id.toString();
-  //     const connection = req.connection;
-  //     const PaymentModel = Payment(connection);
-  //     const FeeModel = Fee(connection);
-
-  //     // const generatedSignature = crypto
-  //     //   .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
-  //     //   .update(`${razorpay_order_id}|${razorpay_payment_id}`)
-  //     //   .digest('hex');
-
-  //     // if (generatedSignature !== razorpay_signature) return res.status(400).json({ message: 'Invalid payment signature' });
-
-  //     const payment = await PaymentModel.findOne({ orderId: razorpay_order_id });
-  //     if (!payment) return res.status(404).json({ message: 'Payment not found' });
-
-  //     payment.status = 'completed';
-  //     payment.transactionId = razorpay_payment_id;
-  //     payment.paymentDate = new Date();
-  //     await payment.save();
-
-  //     const fee = await FeeModel.findById(payment.feeId);
-  //     fee.status = 'paid';
-  //     fee.paymentDetails = {
-  //       transactionId: razorpay_payment_id,
-  //       paymentDate: new Date(),
-  //       paymentMethod: payment.paymentMethod,
-  //       receiptNumber: `REC${Date.now()}`,
-  //     };
-  //     await fee.save();
-
-  //     res.json({ message: 'Payment verified successfully', payment });
-  //   } catch (error) {
-  //     res.status(500).json({ error: error.message });
-  //   }
-  // },
-
-  // // Get fee receipts
-  // getFeeReceipts: async (req, res) => {
-  //   try {
-  //     const { studentId } = req.params;
-  //     const schoolId = req.school._id.toString();
-  //     const connection = req.connection;
-  //     const PaymentModel = Payment(connection);
-  //     const FeeModel = Fee(connection);
-
-  //     const receipts = await PaymentModel.find({
-  //       student: studentId,
-  //       school: schoolId,
-  //       status: 'completed',
-  //     }).populate('feeId', 'type dueDate', FeeModel).sort({ paymentDate: -1 });
-
-  //     res.json(receipts);
-  //   } catch (error) {
-  //     res.status(500).json({ error: error.message });
-  //   }
-  // },
-
-  // getFeeTypes: async (req, res) => {
-  //   try {
-  //     const { studentId } = req.params;
-  //     const { month, year } = req.query;
-  //     const schoolId = req.school._id.toString();
-  //     const connection = req.connection;
-  //     const FeeModel = Fee(connection);
-  //     const UserModel = User(connection);
-
-  //     const student = await UserModel.findById(studentId);
-  //     if (!student) return res.status(404).json({ message: 'Student not found' });
-
-  //     if (student.studentDetails.isRTE) 
-  //       return res.json({ message: 'RTE students are exempted from fees', isRTE: true, feeTypes: [] });
-
-  //     const feeDefinitions = await FeeModel.find({
-  //       school: schoolId,
-  //       student: { $exists: false },
-  //       month: parseInt(month),
-  //       year: parseInt(year)
-  //     });
-
-  //     const paidFees = await FeeModel.find({
-  //       student: studentId,
-  //       school: schoolId,
-  //       month: parseInt(month),
-  //       year: parseInt(year)
-  //     });
-
-  //     const feeTypesWithStatus = feeDefinitions.map(fee => {
-  //       const paidFee = paidFees.find(f => f.type === fee.type);
-  //       return {
-  //         type: fee.type,
-  //         label: fee.type.charAt(0).toUpperCase() + fee.type.slice(1) + ' Fee',
-  //         amount: fee.amount,
-  //         description: fee.description,
-  //         isPaid: !!paidFee && paidFee.status === 'paid',
-  //         paymentDetails: paidFee?.paymentDetails || null
-  //       };
-  //     });
-
-  //     res.json({
-  //       feeTypes: feeTypesWithStatus,
-  //       studentName: student.name,
-  //       grNumber: student.studentDetails.grNumber,
-  //       class: student.studentDetails.class,
-  //       month: parseInt(month),
-  //       year: parseInt(year)
-  //     });
-  //   } catch (error) {
-  //     res.status(500).json({ error: error.message });
-  //   }
-  // },
-
-  // payFeesByType: async (req, res) => {
-  //   try {
-  //     const { studentId } = req.params;
-  //     const { feeTypes, month, year, paymentMethod } = req.body;
-  //     const schoolId = req.school._id.toString();
-  //     const connection = req.connection;
-  //     const FeeModel = Fee(connection);
-  //     const PaymentModel = Payment(connection);
-  //     const UserModel = User(connection);
-
-  //     const student = await UserModel.findById(studentId);
-  //     if (!student) return res.status(404).json({ message: 'Student not found' });
-
-  //     if (student.studentDetails.isRTE) 
-  //       return res.status(400).json({ message: 'RTE students are exempted from fees' });
-
-  //     if (paymentMethod === 'cash') 
-  //       return res.status(403).json({ message: 'Students cannot pay via cash. Contact the fee manager.' });
-
-  //     const feeDefinitions = await FeeModel.find({
-  //       school: schoolId,
-  //       student: { $exists: false },
-  //       month: parseInt(month),
-  //       year: parseInt(year),
-  //       type: { $in: feeTypes }
-  //     });
-
-  //     if (feeDefinitions.length !== feeTypes.length) 
-  //       return res.status(404).json({ message: 'Some fee types not defined for this month' });
-
-  //     const existingFees = await FeeModel.find({
-  //       student: studentId,
-  //       school: schoolId,
-  //       month: parseInt(month),
-  //       year: parseInt(year),
-  //       type: { $in: feeTypes }
-  //     });
-
-  //     const feesToPay = [];
-  //     let totalAmount = 0;
-
-  //     for (const def of feeDefinitions) {
-  //       const existing = existingFees.find(f => f.type === def.type);
-  //       if (existing && existing.status === 'paid') {
-  //         return res.status(400).json({ message: `Fee type ${def.type} is already paid` });
-  //       }
-  //       if (!existing) {
-  //         const fee = new FeeModel({
-  //           school: schoolId,
-  //           student: studentId,
-  //           grNumber: student.studentDetails.grNumber,
-  //           type: def.type,
-  //           amount: def.amount,
-  //           dueDate: def.dueDate,
-  //           month: parseInt(month),
-  //           year: parseInt(year),
-  //           status: 'pending',
-  //           description: def.description
-  //         });
-  //         feesToPay.push(fee);
-  //       } else {
-  //         feesToPay.push(existing);
-  //       }
-  //       totalAmount += def.amount;
-  //     }
-
-  //     const options = { amount: totalAmount * 100, currency: 'INR', receipt: `fee_${studentId}_${month}_${year}` };
-  //     const order = await razorpay.orders.create(options);
-
-  //     const payment = new PaymentModel({
-  //       school: schoolId,
-  //       student: studentId,
-  //       amount: totalAmount,
-  //       feeType: feeTypes.join(','),
-  //       paymentMethod,
-  //       status: 'pending',
-  //       orderId: order.id,
-  //     });
-
-  //     await Promise.all(feesToPay.map(fee => !fee._id && fee.save()));
-  //     payment.feeId = feesToPay.map(f => f._id);
-  //     await payment.save();
-
-  //     res.json({
-  //       orderId: order.id,
-  //       amount: totalAmount * 100,
-  //       currency: 'INR',
-  //       key: process.env.RAZORPAY_KEY_ID,
-  //       payment,
-  //       message: 'Payment initiated. Proceed with Razorpay checkout.',
-  //     });
-  //   } catch (error) {
-  //     res.status(500).json({ error: error.message });
-  //   }
-  // },
-
-  // verifyPayment: async (req, res) => {
-  //   try {
-  //     const { razorpay_payment_id, razorpay_order_id, razorpay_signature } = req.body;
-  //     const schoolId = req.school._id.toString();
-  //     const connection = req.connection;
-  //     const PaymentModel = Payment(connection);
-  //     const FeeModel = Fee(connection);
-
-  //     // const generatedSignature = crypto
-  //     //   .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
-  //     //   .update(`${razorpay_order_id}|${razorpay_payment_id}`)
-  //     //   .digest('hex');
-
-  //     // if (generatedSignature !== razorpay_signature) 
-  //     //   return res.status(400).json({ message: 'Invalid payment signature' });
-
-  //     const payment = await PaymentModel.findOne({ orderId: razorpay_order_id });
-  //     if (!payment) return res.status(404).json({ message: 'Payment not found' });
-
-  //     payment.status = 'completed';
-  //     payment.transactionId = razorpay_payment_id;
-  //     payment.paymentDate = new Date();
-  //     await payment.save();
-
-  //     const fees = await FeeModel.find({ _id: { $in: payment.feeId } });
-  //     const receiptNumber = `REC${Date.now()}`;
-
-  //     const updatePromises = fees.map(fee => {
-  //       fee.status = 'paid';
-  //       fee.paymentDetails = {
-  //         transactionId: razorpay_payment_id,
-  //         paymentDate: new Date(),
-  //         paymentMethod: payment.paymentMethod,
-  //         receiptNumber,
-  //       };
-  //       return fee.save();
-  //     });
-
-  //     await Promise.all(updatePromises);
-
-  //     res.json({ message: 'Payment verified successfully', payment });
-  //   } catch (error) {
-  //     res.status(500).json({ error: error.message });
-  //   }
-  // },
-
 
   getFeeTypes: async (req, res) => {
     try {
@@ -2235,104 +1883,6 @@ const studentController = {
   },
 
 
-
-  // verifyPayment: async (req, res) => {
-  //   try {
-  //     const { razorpay_payment_id, razorpay_order_id, razorpay_signature } = req.body;
-  //     const schoolId = req.school._id.toString();
-  //     const connection = req.connection;
-  //     const PaymentModel = Payment(connection);
-  //     const FeeModel = Fee(connection);
-  
-  //     // Uncomment this section if you want to validate the signature
-  //     // const generatedSignature = crypto
-  //     //   .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
-  //     //   .update(`${razorpay_order_id}|${razorpay_payment_id}`)
-  //     //   .digest('hex');
-  //     // if (generatedSignature !== razorpay_signature) 
-  //     //   return res.status(400).json({ message: 'Invalid payment signature' });
-  
-  //     const payment = await PaymentModel.findOne({ orderId: razorpay_order_id });
-  //     if (!payment) return res.status(404).json({ message: 'Payment not found' });
-  
-  //     // Update payment status
-  //     payment.status = 'completed';
-  //     payment.transactionId = razorpay_payment_id;
-  //     payment.paymentDate = new Date();
-  //     payment.receiptNumber = `REC${Date.now()}`;
-  //     await payment.save();
-  
-  //     // Create or update Fee documents for each fee paid
-  //     // This is the key addition that was missing
-  //     for (const feePaid of payment.feesPaid) {
-  //       // Check if a fee document already exists for this student/type/month/year
-  //       let fee = await FeeModel.findOne({
-  //         school: schoolId,
-  //         student: payment.student,
-  //         type: feePaid.type,
-  //         month: feePaid.month,
-  //         year: feePaid.year
-  //       });
-  
-  //       if (!fee) {
-  //         // Create a new fee document if one doesn't exist
-  //         const feeDefinition = await FeeModel.findOne({
-  //           school: schoolId,
-  //           student: { $exists: false },
-  //           type: feePaid.type,
-  //           month: feePaid.month,
-  //           year: feePaid.year
-  //         });
-  
-  //         if (feeDefinition) {
-  //           fee = new FeeModel({
-  //             school: schoolId,
-  //             student: payment.student,
-  //             grNumber: payment.grNumber,
-  //             type: feePaid.type,
-  //             amount: feePaid.amount,
-  //             dueDate: feeDefinition.dueDate,
-  //             month: feePaid.month,
-  //             year: feePaid.year,
-  //             description: feeDefinition.description,
-  //             status: 'paid'
-  //           });
-  //         } else {
-  //           // Create a new fee document even without a definition
-  //           fee = new FeeModel({
-  //             school: schoolId,
-  //             student: payment.student,
-  //             grNumber: payment.grNumber,
-  //             type: feePaid.type,
-  //             amount: feePaid.amount,
-  //             dueDate: new Date(feePaid.year, feePaid.month - 1, 28), // Last day of the month as fallback
-  //             month: feePaid.month,
-  //             year: feePaid.year,
-  //             status: 'paid'
-  //           });
-  //         }
-  //       } else {
-  //         // Update existing fee document
-  //         fee.status = 'paid';
-  //       }
-  
-  //       // Add payment details to the fee document
-  //       fee.paymentDetails = {
-  //         transactionId: razorpay_payment_id,
-  //         paymentDate: payment.paymentDate,
-  //         paymentMethod: payment.paymentMethod,
-  //         receiptNumber: payment.receiptNumber
-  //       };
-  
-  //       await fee.save();
-  //     }
-  
-  //     res.json({ message: 'Payment verified successfully', payment });
-  //   } catch (error) {
-  //     console.error('Verification Error:', error); // Add logging for debugging
-  //     res.status(500).json({ error: error.message });
-  //   }
-  // },
 
   verifyPayment: async (req, res) => {
     try {
@@ -2559,6 +2109,46 @@ const studentController = {
         })),
       });
     } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  },
+
+  downloadCertificate: async (req, res) => {
+    try {
+      const { studentId, certificateId, documentKey } = req.params;
+      const schoolId = req.school._id.toString();
+      const connection = req.connection;
+      const Certificate = require('../models/Certificate')(connection);
+      const { streamS3Object } = require('../config/s3Upload');
+  
+      if (studentId !== req.user._id.toString()) {
+        return res.status(403).json({ message: 'Unauthorized: You can only download your own certificates' });
+      }
+  
+      const certificate = await Certificate.findOne({
+        _id: certificateId,
+        school: schoolId,
+        student: studentId,
+        isSentToStudent: true,
+      });
+  
+      if (!certificate) {
+        return res.status(404).json({ message: 'Certificate not found or not available for download' });
+      }
+  
+      const key = certificate.signedDocumentKey && certificate.signedDocumentKey.endsWith(documentKey)
+        ? certificate.signedDocumentKey
+        : certificate.documentKey && certificate.documentKey.endsWith(documentKey)
+        ? certificate.documentKey
+        : null;
+  
+      if (!key) {
+        return res.status(404).json({ message: 'Document not found' });
+      }
+  
+      await streamS3Object(key, res);
+    } catch (error) {
+      console.error('Error streaming certificate:', error);
       res.status(500).json({ error: error.message });
     }
   },
