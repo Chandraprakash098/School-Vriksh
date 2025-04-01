@@ -104,11 +104,11 @@ const upload = multer({
 // Assigned Classes
 router.get('/assigned-classes', [auth, roleCheck(['teacher'])], teacherController.getAssignedClasses);
 
-// Class Students (for class teachers)
+// Class Students (for class teachers to mark atendace)
 router.get('/classes/:classId/students', [auth, roleCheck(['teacher'])], teacherController.getClassStudents);
 
 router.get('/classes/:classId/subjects', [auth, roleCheck(['teacher'])], teacherController.getSubjectsForClass);
-// Class Students (for entering marks or viewing as class teacher)
+// Class Students (for entering marks or viewing as subject teacher)
 router.get('/classes/:classId/sub', [auth, roleCheck(['teacher'])], teacherController.getClassStudentsForSubject);
 
 // Schedule

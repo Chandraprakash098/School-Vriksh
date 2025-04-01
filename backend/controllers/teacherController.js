@@ -1161,6 +1161,134 @@ const teacherController = {
 
 
   // Get classes where the teacher is assigned (class teacher or subject teacher)
+  // getAssignedClasses: async (req, res) => {
+  //   try {
+  //     const teacherId = req.user._id;
+  //     const schoolId = req.school._id.toString();
+  //     const connection = req.connection;
+  //     const Class = require('../models/Class')(connection);
+  //     const Subject = require('../models/Subject')(connection);
+
+  //     // Find classes where the teacher is the class teacher
+  //     const classTeacherClasses = await Class.find({
+  //       school: schoolId,
+  //       classTeacher: teacherId,
+  //     }).select('name division _id');
+
+  //     // Find classes where the teacher is a subject teacher
+  //     const subjectClasses = await Subject.find({
+  //       school: schoolId,
+  //       'teachers.teacher': teacherId,
+  //     })
+  //       .populate('class', 'name division')
+  //       .lean();
+
+  //     const subjectTeacherClasses = subjectClasses.map((subject) => ({
+  //       _id: subject.class._id,
+  //       name: subject.class.name,
+  //       division: subject.class.division,
+  //       subject: subject.name,
+  //     }));
+
+  //     // Combine and deduplicate classes
+  //     const allClasses = [
+  //       ...classTeacherClasses.map((c) => ({
+  //         _id: c._id,
+  //         name: c.name,
+  //         division: c.division,
+  //         role: 'classTeacher',
+  //       })),
+  //       ...subjectTeacherClasses.map((c) => ({
+  //         _id: c._id,
+  //         name: c.name,
+  //         division: c.division,
+  //         role: 'subjectTeacher',
+  //         subject: c.subject,
+  //       })),
+  //     ];
+
+  //     const uniqueClasses = Array.from(
+  //       new Map(allClasses.map((item) => [item._id.toString(), item])).values()
+  //     );
+
+  //     res.json(uniqueClasses);
+  //   } catch (error) {
+  //     res.status(500).json({ error: error.message });
+  //   }
+  // },
+
+  // getAssignedClasses: async (req, res) => {
+  //   try {
+  //     const teacherId = req.user._id;
+  //     const schoolId = req.school._id.toString();
+  //     const connection = req.connection;
+  //     const Class = require('../models/Class')(connection);
+  //     const Subject = require('../models/Subject')(connection);
+  
+  //     // Find classes where the teacher is the class teacher
+  //     const classTeacherClasses = await Class.find({
+  //       school: schoolId,
+  //       classTeacher: teacherId,
+  //     }).select('name division _id');
+  
+  //     // Find classes where the teacher is a subject teacher
+  //     const subjectClasses = await Subject.find({
+  //       school: schoolId,
+  //       'teachers.teacher': teacherId,
+  //     })
+  //       .populate('class', 'name division')
+  //       .lean();
+  
+  //     const subjectTeacherClasses = subjectClasses.map((subject) => ({
+  //       _id: subject.class._id,
+  //       name: subject.class.name,
+  //       division: subject.class.division,
+  //       subject: subject.name,
+  //     }));
+  
+  //     // Create a map to combine roles
+  //     const classMap = new Map();
+  
+  //     // Add class teacher roles
+  //     classTeacherClasses.forEach((c) => {
+  //       classMap.set(c._id.toString(), {
+  //         _id: c._id,
+  //         name: c.name,
+  //         division: c.division,
+  //         roles: ['classTeacher'],
+  //       });
+  //     });
+  
+  //     // Add subject teacher roles
+  //     subjectTeacherClasses.forEach((c) => {
+  //       const classIdStr = c._id.toString();
+  //       if (classMap.has(classIdStr)) {
+  //         // If class already exists (teacher is classTeacher), add subjectTeacher role
+  //         const existing = classMap.get(classIdStr);
+  //         existing.roles.push('subjectTeacher');
+  //         existing.subjects = existing.subjects || [];
+  //         existing.subjects.push(c.subject);
+  //       } else {
+  //         // New class, only subjectTeacher role
+  //         classMap.set(classIdStr, {
+  //           _id: c._id,
+  //           name: c.name,
+  //           division: c.division,
+  //           roles: ['subjectTeacher'],
+  //           subjects: [c.subject],
+  //         });
+  //       }
+  //     });
+  
+  //     // Convert map to array
+  //     const uniqueClasses = Array.from(classMap.values());
+  
+  //     res.json(uniqueClasses);
+  //   } catch (error) {
+  //     res.status(500).json({ error: error.message });
+  //   }
+  // },
+
   getAssignedClasses: async (req, res) => {
     try {
       const teacherId = req.user._id;
@@ -1168,13 +1296,13 @@ const teacherController = {
       const connection = req.connection;
       const Class = require('../models/Class')(connection);
       const Subject = require('../models/Subject')(connection);
-
+  
       // Find classes where the teacher is the class teacher
       const classTeacherClasses = await Class.find({
         school: schoolId,
         classTeacher: teacherId,
       }).select('name division _id');
-
+  
       // Find classes where the teacher is a subject teacher
       const subjectClasses = await Subject.find({
         school: schoolId,
@@ -1182,41 +1310,60 @@ const teacherController = {
       })
         .populate('class', 'name division')
         .lean();
-
+  
+      // Map subject teacher classes
       const subjectTeacherClasses = subjectClasses.map((subject) => ({
         _id: subject.class._id,
         name: subject.class.name,
         division: subject.class.division,
         subject: subject.name,
       }));
-
-      // Combine and deduplicate classes
-      const allClasses = [
-        ...classTeacherClasses.map((c) => ({
+  
+      // Identify the class where the teacher is the class teacher
+      let classTeacherClass = null;
+      if (classTeacherClasses.length > 0) {
+        const c = classTeacherClasses[0]; // Assuming a teacher can be class teacher for only one class
+        classTeacherClass = {
           _id: c._id,
           name: c.name,
           division: c.division,
-          role: 'classTeacher',
-        })),
-        ...subjectTeacherClasses.map((c) => ({
-          _id: c._id,
-          name: c.name,
-          division: c.division,
-          role: 'subjectTeacher',
-          subject: c.subject,
-        })),
-      ];
-
-      const uniqueClasses = Array.from(
-        new Map(allClasses.map((item) => [item._id.toString(), item])).values()
-      );
-
-      res.json(uniqueClasses);
+          displayName: `${c.name}${c.division ? c.division : ''}`, // Format as "Class 1A"
+        };
+      }
+  
+      // Do NOT filter out the class teacher's class from subjectTeacherClasses
+      const formattedSubjectTeacherClasses = subjectTeacherClasses
+        .reduce((acc, curr) => {
+          const existing = acc.find((item) => item._id.toString() === curr._id.toString());
+          if (existing) {
+            existing.subjects.push(curr.subject);
+          } else {
+            acc.push({
+              _id: curr._id,
+              name: curr.name,
+              division: curr.division,
+              displayName: `${curr.name}${curr.division ? curr.division : ''}`, // Format as "Class 1A"
+              subjects: [curr.subject],
+            });
+          }
+          return acc;
+        }, []);
+  
+      // Format the response
+      res.json({
+        classTeacherClass: classTeacherClass
+          ? { ...classTeacherClass }
+          : null,
+        subjectTeacherClasses: formattedSubjectTeacherClasses,
+      });
     } catch (error) {
       res.status(500).json({ error: error.message });
     }
   },
+ 
 
+  
+ 
   // View schedule
   getSchedule: async (req, res) => {
     try {
@@ -1285,7 +1432,7 @@ const teacherController = {
         _id: classId,
         school: schoolId,
         classTeacher: teacherId,
-      }).populate('students', 'name rollNumber');
+      }).populate('students', 'name studentDetails.grNumber');
 
       if (!classInfo) {
         return res.status(403).json({
@@ -2078,6 +2225,17 @@ const isSameDay = (date1, date2) => {
     d1.getMonth() === d2.getMonth() &&
     d1.getDate() === d2.getDate()
   );
+};
+
+const formatClassName = (name) => {
+  const match = name.match(/Class (\d+)/i);
+  if (!match) return name;
+  const number = parseInt(match[1], 10);
+  let suffix = 'th';
+  if (number === 1) suffix = 'st';
+  else if (number === 2) suffix = 'nd';
+  else if (number === 3) suffix = 'rd';
+  return `Class ${number}${suffix}`;
 };
 
 module.exports = teacherController;
