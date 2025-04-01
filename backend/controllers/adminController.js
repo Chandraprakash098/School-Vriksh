@@ -693,6 +693,52 @@ const adminController = {
     }
   },
 
+  // getAllTeacherAssignments: async (req, res) => {
+  //   try {
+  //     const schoolId = req.school._id;
+  //     const connection = req.connection;
+  //     const TeacherAssignment = getModel('TeacherAssignment', connection);
+  //     const User = getModel('User', connection);
+  //     const Class = getModel('Class', connection);
+  //     const Subject = getModel('Subject', connection);
+
+  //     const assignments = await TeacherAssignment.find({ school: schoolId })
+  //       .populate('teacher', 'name email profile', User)
+  //       .populate('classTeacherAssignment.class', 'name division', Class)
+  //       .populate('subjectAssignments.class', 'name division', Class)
+  //       .populate('subjectAssignments.subject', 'name', Subject)
+  //       .lean();
+
+  //     const classAssignmentMap = {};
+  //     const subjectAssignmentMap = {};
+
+  //     assignments.forEach(assignment => {
+  //       if (assignment.classTeacherAssignment?.class) {
+  //         const classId = assignment.classTeacherAssignment.class._id.toString();
+  //         classAssignmentMap[classId] = {
+  //           teacher: { id: assignment.teacher._id, name: assignment.teacher.name, email: assignment.teacher.email },
+  //           assignedAt: assignment.classTeacherAssignment.assignedAt,
+  //         };
+  //       }
+
+  //       assignment.subjectAssignments.forEach(subAssignment => {
+  //         const classId = subAssignment.class._id.toString();
+  //         const subjectId = subAssignment.subject._id.toString();
+  //         const key = `${classId}:${subjectId}`;
+  //         if (!subjectAssignmentMap[key]) subjectAssignmentMap[key] = [];
+  //         subjectAssignmentMap[key].push({
+  //           teacher: { id: assignment.teacher._id, name: assignment.teacher.name, email: assignment.teacher.email },
+  //           assignedAt: subAssignment.assignedAt,
+  //         });
+  //       });
+  //     });
+
+  //     res.json({ raw: assignments, classTeachers: classAssignmentMap, subjectTeachers: subjectAssignmentMap });
+  //   } catch (error) {
+  //     res.status(500).json({ error: error.message });
+  //   }
+  // },
+
   getAllTeacherAssignments: async (req, res) => {
     try {
       const schoolId = req.school._id;
@@ -701,39 +747,84 @@ const adminController = {
       const User = getModel('User', connection);
       const Class = getModel('Class', connection);
       const Subject = getModel('Subject', connection);
-
+  
+      // Fetch all teacher assignments with populated data
       const assignments = await TeacherAssignment.find({ school: schoolId })
         .populate('teacher', 'name email profile', User)
         .populate('classTeacherAssignment.class', 'name division', Class)
         .populate('subjectAssignments.class', 'name division', Class)
         .populate('subjectAssignments.subject', 'name', Subject)
         .lean();
-
+  
+      // Maps to organize assignments
       const classAssignmentMap = {};
       const subjectAssignmentMap = {};
-
+      const teacherAssignments = {}; // New map to track all teachers comprehensively
+  
+      // Process each assignment
       assignments.forEach(assignment => {
+        const teacherId = assignment.teacher._id.toString();
+        
+        // Initialize teacher entry if not already present
+        if (!teacherAssignments[teacherId]) {
+          teacherAssignments[teacherId] = {
+            teacher: { id: teacherId, name: assignment.teacher.name, email: assignment.teacher.email },
+            classTeacher: null,
+            subjectAssignments: []
+          };
+        }
+  
+        // Handle class teacher assignment
         if (assignment.classTeacherAssignment?.class) {
           const classId = assignment.classTeacherAssignment.class._id.toString();
           classAssignmentMap[classId] = {
-            teacher: { id: assignment.teacher._id, name: assignment.teacher.name, email: assignment.teacher.email },
+            teacher: { id: teacherId, name: assignment.teacher.name, email: assignment.teacher.email },
+            class: { id: classId, name: assignment.classTeacherAssignment.class.name, division: assignment.classTeacherAssignment.class.division },
             assignedAt: assignment.classTeacherAssignment.assignedAt,
           };
+          teacherAssignments[teacherId].classTeacher = {
+            class: { id: classId, name: assignment.classTeacherAssignment.class.name, division: assignment.classTeacherAssignment.class.division },
+            assignedAt: assignment.classTeacherAssignment.assignedAt
+          };
+        } else {
+          teacherAssignments[teacherId].classTeacher = null; // Explicitly indicate no class teacher role
         }
-
-        assignment.subjectAssignments.forEach(subAssignment => {
-          const classId = subAssignment.class._id.toString();
-          const subjectId = subAssignment.subject._id.toString();
-          const key = `${classId}:${subjectId}`;
-          if (!subjectAssignmentMap[key]) subjectAssignmentMap[key] = [];
-          subjectAssignmentMap[key].push({
-            teacher: { id: assignment.teacher._id, name: assignment.teacher.name, email: assignment.teacher.email },
-            assignedAt: subAssignment.assignedAt,
+  
+        // Handle subject assignments
+        if (assignment.subjectAssignments.length > 0) {
+          assignment.subjectAssignments.forEach(subAssignment => {
+            const classId = subAssignment.class._id.toString();
+            const subjectId = subAssignment.subject._id.toString();
+            const key = `${classId}:${subjectId}`;
+            
+            if (!subjectAssignmentMap[key]) subjectAssignmentMap[key] = [];
+            subjectAssignmentMap[key].push({
+              teacher: { id: teacherId, name: assignment.teacher.name, email: assignment.teacher.email },
+              class: { id: classId, name: subAssignment.class.name, division: subAssignment.class.division },
+              subject: { id: subjectId, name: subAssignment.subject.name },
+              assignedAt: subAssignment.assignedAt,
+            });
+  
+            teacherAssignments[teacherId].subjectAssignments.push({
+              class: { id: classId, name: subAssignment.class.name, division: subAssignment.class.division },
+              subject: { id: subjectId, name: subAssignment.subject.name },
+              assignedAt: subAssignment.assignedAt
+            });
           });
-        });
+        } else {
+          teacherAssignments[teacherId].subjectAssignments = []; // Explicitly indicate no subject assignments
+        }
       });
-
-      res.json({ raw: assignments, classTeachers: classAssignmentMap, subjectTeachers: subjectAssignmentMap });
+  
+      // Convert teacherAssignments map to array for easier consumption
+      const allTeacherAssignments = Object.values(teacherAssignments);
+  
+      res.json({
+        raw: assignments, // Raw data with populated fields
+        classTeachers: classAssignmentMap, // Class-based class teacher assignments
+        subjectTeachers: subjectAssignmentMap, // Class-subject-based subject assignments
+        teachers: allTeacherAssignments // Comprehensive per-teacher breakdown
+      });
     } catch (error) {
       res.status(500).json({ error: error.message });
     }
