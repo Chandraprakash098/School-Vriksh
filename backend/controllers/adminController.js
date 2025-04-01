@@ -189,37 +189,159 @@ const adminController = {
     }
   },
 
+  // createTeacher: async (req, res) => {
+  //   const connection = req.connection;
+  //   if (connection.readyState !== 1) {
+  //     return res.status(500).json({ success: false, message: 'Database connection not ready' });
+  //   }
+
+  //   const session = await connection.startSession();
+  //   session.startTransaction();
+
+  //   try {
+  //     const {
+  //       name, email, password, phone, address, photo, teachingClass, selectedSubjects, classTeacherOf,
+  //     } = req.body;
+  //     const schoolId = req.school._id;
+  //     const User = getModel('User', connection);
+  //     const Class = getModel('Class', connection);
+  //     const Subject = getModel('Subject', connection);
+  //     const TeacherAssignment = getModel('TeacherAssignment', connection);
+
+  //     if (!teachingClass || !selectedSubjects || !Array.isArray(selectedSubjects) || selectedSubjects.length === 0) {
+  //       return res.status(400).json({ success: false, message: 'Class and subjects required' });
+  //     }
+
+  //     const existingUser = await User.findOne({ email }).lean();
+  //     if (existingUser) return res.status(400).json({ success: false, message: 'Email already registered' });
+
+  //     const subjects = await Subject.find({ _id: { $in: selectedSubjects }, class: teachingClass, school: schoolId }).lean();
+  //     if (subjects.length !== selectedSubjects.length) {
+  //       return res.status(400).json({ success: false, message: 'Invalid subjects for class' });
+  //     }
+
+  //     const assignedSubjects = subjects.filter(s => s.teachers?.length > 0);
+  //     if (assignedSubjects.length > 0) {
+  //       return res.status(400).json({
+  //         success: false,
+  //         message: `Cannot assign already assigned subjects: ${assignedSubjects.map(s => s.name).join(', ')}`,
+  //         assignedSubjects: assignedSubjects.map(s => ({ name: s.name, assignedTo: s.teachers[0].teacher })),
+  //       });
+  //     }
+
+  //     if (classTeacherOf) {
+  //       const classData = await Class.findOne({ _id: classTeacherOf, school: schoolId }).lean();
+  //       if (!classData) return res.status(400).json({ success: false, message: 'Class not found' });
+  //       if (classData.classTeacher) return res.status(400).json({ success: false, message: 'Class already has a teacher' });
+  //     }
+
+  //     const salt = await bcrypt.genSalt(10);
+  //     const hashedPassword = await bcrypt.hash(password, salt);
+  //     const permissions = {
+  //       canTakeAttendance: classTeacherOf ? [classTeacherOf] : [],
+  //       canEnterMarks: selectedSubjects.map(subjectId => ({ class: teachingClass, subject: subjectId })),
+  //       canPublishAnnouncements: true,
+  //       canManageInventory: false,
+  //       canManageFees: false,
+  //       canManageLibrary: false,
+  //     };
+
+  //     const teacher = new User({
+  //       school: schoolId,
+  //       name,
+  //       email,
+  //       password: hashedPassword,
+  //       role: 'teacher',
+  //       profile: { phone, address, photo },
+  //       permissions,
+  //     });
+  //     await teacher.save({ session });
+
+  //     const teacherAssignment = new TeacherAssignment({
+  //       school: schoolId,
+  //       teacher: teacher._id,
+  //       classTeacherAssignment: classTeacherOf ? { class: classTeacherOf, assignedAt: new Date() } : null,
+  //       subjectAssignments: selectedSubjects.map(subjectId => ({ class: teachingClass, subject: subjectId, assignedAt: new Date() })),
+  //       academicYear: getCurrentAcademicYear(),
+  //     });
+  //     await teacherAssignment.save({ session });
+
+  //     if (classTeacherOf) {
+  //       await Class.findByIdAndUpdate(classTeacherOf, { classTeacher: teacher._id, lastUpdated: new Date(), updatedBy: req.user._id }, { session });
+  //     }
+
+  //     await Promise.all(selectedSubjects.map(subjectId =>
+  //       Subject.findByIdAndUpdate(subjectId, { $push: { teachers: { teacher: teacher._id, assignedAt: new Date() } } }, { session })
+  //     ));
+
+  //     await session.commitTransaction();
+
+  //     const populatedTeacher = await User.findById(teacher._id)
+  //       .populate('permissions.canTakeAttendance', 'name division', Class)
+  //       .populate('permissions.canEnterMarks.subject', 'name', Subject)
+  //       .populate('permissions.canEnterMarks.class', 'name division', Class)
+  //       .lean();
+
+  //     const populatedAssignment = await TeacherAssignment.findById(teacherAssignment._id)
+  //       .populate('classTeacherAssignment.class', 'name division', Class)
+  //       .populate('subjectAssignments.class', 'name division', Class)
+  //       .populate('subjectAssignments.subject', 'name', Subject)
+  //       .lean();
+
+  //     res.status(201).json({
+  //       success: true,
+  //       teacher: populatedTeacher,
+  //       assignment: populatedAssignment,
+  //       message: 'Teacher created successfully',
+  //     });
+  //   } catch (error) {
+  //     await session.abortTransaction();
+  //     res.status(500).json({ success: false, message: 'Failed to create teacher', error: error.message });
+  //   } finally {
+  //     session.endSession();
+  //   }
+  // },
+
   createTeacher: async (req, res) => {
     const connection = req.connection;
     if (connection.readyState !== 1) {
       return res.status(500).json({ success: false, message: 'Database connection not ready' });
     }
-
+  
     const session = await connection.startSession();
     session.startTransaction();
-
+  
     try {
       const {
-        name, email, password, phone, address, photo, teachingClass, selectedSubjects, classTeacherOf,
-      } = req.body;
+        name, email, password, phone, address, photo, subjectAssignments, classTeacherOf,
+      } = req.body; // Changed `teachingClass, selectedSubjects` to `subjectAssignments`
       const schoolId = req.school._id;
       const User = getModel('User', connection);
       const Class = getModel('Class', connection);
       const Subject = getModel('Subject', connection);
       const TeacherAssignment = getModel('TeacherAssignment', connection);
-
-      if (!teachingClass || !selectedSubjects || !Array.isArray(selectedSubjects) || selectedSubjects.length === 0) {
-        return res.status(400).json({ success: false, message: 'Class and subjects required' });
+  
+      // Expect `subjectAssignments` as an array of { classId, subjectId }
+      if (!subjectAssignments || !Array.isArray(subjectAssignments) || subjectAssignments.length === 0) {
+        return res.status(400).json({ success: false, message: 'Subject assignments are required' });
       }
-
+  
       const existingUser = await User.findOne({ email }).lean();
       if (existingUser) return res.status(400).json({ success: false, message: 'Email already registered' });
-
-      const subjects = await Subject.find({ _id: { $in: selectedSubjects }, class: teachingClass, school: schoolId }).lean();
-      if (subjects.length !== selectedSubjects.length) {
-        return res.status(400).json({ success: false, message: 'Invalid subjects for class' });
+  
+      // Validate subject assignments across multiple classes
+      const subjectIds = subjectAssignments.map(s => s.subjectId);
+      const classIds = [...new Set(subjectAssignments.map(s => s.classId))];
+      const subjects = await Subject.find({ 
+        _id: { $in: subjectIds }, 
+        class: { $in: classIds }, 
+        school: schoolId 
+      }).lean();
+  
+      if (subjects.length !== subjectIds.length) {
+        return res.status(400).json({ success: false, message: 'Invalid subjects for specified classes' });
       }
-
+  
       const assignedSubjects = subjects.filter(s => s.teachers?.length > 0);
       if (assignedSubjects.length > 0) {
         return res.status(400).json({
@@ -228,24 +350,24 @@ const adminController = {
           assignedSubjects: assignedSubjects.map(s => ({ name: s.name, assignedTo: s.teachers[0].teacher })),
         });
       }
-
+  
       if (classTeacherOf) {
         const classData = await Class.findOne({ _id: classTeacherOf, school: schoolId }).lean();
         if (!classData) return res.status(400).json({ success: false, message: 'Class not found' });
         if (classData.classTeacher) return res.status(400).json({ success: false, message: 'Class already has a teacher' });
       }
-
+  
       const salt = await bcrypt.genSalt(10);
       const hashedPassword = await bcrypt.hash(password, salt);
       const permissions = {
         canTakeAttendance: classTeacherOf ? [classTeacherOf] : [],
-        canEnterMarks: selectedSubjects.map(subjectId => ({ class: teachingClass, subject: subjectId })),
+        canEnterMarks: subjectAssignments.map(({ classId, subjectId }) => ({ class: classId, subject: subjectId })),
         canPublishAnnouncements: true,
         canManageInventory: false,
         canManageFees: false,
         canManageLibrary: false,
       };
-
+  
       const teacher = new User({
         school: schoolId,
         name,
@@ -256,38 +378,42 @@ const adminController = {
         permissions,
       });
       await teacher.save({ session });
-
+  
       const teacherAssignment = new TeacherAssignment({
         school: schoolId,
         teacher: teacher._id,
         classTeacherAssignment: classTeacherOf ? { class: classTeacherOf, assignedAt: new Date() } : null,
-        subjectAssignments: selectedSubjects.map(subjectId => ({ class: teachingClass, subject: subjectId, assignedAt: new Date() })),
+        subjectAssignments: subjectAssignments.map(({ classId, subjectId }) => ({ 
+          class: classId, 
+          subject: subjectId, 
+          assignedAt: new Date() 
+        })),
         academicYear: getCurrentAcademicYear(),
       });
       await teacherAssignment.save({ session });
-
+  
       if (classTeacherOf) {
         await Class.findByIdAndUpdate(classTeacherOf, { classTeacher: teacher._id, lastUpdated: new Date(), updatedBy: req.user._id }, { session });
       }
-
-      await Promise.all(selectedSubjects.map(subjectId =>
+  
+      await Promise.all(subjectAssignments.map(({ subjectId }) =>
         Subject.findByIdAndUpdate(subjectId, { $push: { teachers: { teacher: teacher._id, assignedAt: new Date() } } }, { session })
       ));
-
+  
       await session.commitTransaction();
-
+  
       const populatedTeacher = await User.findById(teacher._id)
         .populate('permissions.canTakeAttendance', 'name division', Class)
         .populate('permissions.canEnterMarks.subject', 'name', Subject)
         .populate('permissions.canEnterMarks.class', 'name division', Class)
         .lean();
-
+  
       const populatedAssignment = await TeacherAssignment.findById(teacherAssignment._id)
         .populate('classTeacherAssignment.class', 'name division', Class)
         .populate('subjectAssignments.class', 'name division', Class)
         .populate('subjectAssignments.subject', 'name', Subject)
         .lean();
-
+  
       res.status(201).json({
         success: true,
         teacher: populatedTeacher,
@@ -302,25 +428,143 @@ const adminController = {
     }
   },
 
+  // updateTeacherAssignments: async (req, res) => {
+  //   const connection = req.connection;
+  //   const session = await connection.startSession();
+  //   session.startTransaction();
+
+  //   try {
+  //     const { teacherId } = req.params;
+  //     const { classTeacherOf, removeClassTeacherRole, addSubjectAssignments, removeSubjectAssignments } = req.body;
+  //     const schoolId = req.school._id;
+  //     const adminId = req.user._id;
+
+  //     const User = getModel('User', connection);
+  //     const Class = getModel('Class', connection);
+  //     const Subject = getModel('Subject', connection);
+  //     const TeacherAssignment = getModel('TeacherAssignment', connection);
+
+  //     const teacher = await User.findOne({ _id: teacherId, school: schoolId, role: 'teacher' }).lean();
+  //     if (!teacher) return res.status(404).json({ message: 'Teacher not found' });
+
+  //     let teacherAssignment = await TeacherAssignment.findOne({ teacher: teacherId, school: schoolId });
+  //     if (!teacherAssignment) {
+  //       teacherAssignment = new TeacherAssignment({
+  //         school: schoolId,
+  //         teacher: teacherId,
+  //         classTeacherAssignment: null,
+  //         subjectAssignments: [],
+  //         academicYear: getCurrentAcademicYear(),
+  //       });
+  //     }
+
+  //     if (classTeacherOf) {
+  //       const newClass = await Class.findOne({ _id: classTeacherOf, school: schoolId }).lean();
+  //       if (!newClass) return res.status(400).json({ message: 'Class not found' });
+  //       if (newClass.classTeacher && newClass.classTeacher.toString() !== teacherId) {
+  //         return res.status(400).json({ message: 'Class already assigned to another teacher' });
+  //       }
+
+  //       if (teacherAssignment.classTeacherAssignment?.class?.toString() !== classTeacherOf) {
+  //         await Class.findByIdAndUpdate(
+  //           teacherAssignment.classTeacherAssignment?.class,
+  //           { $unset: { classTeacher: '' }, lastUpdated: new Date(), updatedBy: adminId },
+  //           { session }
+  //         );
+  //         await User.findByIdAndUpdate(
+  //           teacherId,
+  //           { $pull: { 'permissions.canTakeAttendance': teacherAssignment.classTeacherAssignment?.class } },
+  //           { session }
+  //         );
+  //       }
+
+  //       await Class.findByIdAndUpdate(classTeacherOf, { classTeacher: teacherId, lastUpdated: new Date(), updatedBy: adminId }, { session });
+  //       teacherAssignment.classTeacherAssignment = { class: classTeacherOf, assignedAt: new Date() };
+  //       await User.findByIdAndUpdate(teacherId, { $addToSet: { 'permissions.canTakeAttendance': classTeacherOf } }, { session });
+  //     } else if (removeClassTeacherRole && teacherAssignment.classTeacherAssignment) {
+  //       await Class.findByIdAndUpdate(
+  //         teacherAssignment.classTeacherAssignment.class,
+  //         { $unset: { classTeacher: '' }, lastUpdated: new Date(), updatedBy: adminId },
+  //         { session }
+  //       );
+  //       await User.findByIdAndUpdate(
+  //         teacherId,
+  //         { $pull: { 'permissions.canTakeAttendance': teacherAssignment.classTeacherAssignment.class } },
+  //         { session }
+  //       );
+  //       teacherAssignment.classTeacherAssignment = null;
+  //     }
+
+  //     if (addSubjectAssignments?.length) {
+  //       const validAssignments = await Promise.all(addSubjectAssignments.map(async ({ classId, subjectId }) => {
+  //         const subject = await Subject.findOne({ _id: subjectId, class: classId, school: schoolId }).lean();
+  //         if (!subject) throw new Error(`Invalid subject assignment: ${subjectId} for class ${classId}`);
+  //         return { classId, subjectId };
+  //       }));
+
+  //       for (const { classId, subjectId } of validAssignments) {
+  //         if (!teacherAssignment.subjectAssignments.some(a => a.class.toString() === classId && a.subject.toString() === subjectId)) {
+  //           teacherAssignment.subjectAssignments.push({ class: classId, subject: subjectId, assignedAt: new Date() });
+  //           await Subject.findByIdAndUpdate(subjectId, { $addToSet: { teachers: { teacher: teacherId, assignedAt: new Date() } } }, { session });
+  //           await User.findByIdAndUpdate(teacherId, { $addToSet: { 'permissions.canEnterMarks': { class: classId, subject: subjectId } } }, { session });
+  //         }
+  //       }
+  //     }
+
+  //     if (removeSubjectAssignments?.length) {
+  //       for (const { classId, subjectId } of removeSubjectAssignments) {
+  //         teacherAssignment.subjectAssignments = teacherAssignment.subjectAssignments.filter(
+  //           a => !(a.class.toString() === classId && a.subject.toString() === subjectId)
+  //         );
+  //         await Subject.findByIdAndUpdate(subjectId, { $pull: { teachers: { teacher: teacherId } } }, { session });
+  //         await User.findByIdAndUpdate(teacherId, { $pull: { 'permissions.canEnterMarks': { class: classId, subject: subjectId } } }, { session });
+  //       }
+  //     }
+
+  //     await teacherAssignment.save({ session });
+  //     await session.commitTransaction();
+
+  //     const updatedTeacher = await User.findById(teacherId)
+  //       .populate('permissions.canTakeAttendance', 'name division', Class)
+  //       .populate('permissions.canEnterMarks.subject', 'name', Subject)
+  //       .populate('permissions.canEnterMarks.class', 'name division', Class)
+  //       .lean();
+
+  //     const updatedAssignment = await TeacherAssignment.findById(teacherAssignment._id)
+  //       .populate('classTeacherAssignment.class', 'name division', Class)
+  //       .populate('subjectAssignments.class', 'name division', Class)
+  //       .populate('subjectAssignments.subject', 'name', Subject)
+  //       .lean();
+
+  //     res.json({ teacher: updatedTeacher, assignment: updatedAssignment, message: 'Teacher assignments updated successfully' });
+  //   } catch (error) {
+  //     await session.abortTransaction();
+  //     res.status(500).json({ error: error.message, message: 'Failed to update teacher assignments' });
+  //   } finally {
+  //     session.endSession();
+  //   }
+  // },
+
+
   updateTeacherAssignments: async (req, res) => {
     const connection = req.connection;
     const session = await connection.startSession();
     session.startTransaction();
-
+  
     try {
       const { teacherId } = req.params;
       const { classTeacherOf, removeClassTeacherRole, addSubjectAssignments, removeSubjectAssignments } = req.body;
       const schoolId = req.school._id;
       const adminId = req.user._id;
-
+  
       const User = getModel('User', connection);
       const Class = getModel('Class', connection);
       const Subject = getModel('Subject', connection);
       const TeacherAssignment = getModel('TeacherAssignment', connection);
-
+  
       const teacher = await User.findOne({ _id: teacherId, school: schoolId, role: 'teacher' }).lean();
       if (!teacher) return res.status(404).json({ message: 'Teacher not found' });
-
+  
       let teacherAssignment = await TeacherAssignment.findOne({ teacher: teacherId, school: schoolId });
       if (!teacherAssignment) {
         teacherAssignment = new TeacherAssignment({
@@ -331,14 +575,14 @@ const adminController = {
           academicYear: getCurrentAcademicYear(),
         });
       }
-
+  
       if (classTeacherOf) {
         const newClass = await Class.findOne({ _id: classTeacherOf, school: schoolId }).lean();
         if (!newClass) return res.status(400).json({ message: 'Class not found' });
         if (newClass.classTeacher && newClass.classTeacher.toString() !== teacherId) {
           return res.status(400).json({ message: 'Class already assigned to another teacher' });
         }
-
+  
         if (teacherAssignment.classTeacherAssignment?.class?.toString() !== classTeacherOf) {
           await Class.findByIdAndUpdate(
             teacherAssignment.classTeacherAssignment?.class,
@@ -351,7 +595,7 @@ const adminController = {
             { session }
           );
         }
-
+  
         await Class.findByIdAndUpdate(classTeacherOf, { classTeacher: teacherId, lastUpdated: new Date(), updatedBy: adminId }, { session });
         teacherAssignment.classTeacherAssignment = { class: classTeacherOf, assignedAt: new Date() };
         await User.findByIdAndUpdate(teacherId, { $addToSet: { 'permissions.canTakeAttendance': classTeacherOf } }, { session });
@@ -368,14 +612,14 @@ const adminController = {
         );
         teacherAssignment.classTeacherAssignment = null;
       }
-
+  
       if (addSubjectAssignments?.length) {
         const validAssignments = await Promise.all(addSubjectAssignments.map(async ({ classId, subjectId }) => {
           const subject = await Subject.findOne({ _id: subjectId, class: classId, school: schoolId }).lean();
           if (!subject) throw new Error(`Invalid subject assignment: ${subjectId} for class ${classId}`);
           return { classId, subjectId };
         }));
-
+  
         for (const { classId, subjectId } of validAssignments) {
           if (!teacherAssignment.subjectAssignments.some(a => a.class.toString() === classId && a.subject.toString() === subjectId)) {
             teacherAssignment.subjectAssignments.push({ class: classId, subject: subjectId, assignedAt: new Date() });
@@ -384,7 +628,7 @@ const adminController = {
           }
         }
       }
-
+  
       if (removeSubjectAssignments?.length) {
         for (const { classId, subjectId } of removeSubjectAssignments) {
           teacherAssignment.subjectAssignments = teacherAssignment.subjectAssignments.filter(
@@ -394,22 +638,22 @@ const adminController = {
           await User.findByIdAndUpdate(teacherId, { $pull: { 'permissions.canEnterMarks': { class: classId, subject: subjectId } } }, { session });
         }
       }
-
+  
       await teacherAssignment.save({ session });
       await session.commitTransaction();
-
+  
       const updatedTeacher = await User.findById(teacherId)
         .populate('permissions.canTakeAttendance', 'name division', Class)
         .populate('permissions.canEnterMarks.subject', 'name', Subject)
         .populate('permissions.canEnterMarks.class', 'name division', Class)
         .lean();
-
+  
       const updatedAssignment = await TeacherAssignment.findById(teacherAssignment._id)
         .populate('classTeacherAssignment.class', 'name division', Class)
         .populate('subjectAssignments.class', 'name division', Class)
         .populate('subjectAssignments.subject', 'name', Subject)
         .lean();
-
+  
       res.json({ teacher: updatedTeacher, assignment: updatedAssignment, message: 'Teacher assignments updated successfully' });
     } catch (error) {
       await session.abortTransaction();
