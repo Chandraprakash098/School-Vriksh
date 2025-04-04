@@ -17,8 +17,8 @@ const ownerController = {
         subscriptionDetails, 
         rteQuota,
         customFormFields,
-        razorpayKeyId,    // New field
-        razorpayKeySecret // New field
+        // razorpayKeyId,    // New field
+        // razorpayKeySecret  // New field
       } = req.body;
 
   
@@ -45,8 +45,8 @@ const ownerController = {
       //   return res.status(400).json({ error: 'Razorpay credentials are required' });
       // }
 
-      const encryptedKeyId = encrypt(razorpayKeyId);
-      const encryptedKeySecret = encrypt(razorpayKeySecret);
+      // const encryptedKeyId = encrypt(razorpayKeyId);
+      // const encryptedKeySecret = encrypt(razorpayKeySecret);
 
       // Create new school in owner_db
       const school = new School({
@@ -66,11 +66,11 @@ const ownerController = {
         rteQuota,
         customFormFields,
         
-        paymentConfig: {
-          razorpayKeyId: encryptedKeyId,
-          razorpayKeySecret: encryptedKeySecret,
-          isPaymentConfigured: true
-        },
+        // paymentConfig: {
+        //   razorpayKeyId: encryptedKeyId,
+        //   razorpayKeySecret: encryptedKeySecret,
+        //   isPaymentConfigured: true
+        // },
   
       });
       await school.save();
