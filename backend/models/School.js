@@ -70,12 +70,12 @@ const schoolSchema = new mongoose.Schema({
   paymentConfig: {
     razorpayKeyId: {
       type: String,
-      required: true,
+      required: false,
       trim: true
     },
     razorpayKeySecret: {
       type: String,
-      required: true,
+      required: false,
       trim: true,
       select: false // Prevent accidental exposure in queries
     },

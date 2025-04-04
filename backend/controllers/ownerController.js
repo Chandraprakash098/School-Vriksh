@@ -41,9 +41,9 @@ const ownerController = {
       const dbName = `school_${sanitizedName}_${timestamp}`;
       // const dbName = `school_db_${new mongoose.Types.ObjectId()}`;
 
-      if (!razorpayKeyId || !razorpayKeySecret) {
-        return res.status(400).json({ error: 'Razorpay credentials are required' });
-      }
+      // if (!razorpayKeyId || !razorpayKeySecret) {
+      //   return res.status(400).json({ error: 'Razorpay credentials are required' });
+      // }
 
       const encryptedKeyId = encrypt(razorpayKeyId);
       const encryptedKeySecret = encrypt(razorpayKeySecret);
@@ -65,11 +65,7 @@ const ownerController = {
         },
         rteQuota,
         customFormFields,
-        // paymentConfig: {
-        //   razorpayKeyId,
-        //   razorpayKeySecret,
-        //   isPaymentConfigured: true
-        // }
+        
         paymentConfig: {
           razorpayKeyId: encryptedKeyId,
           razorpayKeySecret: encryptedKeySecret,
