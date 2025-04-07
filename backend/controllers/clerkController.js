@@ -2775,56 +2775,164 @@ const clerkController = {
     }
   },
 
+  // enrollStudent: async (req, res) => {
+  //   try {
+  //     const { applicationId } = req.params;
+  //     const { classId, grNumber, password } = req.body;
+  //     const schoolId = req.school._id.toString();
+  //     const connection = req.connection;
+  //     const AdmissionApplication = require('../models/AdmissionApplication')(connection);
+  //     const Class = require('../models/Class')(connection);
+  //     const User = require('../models/User')(connection);
+  //     const School = require('../models/School')(require('../config/database').getOwnerConnection());
+
+  //     if (!password) {
+  //       return res.status(400).json({ message: 'Password is required' });
+  //     }
+
+  //     const application = await AdmissionApplication.findOne({ _id: applicationId, school: schoolId });
+  //     if (!application) {
+  //       return res.status(404).json({ message: 'Application not found' });
+  //     }
+
+  //     if (application.status !== 'approved') {
+  //       return res.status(400).json({ message: 'Only approved applications can be enrolled' });
+  //     }
+
+  //     const existingGR = await User.findOne({ 'studentDetails.grNumber': grNumber, school: schoolId });
+  //     if (existingGR) {
+  //       return res.status(400).json({ message: 'GR number already exists' });
+  //     }
+
+  //     const selectedClass = await Class.findOne({ _id: classId, school: schoolId });
+  //     if (!selectedClass) {
+  //       return res.status(404).json({ message: 'Class not found' });
+  //     }
+
+  //     if (selectedClass.students.length >= selectedClass.capacity) {
+  //       return res.status(400).json({ message: 'Class is at full capacity' });
+  //     }
+
+  //     const school = await School.findById(schoolId).select('name');
+  //     if (!school) {
+  //       return res.status(404).json({ message: 'School not found' });
+  //     }
+
+  //     const hashedPassword = await bcrypt.hash(password, 10);
+
+  //     const student = new User({
+  //       school: schoolId,
+  //       name: application.studentDetails.name,
+  //       email: application.studentDetails.email,
+  //       password: hashedPassword,
+  //       role: 'student',
+  //       status: 'active',
+  //       studentDetails: {
+  //         grNumber,
+  //         class: classId,
+  //         admissionType: application.admissionType,
+  //         parentDetails: application.parentDetails,
+  //         dob: application.studentDetails.dob,
+  //         gender: application.studentDetails.gender,
+  //       },
+  //     });
+
+  //     await student.save();
+
+  //     await Class.findByIdAndUpdate(classId, { $push: { students: student._id } });
+
+  //     application.status = 'enrolled';
+  //     application.grNumber = grNumber;
+  //     application.assignedClass = classId;
+  //     await application.save();
+
+  //     const className = `${selectedClass.name}${selectedClass.division ? ' ' + selectedClass.division : ''}`;
+
+  //     const notificationResult = await sendAdmissionNotification(
+  //       student.email,
+  //       application.studentDetails.mobile,
+  //       student.name,
+  //       password,
+  //       school.name,
+  //       className
+  //     );
+
+  //     if (!notificationResult.emailSent || !notificationResult.smsSent) {
+  //       console.warn('Notification partially failed:', notificationResult.error);
+  //     }
+
+  //     res.json({
+  //       message: 'Student enrolled successfully',
+  //       studentDetails: {
+  //         id: student._id,
+  //         name: student.name,
+  //         email: student.email,
+  //         grNumber,
+  //         class: { name: selectedClass.name, division: selectedClass.division },
+  //       },
+  //       notificationStatus: {
+  //         emailSent: notificationResult.emailSent,
+  //         smsSent: notificationResult.smsSent,
+  //       },
+  //     });
+  //   } catch (error) {
+  //     res.status(500).json({ error: error.message });
+  //   }
+  // },
+
+
   enrollStudent: async (req, res) => {
     try {
       const { applicationId } = req.params;
-      const { classId, grNumber, password } = req.body;
+      const { classId, grNumber, password, parentPassword } = req.body; // Add parentPassword
       const schoolId = req.school._id.toString();
       const connection = req.connection;
       const AdmissionApplication = require('../models/AdmissionApplication')(connection);
       const Class = require('../models/Class')(connection);
       const User = require('../models/User')(connection);
       const School = require('../models/School')(require('../config/database').getOwnerConnection());
-
-      if (!password) {
-        return res.status(400).json({ message: 'Password is required' });
+  
+      if (!password || !parentPassword) {
+        return res.status(400).json({ message: 'Student and parent passwords are required' });
       }
-
+  
       const application = await AdmissionApplication.findOne({ _id: applicationId, school: schoolId });
       if (!application) {
         return res.status(404).json({ message: 'Application not found' });
       }
-
+  
       if (application.status !== 'approved') {
         return res.status(400).json({ message: 'Only approved applications can be enrolled' });
       }
-
+  
       const existingGR = await User.findOne({ 'studentDetails.grNumber': grNumber, school: schoolId });
       if (existingGR) {
         return res.status(400).json({ message: 'GR number already exists' });
       }
-
+  
       const selectedClass = await Class.findOne({ _id: classId, school: schoolId });
       if (!selectedClass) {
         return res.status(404).json({ message: 'Class not found' });
       }
-
+  
       if (selectedClass.students.length >= selectedClass.capacity) {
         return res.status(400).json({ message: 'Class is at full capacity' });
       }
-
+  
       const school = await School.findById(schoolId).select('name');
       if (!school) {
         return res.status(404).json({ message: 'School not found' });
       }
-
-      const hashedPassword = await bcrypt.hash(password, 10);
-
+  
+      const hashedStudentPassword = await bcrypt.hash(password, 10);
+      const hashedParentPassword = await bcrypt.hash(parentPassword, 10);
+  
+      // Create Student User
       const student = new User({
         school: schoolId,
         name: application.studentDetails.name,
         email: application.studentDetails.email,
-        password: hashedPassword,
+        password: hashedStudentPassword,
         role: 'student',
         status: 'active',
         studentDetails: {
@@ -2836,19 +2944,43 @@ const clerkController = {
           gender: application.studentDetails.gender,
         },
       });
-
+  
       await student.save();
-
+  
+      // Create Parent User
+      const parent = new User({
+        school: schoolId,
+        name: application.parentDetails.name,
+        email: application.parentDetails.email,
+        password: hashedParentPassword,
+        role: 'parent',
+        status: 'active',
+        profile: {
+          phone: application.parentDetails.mobile,
+          address: application.parentDetails.address.street // Adjust based on your address structure
+        },
+        studentDetails: { // Optionally link parent to student(s)
+          children: [student._id]
+        }
+      });
+  
+      await parent.save();
+  
+      // Update student with parent reference (optional)
+      student.studentDetails.parent = parent._id;
+      await student.save();
+  
       await Class.findByIdAndUpdate(classId, { $push: { students: student._id } });
-
+  
       application.status = 'enrolled';
       application.grNumber = grNumber;
       application.assignedClass = classId;
       await application.save();
-
+  
       const className = `${selectedClass.name}${selectedClass.division ? ' ' + selectedClass.division : ''}`;
-
-      const notificationResult = await sendAdmissionNotification(
+  
+      // Notify Student
+      const studentNotification = await sendAdmissionNotification(
         student.email,
         application.studentDetails.mobile,
         student.name,
@@ -2856,13 +2988,21 @@ const clerkController = {
         school.name,
         className
       );
-
-      if (!notificationResult.emailSent || !notificationResult.smsSent) {
-        console.warn('Notification partially failed:', notificationResult.error);
-      }
-
+  
+      // Notify Parent
+      const parentNotification = await sendAdmissionNotification(
+        parent.email,
+        application.parentDetails.mobile,
+        parent.name,
+        parentPassword,
+        school.name,
+        className,
+        null,
+        'Parent Account Creation'
+      );
+  
       res.json({
-        message: 'Student enrolled successfully',
+        message: 'Student and parent enrolled successfully',
         studentDetails: {
           id: student._id,
           name: student.name,
@@ -2870,9 +3010,20 @@ const clerkController = {
           grNumber,
           class: { name: selectedClass.name, division: selectedClass.division },
         },
+        parentDetails: {
+          id: parent._id,
+          name: parent.name,
+          email: parent.email,
+        },
         notificationStatus: {
-          emailSent: notificationResult.emailSent,
-          smsSent: notificationResult.smsSent,
+          student: {
+            emailSent: studentNotification.emailSent,
+            smsSent: studentNotification.smsSent,
+          },
+          parent: {
+            emailSent: parentNotification.emailSent,
+            smsSent: parentNotification.smsSent,
+          },
         },
       });
     } catch (error) {
@@ -3452,6 +3603,134 @@ const clerkController = {
     }
   },
 
+  // registerExistingStudent: async (req, res) => {
+  //   try {
+  //     const {
+  //       name,
+  //       email,
+  //       dob,
+  //       gender,
+  //       mobile,
+  //       parentName,
+  //       parentEmail,
+  //       parentMobile,
+  //       parentOccupation,
+  //       address,
+  //       grNumber,
+  //       classId,
+  //       admissionType = 'Regular',
+  //       password,
+  //     } = req.body;
+
+  //     const schoolId = req.school._id.toString();
+  //     const connection = req.connection;
+  //     const User = require('../models/User')(connection);
+  //     const Class = require('../models/Class')(connection);
+  //     const School = require('../models/School')(require('../config/database').getOwnerConnection());
+
+  //     if (!name || !email || !dob || !gender || !mobile || !grNumber || !classId || !password) {
+  //       return res.status(400).json({ message: 'All required fields must be provided' });
+  //     }
+
+  //     const emailRegex = /^[a-zA-Z0-9._-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,6}$/;
+  //     if (!emailRegex.test(email)) {
+  //       return res.status(400).json({ message: 'Invalid email format' });
+  //     }
+
+  //     const mobileRegex = /^[0-9]{10}$/;
+  //     if (!mobileRegex.test(mobile) || (parentMobile && !mobileRegex.test(parentMobile))) {
+  //       return res.status(400).json({ message: 'Mobile number must be 10 digits' });
+  //     }
+
+  //     const existingGR = await User.findOne({ 'studentDetails.grNumber': grNumber, school: schoolId });
+  //     if (existingGR) {
+  //       return res.status(400).json({ message: 'GR number already exists' });
+  //     }
+
+  //     const existingEmail = await User.findOne({ email, school: schoolId });
+  //     if (existingEmail) {
+  //       return res.status(400).json({ message: 'Email already registered' });
+  //     }
+
+  //     const selectedClass = await Class.findOne({ _id: classId, school: schoolId });
+  //     if (!selectedClass) {
+  //       return res.status(404).json({ message: 'Class not found' });
+  //     }
+
+  //     if (selectedClass.students.length >= selectedClass.capacity) {
+  //       return res.status(400).json({ message: 'Class is at full capacity' });
+  //     }
+
+  //     const school = await School.findById(schoolId).select('name');
+  //     if (!school) {
+  //       return res.status(404).json({ message: 'School not found' });
+  //     }
+
+  //     const hashedPassword = await bcrypt.hash(password, 10);
+
+  //     const student = new User({
+  //       school: schoolId,
+  //       name,
+  //       email,
+  //       password: hashedPassword,
+  //       role: 'student',
+  //       status: 'active',
+  //       studentDetails: {
+  //         grNumber,
+  //         class: classId,
+  //         admissionType,
+  //         parentDetails: {
+  //           name: parentName,
+  //           email: parentEmail,
+  //           mobile: parentMobile,
+  //           occupation: parentOccupation,
+  //           address: address || {},
+  //         },
+  //         dob: new Date(dob),
+  //         gender,
+  //       },
+  //     });
+
+  //     await student.save();
+
+  //     await Class.findByIdAndUpdate(classId, { $push: { students: student._id } });
+
+  //     const className = `${selectedClass.name}${selectedClass.division ? ' ' + selectedClass.division : ''}`;
+
+  //     const notificationResult = await sendAdmissionNotification(
+  //       student.email,
+  //       mobile,
+  //       student.name,
+  //       password,
+  //       school.name,
+  //       className,
+  //       grNumber
+  //     );
+
+  //     if (!notificationResult.emailSent || !notificationResult.smsSent) {
+  //       console.warn('Notification partially failed:', notificationResult.error);
+  //     }
+
+  //     res.status(201).json({
+  //       message: 'Existing student registered successfully',
+  //       studentDetails: {
+  //         id: student._id,
+  //         name: student.name,
+  //         email: student.email,
+  //         grNumber,
+  //         class: { name: selectedClass.name, division: selectedClass.division },
+  //       },
+  //       notificationStatus: {
+  //         emailSent: notificationResult.emailSent,
+  //         smsSent: notificationResult.smsSent,
+  //       },
+  //     });
+  //   } catch (error) {
+  //     console.error('Error registering existing student:', error);
+  //     res.status(500).json({ error: error.message });
+  //   }
+  // },
+
   registerExistingStudent: async (req, res) => {
     try {
       const {
@@ -3469,59 +3748,84 @@ const clerkController = {
         classId,
         admissionType = 'Regular',
         password,
+        parentPassword, // New field for parent password
       } = req.body;
-
+  
       const schoolId = req.school._id.toString();
       const connection = req.connection;
       const User = require('../models/User')(connection);
       const Class = require('../models/Class')(connection);
       const School = require('../models/School')(require('../config/database').getOwnerConnection());
-
-      if (!name || !email || !dob || !gender || !mobile || !grNumber || !classId || !password) {
-        return res.status(400).json({ message: 'All required fields must be provided' });
+  
+      // Validation for required fields
+      if (!name || !email || !dob || !gender || !mobile || !grNumber || !classId || !password || !parentPassword) {
+        return res.status(400).json({ message: 'All required fields, including student and parent passwords, must be provided' });
       }
-
+  
+      // Email validation
       const emailRegex = /^[a-zA-Z0-9._-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,6}$/;
       if (!emailRegex.test(email)) {
-        return res.status(400).json({ message: 'Invalid email format' });
+        return res.status(400).json({ message: 'Invalid student email format' });
       }
-
+      if (parentEmail && !emailRegex.test(parentEmail)) {
+        return res.status(400).json({ message: 'Invalid parent email format' });
+      }
+  
+      // Mobile validation
       const mobileRegex = /^[0-9]{10}$/;
-      if (!mobileRegex.test(mobile) || (parentMobile && !mobileRegex.test(parentMobile))) {
-        return res.status(400).json({ message: 'Mobile number must be 10 digits' });
+      if (!mobileRegex.test(mobile)) {
+        return res.status(400).json({ message: 'Student mobile number must be 10 digits' });
       }
-
+      if (parentMobile && !mobileRegex.test(parentMobile)) {
+        return res.status(400).json({ message: 'Parent mobile number must be 10 digits' });
+      }
+  
+      // Check for existing GR number
       const existingGR = await User.findOne({ 'studentDetails.grNumber': grNumber, school: schoolId });
       if (existingGR) {
         return res.status(400).json({ message: 'GR number already exists' });
       }
-
-      const existingEmail = await User.findOne({ email, school: schoolId });
-      if (existingEmail) {
-        return res.status(400).json({ message: 'Email already registered' });
+  
+      // Check for existing student email
+      const existingStudentEmail = await User.findOne({ email, school: schoolId });
+      if (existingStudentEmail) {
+        return res.status(400).json({ message: 'Student email already registered' });
       }
-
+  
+      // Check for existing parent email (optional, depending on your policy)
+      if (parentEmail) {
+        const existingParentEmail = await User.findOne({ email: parentEmail, school: schoolId, role: 'parent' });
+        if (existingParentEmail && !existingParentEmail.studentDetails.children.length) {
+          return res.status(400).json({ message: 'Parent email already registered with no linked students' });
+        }
+      }
+  
+      // Validate class
       const selectedClass = await Class.findOne({ _id: classId, school: schoolId });
       if (!selectedClass) {
         return res.status(404).json({ message: 'Class not found' });
       }
-
+  
       if (selectedClass.students.length >= selectedClass.capacity) {
         return res.status(400).json({ message: 'Class is at full capacity' });
       }
-
+  
+      // Validate school
       const school = await School.findById(schoolId).select('name');
       if (!school) {
         return res.status(404).json({ message: 'School not found' });
       }
-
-      const hashedPassword = await bcrypt.hash(password, 10);
-
+  
+      // Hash passwords
+      const hashedStudentPassword = await bcrypt.hash(password, 10);
+      const hashedParentPassword = await bcrypt.hash(parentPassword, 10);
+  
+      // Create Student User
       const student = new User({
         school: schoolId,
         name,
         email,
-        password: hashedPassword,
+        password: hashedStudentPassword,
         role: 'student',
         status: 'active',
         studentDetails: {
@@ -3539,14 +3843,48 @@ const clerkController = {
           gender,
         },
       });
-
+  
       await student.save();
-
+  
+      // Check if parent already exists by email, otherwise create new parent
+      let parent = parentEmail ? await User.findOne({ email: parentEmail, role: 'parent', school: schoolId }) : null;
+      if (parent) {
+        // If parent exists, link the new student
+        if (!parent.studentDetails) parent.studentDetails = {};
+        if (!parent.studentDetails.children) parent.studentDetails.children = [];
+        parent.studentDetails.children.push(student._id);
+        await parent.save();
+      } else {
+        // Create new Parent User
+        parent = new User({
+          school: schoolId,
+          name: parentName,
+          email: parentEmail || `${grNumber}_parent@${school.name.toLowerCase().replace(/\s+/g, '')}.com`, // Fallback email if not provided
+          password: hashedParentPassword,
+          role: 'parent',
+          status: 'active',
+          profile: {
+            phone: parentMobile,
+            address: address?.street || '', // Adjust based on your address structure
+          },
+          studentDetails: {
+            children: [student._id],
+          },
+        });
+        await parent.save();
+      }
+  
+      // Link student to parent
+      student.studentDetails.parent = parent._id;
+      await student.save();
+  
+      // Update class with student
       await Class.findByIdAndUpdate(classId, { $push: { students: student._id } });
-
+  
       const className = `${selectedClass.name}${selectedClass.division ? ' ' + selectedClass.division : ''}`;
-
-      const notificationResult = await sendAdmissionNotification(
+  
+      // Send notification to student
+      const studentNotification = await sendAdmissionNotification(
         student.email,
         mobile,
         student.name,
@@ -3555,13 +3893,22 @@ const clerkController = {
         className,
         grNumber
       );
-
-      if (!notificationResult.emailSent || !notificationResult.smsSent) {
-        console.warn('Notification partially failed:', notificationResult.error);
-      }
-
+  
+      // Send notification to parent
+      const parentNotification = await sendAdmissionNotification(
+        parent.email,
+        parentMobile,
+        parent.name,
+        parentPassword,
+        school.name,
+        className,
+        null,
+        'Parent Account Creation'
+      );
+  
+      // Response
       res.status(201).json({
-        message: 'Existing student registered successfully',
+        message: 'Existing student and parent registered successfully',
         studentDetails: {
           id: student._id,
           name: student.name,
@@ -3569,9 +3916,20 @@ const clerkController = {
           grNumber,
           class: { name: selectedClass.name, division: selectedClass.division },
         },
+        parentDetails: {
+          id: parent._id,
+          name: parent.name,
+          email: parent.email,
+        },
         notificationStatus: {
-          emailSent: notificationResult.emailSent,
-          smsSent: notificationResult.smsSent,
+          student: {
+            emailSent: studentNotification.emailSent,
+            smsSent: studentNotification.smsSent,
+          },
+          parent: {
+            emailSent: parentNotification.emailSent,
+            smsSent: parentNotification.smsSent,
+          },
         },
       });
     } catch (error) {

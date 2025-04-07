@@ -45,6 +45,8 @@ const userSchema = new mongoose.Schema(
         mobile: String,
         occupation: String
       },
+      parent: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }, // Reference to parent User
+      children: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
       dob: Date,
       gender: String
     }
