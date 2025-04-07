@@ -3902,7 +3902,7 @@ const clerkController = {
         parentPassword,
         school.name,
         className,
-        null,
+        grNumber,
         'Parent Account Creation'
       );
   
@@ -3937,7 +3937,6 @@ const clerkController = {
       res.status(500).json({ error: error.message });
     }
   },
-
 
 // Add this to clerkController object
 upgradeStudentClass: async (req, res) => {
@@ -4075,5 +4074,9 @@ const sendAdmissionNotification1 = async (email, mobile, studentName, password, 
     message // Optional: for debugging
   };
 };
+
+
+
+
 
 module.exports = { clerkController, upload,sendAdmissionNotification };

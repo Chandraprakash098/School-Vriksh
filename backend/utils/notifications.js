@@ -118,8 +118,9 @@ const sendSMS = async (to, body) => {
   }
 };
 
-// Combined notification function with schoolName and className
-// const sendAdmissionNotification = async (studentEmail, studentMobile, studentName, password, schoolName, className) => {
+
+
+// const sendAdmissionNotification = async (studentEmail, studentMobile, studentName, password, schoolName, className, grNumber) => {
 //   const subject = `Admission Confirmed - Login Credentials from ${schoolName}`;
 //   const emailMessage = `Dear ${studentName},\n\nYour admission has been confirmed at ${schoolName}!\n\nYou have been admitted to class: ${className}.\nGR Number: ${grNumber}\n\nLogin Credentials:\nEmail: ${studentEmail}\nPassword: ${password}\n\nPlease log in to the portal to access your details.\n\nRegards,\n${schoolName} Administration`;
 
@@ -128,7 +129,7 @@ const sendSMS = async (to, body) => {
 //     await sendEmail(studentEmail, subject, emailMessage);
 
 //     // Send SMS (shortened due to character limits, e.g., 160 chars for standard SMS)
-//     const smsMessage = `Dear ${studentName}, your admission at ${schoolName} in ${className} is confirmed! GR: ${grNumber},Login: ${studentEmail}, Pass: ${password}`;
+//     const smsMessage = `Dear ${studentName}, your admission at ${schoolName} in ${className} is confirmed! GR: ${grNumber}, Login: ${studentEmail}, Pass: ${password}`;
 //     await sendSMS(studentMobile, smsMessage);
 
 //     return { emailSent: true, smsSent: true };
@@ -137,23 +138,45 @@ const sendSMS = async (to, body) => {
 //   }
 // };
 
-const sendAdmissionNotification = async (studentEmail, studentMobile, studentName, password, schoolName, className, grNumber) => {
-  const subject = `Admission Confirmed - Login Credentials from ${schoolName}`;
-  const emailMessage = `Dear ${studentName},\n\nYour admission has been confirmed at ${schoolName}!\n\nYou have been admitted to class: ${className}.\nGR Number: ${grNumber}\n\nLogin Credentials:\nEmail: ${studentEmail}\nPassword: ${password}\n\nPlease log in to the portal to access your details.\n\nRegards,\n${schoolName} Administration`;
+const sendAdmissionNotification = async (
+  email,
+  mobile,
+  name,
+  password,
+  schoolName,
+  className,
+  grNumber = null,
+  notificationType = 'Admission'
+) => {
+  let subject, emailMessage, smsMessage;
+
+  if (notificationType === 'Parent Account Creation') {
+    // Parent-specific message
+    subject = `Your Child's Admission Confirmed - Login Credentials from ${schoolName}`;
+    emailMessage = `Dear ${name},\n\nYour child's admission has been confirmed at ${schoolName}!\n\nThey have been admitted to class: ${className}.\nGR Number: ${grNumber || 'N/A'}\n\nYour Login Credentials:\nEmail: ${email}\nPassword: ${password}\n\nPlease log in to the portal to access your child's details.\n\nRegards,\n${schoolName} Administration`;
+    smsMessage = `Dear ${name}, your child's admission at ${schoolName} in ${className} is confirmed! GR: ${grNumber || 'N/A'}, Login: ${email}, Pass: ${password}`;
+  } else {
+    // Student-specific message (default case)
+    subject = `Admission Confirmed - Login Credentials from ${schoolName}`;
+    emailMessage = `Dear ${name},\n\nYour admission has been confirmed at ${schoolName}!\n\nYou have been admitted to class: ${className}.\nGR Number: ${grNumber || 'N/A'}\n\nLogin Credentials:\nEmail: ${email}\nPassword: ${password}\n\nPlease log in to the portal to access your details.\n\nRegards,\n${schoolName} Administration`;
+    smsMessage = `Dear ${name}, your admission at ${schoolName} in ${className} is confirmed! GR: ${grNumber || 'N/A'}, Login: ${email}, Pass: ${password}`;
+  }
 
   try {
-    // Send email
-    await sendEmail(studentEmail, subject, emailMessage);
+    // Send email (assuming sendEmail is a function you have implemented)
+    await sendEmail(email, subject, emailMessage);
 
-    // Send SMS (shortened due to character limits, e.g., 160 chars for standard SMS)
-    const smsMessage = `Dear ${studentName}, your admission at ${schoolName} in ${className} is confirmed! GR: ${grNumber}, Login: ${studentEmail}, Pass: ${password}`;
-    await sendSMS(studentMobile, smsMessage);
+    // Send SMS (assuming sendSMS is a function you have implemented)
+    await sendSMS(mobile, smsMessage);
 
     return { emailSent: true, smsSent: true };
   } catch (error) {
+    console.error(`Error in sendAdmissionNotification (${notificationType}):`, error);
     return { emailSent: false, smsSent: false, error: error.message };
   }
 };
+
+
 
 
 
