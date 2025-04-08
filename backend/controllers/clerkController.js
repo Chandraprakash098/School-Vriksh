@@ -2400,11 +2400,130 @@ const bcrypt = require('bcryptjs');
 const { sendAdmissionNotification } = require('../utils/notifications');
 const { uploadToS3, deleteFromS3, streamS3Object } = require('../config/s3Upload');
 const multer = require('multer');
+const QRCode = require('qrcode'); // Import QRCode library
+const jwt = require('jsonwebtoken'); // Import JWT for token generation
 
 const storage = multer.memoryStorage();
 const upload = multer({ storage: storage });
 
 const clerkController = {
+  // getDashboard: async (req, res) => {
+  //   try {
+  //     const schoolId = req.school._id.toString();
+  //     const clerkId = req.user._id.toString();
+  //     const connection = req.connection;
+
+  //     const AdmissionApplication = require('../models/AdmissionApplication')(connection);
+  //     const Certificate = require('../models/Certificate')(connection);
+  //     const User = require('../models/User')(connection);
+  //     const Leave = require('../models/Leave')(connection);
+
+  //     const today = new Date('2025-03-21');
+  //     const startOfDay = new Date(today.setHours(0, 0, 0, 0));
+  //     const endOfDay = new Date(today.setHours(23, 59, 59, 999));
+
+  //     const pendingVerifications = await AdmissionApplication.countDocuments({
+  //       school: schoolId,
+  //       $or: [
+  //         {
+  //           status: { $in: ['pending', 'document_verification'] },
+  //           'clerkVerification.status': 'pending',
+  //         },
+  //         {
+  //           status: 'approved',
+  //           'feesVerification.status': 'verified',
+  //           'clerkVerification.status': 'verified',
+  //         },
+  //       ],
+  //     });
+
+  //     const pendingCertificates = await Certificate.countDocuments({
+  //       school: schoolId,
+  //       status: 'pending',
+  //     });
+
+  //     const enrolledToday = await User.countDocuments({
+  //       school: schoolId,
+  //       role: 'student',
+  //       createdAt: { $gte: startOfDay, $lte: endOfDay },
+  //     });
+
+  //     const totalLeaves = await Leave.countDocuments({
+  //       school: schoolId,
+  //       user: clerkId,
+  //     });
+
+  //     const leaveSummary = await Leave.aggregate([
+  //       {
+  //         $match: {
+  //           school: new mongoose.Types.ObjectId(schoolId),
+  //           user: new mongoose.Types.ObjectId(clerkId),
+  //         },
+  //       },
+  //       {
+  //         $group: {
+  //           _id: '$status',
+  //           count: { $sum: 1 },
+  //         },
+  //       },
+  //       {
+  //         $project: {
+  //           status: '$_id',
+  //           count: 1,
+  //           _id: 0,
+  //         },
+  //       },
+  //     ]);
+
+  //     const leaveStatus = {
+  //       pending: 0,
+  //       approved: 0,
+  //       rejected: 0,
+  //       total: 0,
+  //     };
+
+  //     leaveSummary.forEach((item) => {
+  //       if (item.status in leaveStatus) {
+  //         leaveStatus[item.status] = item.count;
+  //       }
+  //     });
+  //     leaveStatus.total = leaveStatus.pending + leaveStatus.approved + leaveStatus.rejected;
+
+  //     const rteStudents = await User.countDocuments({
+  //       school: schoolId,
+  //       'studentDetails.isRTE': true,
+  //       'studentDetails.admissionDate': {
+  //         $gte: new Date('2025-01-01'),
+  //         $lte: new Date('2025-12-31'),
+  //       },
+  //     });
+
+  //     const totalStudents = await User.countDocuments({
+  //       school: schoolId,
+  //       role: 'student',
+  //     });
+
+  //     const dashboardData = {
+  //       status: 'success',
+  //       timestamp: new Date(),
+  //       pendingVerifications,
+  //       pendingCertificates,
+  //       enrolledToday,
+  //       totalStudents,
+  //       leaveStatus,
+  //       rteStudents,
+  //       debug: { totalLeaves },
+  //     };
+
+  //     res.json(dashboardData);
+  //   } catch (error) {
+  //     console.error('Error in getDashboard:', error);
+  //     res.status(500).json({ error: error.message });
+  //   }
+  // },
+
+
+
   getDashboard: async (req, res) => {
     try {
       const schoolId = req.school._id.toString();
@@ -2416,9 +2535,12 @@ const clerkController = {
       const User = require('../models/User')(connection);
       const Leave = require('../models/Leave')(connection);
 
-      const today = new Date('2025-03-21');
-      const startOfDay = new Date(today.setHours(0, 0, 0, 0));
-      const endOfDay = new Date(today.setHours(23, 59, 59, 999));
+      const today = new Date();
+      const startOfDay = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate(), 0, 0, 0, 0));
+      const endOfDay = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate(), 23, 59, 59, 999));
+
+      console.log('Server current date:', today.toISOString());
+      console.log('UTC date for QR token:', startOfDay.toISOString().split('T')[0]);
 
       const pendingVerifications = await AdmissionApplication.countDocuments({
         school: schoolId,
@@ -2501,6 +2623,16 @@ const clerkController = {
         role: 'student',
       });
 
+      const qrToken = jwt.sign(
+        { schoolId, date: startOfDay.toISOString().split('T')[0] },
+        process.env.JWT_SECRET || 'your-secret-key',
+        { expiresIn: '24h' }
+      );
+      const qrData = `${process.env.APP_URL}/teacher/attendance/verify-qr/${qrToken}`;
+      const qrCodeUrl = await QRCode.toDataURL(qrData);
+
+      console.log('Generated qrToken:', qrToken);
+
       const dashboardData = {
         status: 'success',
         timestamp: new Date(),
@@ -2510,6 +2642,8 @@ const clerkController = {
         totalStudents,
         leaveStatus,
         rteStudents,
+        qrCodeUrl,
+        qrToken, // For debugging
         debug: { totalLeaves },
       };
 
@@ -2519,7 +2653,6 @@ const clerkController = {
       res.status(500).json({ error: error.message });
     }
   },
-
 
 
   getPendingVerifications: async (req, res) => {

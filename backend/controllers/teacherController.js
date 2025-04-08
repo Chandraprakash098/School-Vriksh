@@ -763,87 +763,9 @@
 const mongoose = require('mongoose');
 const { uploadToS3 } = require('../config/s3Upload'); // Import S3 upload utility
 const path = require('path');
+const jwt = require('jsonwebtoken');
 
 const teacherController = {
-
-  //new Controoler
-
-
-  // enterSubjectProgress: async (req, res) => {
-  //   try {
-  //     const { classId, subjectId } = req.params;
-  //     const { studentProgress } = req.body; // Array of { studentId, grade, feedback }
-  //     const teacherId = req.user._id;
-  //     const schoolId = req.school._id.toString();
-  //     const connection = req.connection;
-  //     const ProgressReport = require('../models/ProgressReport')(connection);
-  //     const Subject = require('../models/Subject')(connection);
-  //     const Class = require('../models/Class')(connection);
-
-  //     // Verify teacher is assigned to the subject
-  //     const subject = await Subject.findOne({
-  //       _id: subjectId,
-  //       school: schoolId,
-  //       'teachers.teacher': teacherId,
-  //     });
-  //     if (!subject) {
-  //       return res.status(403).json({ message: 'Not authorized to enter progress for this subject' });
-  //     }
-
-  //     const classInfo = await Class.findOne({ _id: classId, school: schoolId });
-  //     if (!classInfo) {
-  //       return res.status(404).json({ message: 'Class not found' });
-  //     }
-
-  //     const academicYear = getCurrentAcademicYear();
-  //     const progressReports = [];
-
-  //     // Process each student's progress
-  //     for (const progress of studentProgress) {
-  //       const { studentId, grade, feedback } = progress;
-
-  //       // Check if a progress report already exists for this student, subject, and academic year
-  //       let progressReport = await ProgressReport.findOne({
-  //         school: schoolId,
-  //         class: classId,
-  //         student: studentId,
-  //         subject: subjectId,
-  //         academicYear,
-  //       });
-
-  //       if (progressReport) {
-  //         // Update existing progress report
-  //         progressReport.grade = grade;
-  //         progressReport.feedback = feedback;
-  //         progressReport.enteredBy = teacherId;
-  //         progressReport.updatedAt = new Date();
-  //       } else {
-  //         // Create a new progress report
-  //         progressReport = new ProgressReport({
-  //           school: schoolId,
-  //           class: classId,
-  //           student: studentId,
-  //           subject: subjectId,
-  //           grade,
-  //           feedback,
-  //           enteredBy: teacherId,
-  //           academicYear,
-  //           status: 'draft',
-  //         });
-  //       }
-
-  //       await progressReport.save();
-  //       progressReports.push(progressReport);
-  //     }
-
-  //     res.status(201).json({
-  //       message: 'Progress reports saved successfully',
-  //       progressReports,
-  //     });
-  //   } catch (error) {
-  //     res.status(500).json({ error: error.message });
-  //   }
-  // },
 
   enterSubjectProgress: async (req, res) => {
     try {
@@ -1499,28 +1421,93 @@ const teacherController = {
   },
 
   // Mark teacher's own attendance
+  // markOwnAttendance: async (req, res) => {
+  //   try {
+  //     const schoolId = req.school._id.toString();
+  //     const { date, month, year, status, remarks } = req.body;
+  //     const teacherId = req.user._id;
+  //     const connection = req.connection;
+  //     const Attendance = require('../models/Attendance')(connection);
+
+  //     const attendanceDate = new Date(year, month - 1, date);
+
+  //     const attendance = new Attendance({
+  //       school: schoolId,
+  //       user: teacherId,
+  //       date: attendanceDate,
+  //       status,
+  //       remarks,
+  //       type: 'teacher',
+  //       markedBy: teacherId,
+  //     });
+
+  //     await attendance.save();
+  //     res.status(201).json(attendance);
+  //   } catch (error) {
+  //     res.status(500).json({ error: error.message });
+  //   }
+  // },
+
   markOwnAttendance: async (req, res) => {
     try {
       const schoolId = req.school._id.toString();
-      const { date, month, year, status, remarks } = req.body;
+      const { qrToken } = req.body;
       const teacherId = req.user._id;
       const connection = req.connection;
       const Attendance = require('../models/Attendance')(connection);
 
-      const attendanceDate = new Date(year, month - 1, date);
+      console.log('Received qrToken:', qrToken); // Debug log
+
+      let decoded;
+      try {
+        decoded = jwt.verify(qrToken, process.env.JWT_SECRET || 'your-secret-key');
+        console.log('Decoded token:', decoded); // Debug log
+      } catch (error) {
+        console.error('JWT verification error:', error.message); // Debug log
+        return res.status(400).json({ message: 'Invalid or expired QR code' });
+      }
+
+      const { schoolId: tokenSchoolId, date: tokenDate } = decoded;
+      console.log('Token schoolId:', tokenSchoolId, 'Request schoolId:', schoolId); // Debug log
+      console.log('Token date:', tokenDate); // Debug log
+
+      if (tokenSchoolId !== schoolId) {
+        return res.status(403).json({ message: 'QR code not valid for this school' });
+      }
+
+      const today = new Date().toISOString().split('T')[0];
+      console.log('Today:', today); // Debug log
+      if (tokenDate !== today) {
+        return res.status(400).json({ message: 'QR code is not valid for today' });
+      }
+
+      const startOfDay = new Date(today);
+      startOfDay.setHours(0, 0, 0, 0);
+      const endOfDay = new Date(today);
+      endOfDay.setHours(23, 59, 59, 999);
+
+      const existingAttendance = await Attendance.findOne({
+        school: schoolId,
+        user: teacherId,
+        date: { $gte: startOfDay, $lte: endOfDay },
+        type: 'teacher',
+      });
+
+      if (existingAttendance) {
+        return res.status(400).json({ message: 'Attendance already marked for today' });
+      }
 
       const attendance = new Attendance({
         school: schoolId,
         user: teacherId,
-        date: attendanceDate,
-        status,
-        remarks,
+        date: new Date(),
+        status: 'present',
         type: 'teacher',
         markedBy: teacherId,
       });
 
       await attendance.save();
-      res.status(201).json(attendance);
+      res.status(201).json({ message: 'Attendance marked successfully', attendance });
     } catch (error) {
       res.status(500).json({ error: error.message });
     }

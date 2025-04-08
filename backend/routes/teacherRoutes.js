@@ -127,8 +127,8 @@ router.post(
   [auth, roleCheck(['teacher']), validateAttendancePermission],
   teacherController.markAttendance
 );
+// router.post('/my-attendance', [auth, roleCheck(['teacher'])], teacherController.markOwnAttendance);
 router.post('/my-attendance', [auth, roleCheck(['teacher'])], teacherController.markOwnAttendance);
-
 
 router.get(
     '/classes/:classId/attendance-history',
