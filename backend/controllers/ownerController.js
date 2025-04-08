@@ -17,7 +17,6 @@ const ownerController = {
         subscriptionDetails, 
         rteQuota,
         customFormFields,
-        location
         // razorpayKeyId,    // New field
         // razorpayKeySecret  // New field
       } = req.body;
@@ -66,7 +65,6 @@ const ownerController = {
         },
         rteQuota,
         customFormFields,
-        location // Store location data
         
         // paymentConfig: {
         //   razorpayKeyId: encryptedKeyId,

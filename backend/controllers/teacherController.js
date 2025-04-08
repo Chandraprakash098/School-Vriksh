@@ -1499,64 +1499,13 @@ const teacherController = {
   },
 
   // Mark teacher's own attendance
-  // markOwnAttendance: async (req, res) => {
-  //   try {
-  //     const schoolId = req.school._id.toString();
-  //     const { date, month, year, status, remarks } = req.body;
-  //     const teacherId = req.user._id;
-  //     const connection = req.connection;
-  //     const Attendance = require('../models/Attendance')(connection);
-
-  //     const attendanceDate = new Date(year, month - 1, date);
-
-  //     const attendance = new Attendance({
-  //       school: schoolId,
-  //       user: teacherId,
-  //       date: attendanceDate,
-  //       status,
-  //       remarks,
-  //       type: 'teacher',
-  //       markedBy: teacherId,
-  //     });
-
-  //     await attendance.save();
-  //     res.status(201).json(attendance);
-  //   } catch (error) {
-  //     res.status(500).json({ error: error.message });
-  //   }
-  // },
-
-
   markOwnAttendance: async (req, res) => {
     try {
       const schoolId = req.school._id.toString();
-      const { date, month, year, status, remarks, location } = req.body;
+      const { date, month, year, status, remarks } = req.body;
       const teacherId = req.user._id;
       const connection = req.connection;
       const Attendance = require('../models/Attendance')(connection);
-      const School = require('../models/School')(connection);
-
-      // Fetch the school's location
-      const school = await School.findById(schoolId).select('address');
-      if (!school) {
-        return res.status(404).json({ message: 'School not found' });
-      }
-
-      // Assume the school's address is stored in a format that can be geocoded
-      // For simplicity, let's assume the address is in the format: "latitude,longitude"
-      const schoolLocation = school.address.split(',').map(Number);
-
-      // Validate the teacher's location
-      const teacherLocation = location.coordinates;
-      const distance = getDistanceFromLatLonInKm(
-        schoolLocation[0], schoolLocation[1],
-        teacherLocation[0], teacherLocation[1]
-      );
-
-      const maxDistance = 0.5; // Maximum allowed distance in kilometers
-      if (distance > maxDistance) {
-        return res.status(403).json({ message: 'You must be within the school premises to mark attendance' });
-      }
 
       const attendanceDate = new Date(year, month - 1, date);
 
@@ -1568,10 +1517,6 @@ const teacherController = {
         remarks,
         type: 'teacher',
         markedBy: teacherId,
-        location: {
-          type: 'Point',
-          coordinates: teacherLocation
-        }
       });
 
       await attendance.save();
@@ -1580,9 +1525,6 @@ const teacherController = {
       res.status(500).json({ error: error.message });
     }
   },
-
-
-  
 
   getAttendanceHistory: async (req, res) => {
     try {
