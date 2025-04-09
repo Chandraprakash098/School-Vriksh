@@ -1,2570 +1,59 @@
-
-
-
-// const mongoose = require('mongoose');
-// const bcrypt = require('bcryptjs');
-// const { sendAdmissionNotification } = require('../utils/notifications');
-// const PDFDocument = require('pdfkit');
-// // const { uploadCertificateToCloudinary } = require('../config/cloudinary');
-// const { upload, announcementUpload, certificateUpload, uploadCertificateToCloudinary } = require('../config/cloudinary');
-
-// const multer = require('multer');
-
-// // Configure multer for temporary file storage
-// const storage = multer.memoryStorage(); // Store files in memory (we'll upload directly to Cloudinary)
-// // const upload = multer({ storage: storage });
-
-// const clerkController = {
-
- 
-    
-
-//     getDashboard: async (req, res) => {
-//       try {
-//         const schoolId = req.school._id.toString();
-//         const clerkId = req.user._id.toString(); // Ensure string type
-//         const connection = req.connection;
-        
-//         const AdmissionApplication = require('../models/AdmissionApplication')(connection);
-//         const Certificate = require('../models/Certificate')(connection);
-//         const User = require('../models/User')(connection);
-//         const Leave = require('../models/Leave')(connection);
-    
-//         // Current date (March 21, 2025 as per system date)
-//         const today = new Date('2025-03-21');
-//         const startOfDay = new Date(today.setHours(0, 0, 0, 0));
-//         const endOfDay = new Date(today.setHours(23, 59, 59, 999));
-    
-//         // 1. Pending Verifications Count
-//         const pendingVerifications = await AdmissionApplication.countDocuments({
-//           school: schoolId,
-//           $or: [
-//             {
-//               status: { $in: ['pending', 'document_verification'] },
-//               'clerkVerification.status': 'pending',
-//             },
-//             {
-//               status: 'approved',
-//               'feesVerification.status': 'verified',
-//               'clerkVerification.status': 'verified',
-//             },
-//           ],
-//         });
-    
-//         // 2. Pending Certificates Count
-//         const pendingCertificates = await Certificate.countDocuments({
-//           school: schoolId,
-//           status: 'pending',
-//         });
-    
-//         // 3. Enrolled Students Today
-//         const enrolledToday = await User.countDocuments({
-//           school: schoolId,
-//           role: 'student',
-//           createdAt: { $gte: startOfDay, $lte: endOfDay },
-//         });
-    
-//         // 4. Leave Status Summary - Enhanced with debugging
-//         // First, let's verify if we have any leaves at all
-//         const totalLeaves = await Leave.countDocuments({
-//           school: schoolId,
-//           user: clerkId
-//         });
-    
-//         console.log(`Total leaves found for clerk ${clerkId} in school ${schoolId}: ${totalLeaves}`);
-    
-//         const leaveSummary = await Leave.aggregate([
-//           { 
-//             $match: { 
-//               school: new mongoose.Types.ObjectId(schoolId), // Use 'new' keyword
-//               user: new mongoose.Types.ObjectId(clerkId)
-//             } 
-//           },
-//           {
-//             $group: {
-//               _id: '$status',
-//               count: { $sum: 1 },
-//             },
-//           },
-//           {
-//             $project: {
-//               status: '$_id',
-//               count: 1,
-//               _id: 0
-//             }
-//           }
-//         ]);
-    
-//         console.log('Leave summary aggregation result:', leaveSummary);
-    
-//         // Initialize leave status object
-//         const leaveStatus = {
-//           pending: 0,
-//           approved: 0,
-//           rejected: 0,
-//           total: 0
-//         };
-    
-//         // Populate leave status counts
-//         leaveSummary.forEach(item => {
-//           if (item.status in leaveStatus) {
-//             leaveStatus[item.status] = item.count;
-//           }
-//         });
-    
-//         // Calculate total leaves
-//         leaveStatus.total = leaveStatus.pending + leaveStatus.approved + leaveStatus.rejected;
-    
-//         // 5. RTE Admissions Overview
-//         const rteStudents = await User.countDocuments({
-//           school: schoolId,
-//           'studentDetails.isRTE': true,
-//           'studentDetails.admissionDate': {
-//             $gte: new Date('2025-01-01'),
-//             $lte: new Date('2025-12-31'),
-//           },
-//         });
-    
-//         // 6. Total Number of Students
-//         const totalStudents = await User.countDocuments({
-//           school: schoolId,
-//           role: 'student',
-//         });
-    
-//         // Compile dashboard data
-//         const dashboardData = {
-//           status: 'success',
-//           timestamp: new Date(),
-//           pendingVerifications,
-//           pendingCertificates,
-//           enrolledToday,
-//           totalStudents,
-//           leaveStatus,
-//           rteStudents,
-//           debug: { totalLeaves } // Adding debug info
-//         };
-    
-//         res.json(dashboardData);
-//       } catch (error) {
-//         console.error('Error in getDashboard:', error);
-//         res.status(500).json({ error: error.message });
-//       }
-//     },
-
-//   getPendingVerifications: async (req, res) => {
-//     try {
-//       const schoolId = req.school._id.toString();
-//       const connection = req.connection;
-//       const AdmissionApplication = require('../models/AdmissionApplication')(connection);
-
-//       const applications = await AdmissionApplication.find({
-//         school: schoolId,
-//         $or: [
-//           // Pending document verification by clerk
-//           {
-//             status: { $in: ['pending', 'document_verification'] },
-//             'clerkVerification.status': 'pending',
-//           },
-//           // Approved by fees manager, awaiting clerk's final enrollment
-//           {
-//             status: 'approved',
-//             'feesVerification.status': 'verified',
-//             'clerkVerification.status': 'verified', // Ensure clerk has already verified documents
-//           },
-//         ],
-//       }).sort({ createdAt: -1 });
-
-//       res.json({
-//         status: 'success',
-//         count: applications.length,
-//         applications: applications.map((app) => ({
-//           id: app._id,
-//           trackingId: app.trackingId,
-//           studentDetails: {
-//             name: app.studentDetails.name,
-//             dob: app.studentDetails.dob,
-//             gender: app.studentDetails.gender,
-//             email: app.studentDetails.email,
-//             mobile: app.studentDetails.mobile,
-//             appliedClass: app.studentDetails.appliedClass,
-//           },
-//           parentDetails: {
-//             name: app.parentDetails.name,
-//             email: app.parentDetails.email,
-//             mobile: app.parentDetails.mobile,
-//             occupation: app.parentDetails.occupation,
-//             address: {
-//               street: app.parentDetails.address.street,
-//               city: app.parentDetails.address.city,
-//               state: app.parentDetails.address.state,
-//               pincode: app.parentDetails.address.pincode,
-//             },
-//           },
-//           admissionType: app.admissionType,
-//           status: app.status,
-//           submittedOn: app.createdAt,
-//           documents: app.documents.map(doc => ({
-//             type: doc.type,
-//             documentUrl: doc.documentUrl,
-//             public_id: doc.public_id,
-//             verified: doc.verified,
-//           })),
-//           additionalResponses: app.additionalResponses ? Object.fromEntries(app.additionalResponses) : {},
-//           clerkVerification: {
-//             status: app.clerkVerification.status,
-//             comments: app.clerkVerification.comments,
-//           },
-//           feesVerification: {
-//             status: app.feesVerification.status,
-//             receiptNumber: app.feesVerification.receiptNumber,
-//             verifiedAt: app.feesVerification.verifiedAt,
-//           }, // Include fees verification details
-//         })),
-//       });
-//     } catch (error) {
-//       res.status(500).json({ 
-//         status: 'error',
-//         error: error.message 
-//       });
-//     }
-//   },
-
-//   clerkVerification: async (req, res) => {
-//     try {
-//       const { applicationId } = req.params;
-//       const { status, comments } = req.body;
-//       const schoolId = req.school._id.toString();
-//       const connection = req.connection;
-//       const AdmissionApplication = require('../models/AdmissionApplication')(connection);
-
-//       const application = await AdmissionApplication.findOne({ _id: applicationId, school: schoolId });
-//       if (!application) {
-//         return res.status(404).json({ message: 'Application not found' });
-//       }
-
-//       // Verify all required documents are present (implement validateDocuments if needed)
-//       // const hasAllDocuments = application.documents.length > 0;
-//       const hasAllDocuments = application.validateDocuments();
-//       if (!hasAllDocuments) {
-//         return res.status(400).json({ message: 'Missing required documents' });
-//       }
-
-//       application.clerkVerification = {
-//         status,
-//         verifiedBy: req.user._id,
-//         verifiedAt: new Date(),
-//         comments,
-//       };
-
-//       if (status === 'verified') {
-//         // application.status = application.admissionType === 'RTE' ? 'approved' : 'fees_pending';
-//         application.status = 'fees_pending';
-//       } else {
-//         application.status = 'rejected';
-//       }
-
-//       await application.save();
-
-//       // res.json({
-//       //   message: 'Verification completed',
-//       //   nextStep: status === 'verified'
-//       //     ? application.admissionType === 'RTE'
-//       //       ? 'Admission approved'
-//       //       : 'Visit fees department'
-//       //     : 'Application rejected',
-//       // });
-//       res.json({
-//         message: 'Verification completed',
-//         nextStep: status === 'verified' ? 'Visit fees department for verification' : 'Application rejected',
-//       });
-//     } catch (error) {
-//       res.status(500).json({ error: error.message });
-//     }
-//   },
-
-  
-
-//   verifyDocuments: async (req, res) => {
-//     try {
-//       const { studentId } = req.params; // Changed from req.school to req.params
-//       const { verifiedDocuments } = req.body;
-//       const schoolId = req.school._id.toString();
-//       const connection = req.connection;
-//       const User = require('../models/User')(connection);
-//       // const Document = require('../models/Document')(connection); // Uncomment if Document model exists
-
-//       const student = await User.findOne({ _id: studentId, school: schoolId });
-//       if (!student) {
-//         return res.status(404).json({ message: 'Student not found' });
-//       }
-
-//       // Placeholder: Assuming documents are part of studentDetails or a separate model
-//       // Update document verification status (implement if Document model exists)
-//       // await Document.updateMany({ student: studentId, _id: { $in: verifiedDocuments } }, { verified: true });
-
-//       // Update student status
-//       student.studentDetails.status = 'verified'; // Adjusted to studentDetails
-//       await student.save();
-
-//       res.json({ message: 'Documents verified successfully' });
-//     } catch (error) {
-//       res.status(500).json({ error: error.message });
-//     }
-//   },
-
-  
-//   viewApplicationDocuments: async (req, res) => {
-//     try {
-//       const { applicationId } = req.params;
-//       const schoolId = req.school._id.toString();
-//       const connection = req.connection;
-//       const AdmissionApplication = require('../models/AdmissionApplication')(connection);
-
-//       // Validate applicationId
-//       if (!mongoose.Types.ObjectId.isValid(applicationId)) {
-//         return res.status(400).json({ message: 'Invalid application ID' });
-//       }
-
-//       const application = await AdmissionApplication.findOne({
-//         _id: applicationId,
-//         school: schoolId,
-//       });
-
-//       if (!application) {
-//         return res.status(404).json({ message: 'Application not found' });
-//       }
-
-//       // Check if the user has permission (clerk role is already enforced by middleware)
-//       if (req.user.role !== 'clerk') {
-//         return res.status(403).json({ message: 'Unauthorized access' });
-//       }
-
-//       // Prepare document data for response
-//       const documents = application.documents.map(doc => ({
-//         type: doc.type,
-//         documentUrl: doc.documentUrl, // URL to view the document
-//         public_id: doc.public_id,    // Cloudinary public ID
-//         verified: doc.verified,      // Verification status
-//         uploadedAt: application.createdAt, // Assuming uploaded at the time of application creation
-//       }));
-
-//       res.json({
-//         status: 'success',
-//         applicationId: application._id,
-//         trackingId: application.trackingId,
-//         studentName: application.studentDetails.name,
-//         admissionType: application.admissionType,
-//         documentCount: documents.length,
-//         documents,
-//       });
-//     } catch (error) {
-//       res.status(500).json({ error: error.message });
-//     }
-//   },
-
-
-
-//   getAvailableClasses: async (req, res) => {
-//     try {
-//       const schoolId = req.school._id.toString();
-//       const connection = req.connection;
-//       const Class = require('../models/Class')(connection);
-//       const User = require('../models/User')(connection);
-  
-//       const allClasses = await Class.find({ school: schoolId })
-//         .select('name division academicYear capacity students classTeacher')
-//         .populate('classTeacher', 'name', User)
-//         .sort({ name: 1, division: 1 });
-  
-//       res.json({
-//         classes: allClasses.map(cls => ({
-//           _id: cls._id,
-//           name: cls.name,
-//           division: cls.division,
-//           academicYear: cls.academicYear,
-//           teacher: cls.classTeacher ? cls.classTeacher.name : null,
-//           enrolledCount: cls.students ? cls.students.length : 0,
-//           capacity: cls.capacity,
-//           remainingCapacity: cls.capacity - (cls.students ? cls.students.length : 0),
-//         })),
-//       });
-//     } catch (error) {
-//       res.status(500).json({ error: error.message });
-//     }
-//   },
-
-  
-
-
-
-//   enrollStudent: async (req, res) => {
-//     try {
-//       const { applicationId } = req.params;
-//       const { classId, grNumber, password } = req.body;
-//       const schoolId = req.school._id.toString();
-//       const connection = req.connection;
-//       const AdmissionApplication = require('../models/AdmissionApplication')(connection);
-//       const Class = require('../models/Class')(connection);
-//       const User = require('../models/User')(connection);
-//       const School = require('../models/School')(require('../config/database').getOwnerConnection()); // Access School model from owner DB
-
-//       if (!password) {
-//         return res.status(400).json({ message: 'Password is required' });
-//       }
-
-//       const application = await AdmissionApplication.findOne({ _id: applicationId, school: schoolId });
-//       if (!application) {
-//         return res.status(404).json({ message: 'Application not found' });
-//       }
-
-//       if (application.status !== 'approved') {
-//         return res.status(400).json({ message: 'Only approved applications can be enrolled' });
-//       }
-
-//       const existingGR = await User.findOne({ 'studentDetails.grNumber': grNumber, school: schoolId });
-//       if (existingGR) {
-//         return res.status(400).json({ message: 'GR number already exists' });
-//       }
-
-//       const selectedClass = await Class.findOne({ _id: classId, school: schoolId });
-//       if (!selectedClass) {
-//         return res.status(404).json({ message: 'Class not found' });
-//       }
-
-//       if (selectedClass.students.length >= selectedClass.capacity) {
-//         return res.status(400).json({ message: 'Class is at full capacity' });
-//       }
-
-//       // Fetch school name from the School model
-//       const school = await School.findById(schoolId).select('name');
-//       if (!school) {
-//         return res.status(404).json({ message: 'School not found' });
-//       }
-
-//       const hashedPassword = await bcrypt.hash(password, 10);
-
-//       const student = new User({
-//         school: schoolId,
-//         name: application.studentDetails.name,
-//         email: application.studentDetails.email,
-//         password: hashedPassword,
-//         role: 'student',
-//         status: 'active',
-//         studentDetails: {
-//           grNumber,
-//           class: classId,
-//           admissionType: application.admissionType,
-//           parentDetails: application.parentDetails,
-//           dob: application.studentDetails.dob,
-//           gender: application.studentDetails.gender,
-//         },
-//       });
-
-//       await student.save();
-
-//       await Class.findByIdAndUpdate(classId, { $push: { students: student._id } });
-
-//       application.status = 'enrolled';
-//       application.grNumber = grNumber;
-//       application.assignedClass = classId;
-//       await application.save();
-
-//       // Prepare class name (e.g., "5th A" using name and division)
-//       const className = `${selectedClass.name}${selectedClass.division ? ' ' + selectedClass.division : ''}`;
-
-//       // Send notification with school name and class
-//       const notificationResult = await sendAdmissionNotification(
-//         student.email,
-//         application.studentDetails.mobile,
-//         student.name,
-//         password,
-//         school.name, // School name
-//         className    // Class name
-//       );
-
-//       if (!notificationResult.emailSent || !notificationResult.smsSent) {
-//         console.warn('Notification partially failed:', notificationResult.error);
-//         // Optionally rollback if notifications are critical (see previous example)
-//       }
-
-//       res.json({
-//         message: 'Student enrolled successfully',
-//         studentDetails: {
-//           id: student._id,
-//           name: student.name,
-//           email: student.email,
-//           grNumber,
-//           class: { name: selectedClass.name, division: selectedClass.division },
-//         },
-//         notificationStatus: {
-//           emailSent: notificationResult.emailSent,
-//           smsSent: notificationResult.smsSent,
-//         },
-//       });
-//     } catch (error) {
-//       res.status(500).json({ error: error.message });
-//     }
-//   },
-
-//   getStudentsByClass: async (req, res) => {
-//     try {
-//       const { classId } = req.params;
-//       const schoolId = req.school._id.toString();
-//       const connection = req.connection;
-//       const Class = require('../models/Class')(connection);
-//       const User = require('../models/User')(connection);
-
-//       // Validate classId
-//       if (!mongoose.Types.ObjectId.isValid(classId)) {
-//         return res.status(400).json({ message: 'Invalid class ID' });
-//       }
-
-//       // Check if class exists
-//       const selectedClass = await Class.findOne({ _id: classId, school: schoolId });
-//       if (!selectedClass) {
-//         return res.status(404).json({ message: 'Class not found' });
-//       }
-
-//       // Fetch students enrolled in this class
-//       const students = await User.find({
-//         school: schoolId,
-//         'studentDetails.class': classId,
-//         role: 'student',
-//       })
-//         .select('name email studentDetails')
-//         .lean();
-
-//       res.json({
-//         status: 'success',
-//         class: {
-//           name: selectedClass.name,
-//           division: selectedClass.division,
-//           academicYear: selectedClass.academicYear,
-//           capacity: selectedClass.capacity,
-//           enrolledCount: selectedClass.students.length,
-//         },
-//         count: students.length,
-//         students: students.map(student => ({
-//           id: student._id,
-//           name: student.name,
-//           email: student.email,
-//           grNumber: student.studentDetails.grNumber,
-//           admissionType: student.studentDetails.admissionType,
-//           dob: student.studentDetails.dob,
-//           gender: student.studentDetails.gender,
-//           parentDetails: student.studentDetails.parentDetails,
-//         })),
-//       });
-//     } catch (error) {
-//       res.status(500).json({ error: error.message });
-//     }
-//   },
-
-//   requestLeave: async (req, res) => {
-//     try {
-//       const schoolId = req.school._id.toString();
-//       const { reason, startDate, endDate, type } = req.body;
-//       const clerkId = req.user._id;
-//       const connection = req.connection;
-//       const Leave = require('../models/Leave')(connection);
-
-//       const leave = new Leave({
-//         school: schoolId,
-//         user: clerkId,
-//         reason,
-//         startDate,
-//         endDate,
-//         type,
-//         status: 'pending',
-//         appliedOn: new Date(),
-//       });
-
-//       await leave.save();
-//       res.status(201).json(leave);
-//     } catch (error) {
-//       res.status(500).json({ error: error.message });
-//     }
-//   },
-
-//   getLeaveStatus: async (req, res) => {
-//     try {
-//       const schoolId = req.school._id.toString();
-//       const clerkId = req.user._id;
-//       const connection = req.connection;
-//       const Leave = require('../models/Leave')(connection);
-
-//       const leaves = await Leave.find({ school: schoolId, user: clerkId })
-//         .sort({ appliedOn: -1 })
-//         .lean();
-
-//       res.json({
-//         status: 'success',
-//         count: leaves.length,
-//         leaves: leaves.map(leave => ({
-//           id: leave._id,
-//           reason: leave.reason,
-//           startDate: leave.startDate,
-//           endDate: leave.endDate,
-//           type: leave.type,
-//           status: leave.status,
-//           appliedOn: leave.appliedOn,
-//           reviewedBy: leave.reviewedBy,
-//           reviewedAt: leave.reviewedAt,
-//           comments: leave.comments,
-//         })),
-//       });
-//     } catch (error) {
-//       res.status(500).json({ error: error.message });
-//     }
-//   },
-
- 
-//   getPendingCertificates: async (req, res) => {
-//     try {
-//       const schoolId = req.school._id.toString();
-//       const connection = req.connection;
-//       const Certificate = require('../models/Certificate')(connection);
-//       const User = require('../models/User')(connection);
-//       const Class = require('../models/Class')(connection);
-
-//       const certificates = await Certificate.find({
-//         school: schoolId,
-//         status: 'pending',
-//       })
-//         .populate({
-//           path: 'student',
-//           select: 'name email studentDetails',
-//           populate: {
-//             path: 'studentDetails.class',
-//             model: Class,
-//             select: 'name division',
-//           },
-//         })
-//         .populate('generatedBy', 'name email', User)
-//         .sort({ requestDate: -1 });
-
-//       res.json({
-//         status: 'success',
-//         count: certificates.length,
-//         certificates: certificates.map(cert => ({
-//           id: cert._id,
-//           studentName: cert.student?.name || 'N/A',
-//           studentEmail: cert.student?.email || 'N/A',
-//           type: cert.type,
-//           purpose: cert.purpose,
-//           urgency: cert.urgency,
-//           requestDate: cert.requestDate,
-//           status: cert.status,
-//           grNumber: cert.student?.studentDetails?.grNumber || 'N/A',
-//           parentName: cert.student?.studentDetails?.parentDetails?.name || 'N/A',
-//           admissionDate: cert.student?.studentDetails?.admissionDate
-//             ? new Date(cert.student.studentDetails.admissionDate).toISOString().split('T')[0]
-//             : 'N/A',
-//           dob: cert.student?.studentDetails?.dob
-//             ? new Date(cert.student.studentDetails.dob).toISOString().split('T')[0]
-//             : 'N/A',
-//           className: cert.student?.studentDetails?.class
-//             ? `${cert.student.studentDetails.class.name}${cert.student.studentDetails.class.division ? ' ' + cert.student.studentDetails.class.division : ''}`
-//             : 'N/A',
-//           schoolName: req.school?.name || 'N/A',
-//           schoolAddress: req.school?.address || 'N/A',
-//         })),
-//       });
-//     } catch (error) {
-//       console.error('Error in getPendingCertificates:', error);
-//       res.status(500).json({ error: error.message });
-//     }
-//   },
-
-//   getCertificateHistory: async (req, res) => {
-//     try {
-//       const schoolId = req.school._id.toString();
-//       const connection = req.connection;
-//       const Certificate = require('../models/Certificate')(connection);
-//       const User = require('../models/User')(connection);
-//       const Class = require('../models/Class')(connection);
-
-//       const certificates = await Certificate.find({ school: schoolId })
-//         .populate({
-//           path: 'student',
-//           select: 'name email studentDetails',
-//           populate: {
-//             path: 'studentDetails.class',
-//             model: Class,
-//             select: 'name division',
-//           },
-//         })
-//         .populate('generatedBy', 'name email', User)
-//         .sort({ requestDate: -1 });
-
-//       res.json({
-//         status: 'success',
-//         count: certificates.length,
-//         certificates: certificates.map(cert => ({
-//           id: cert._id,
-//           studentName: cert.student?.name || 'N/A',
-//           studentEmail: cert.student?.email || 'N/A',
-//           type: cert.type,
-//           purpose: cert.purpose,
-//           urgency: cert.urgency,
-//           requestDate: cert.requestDate,
-//           status: cert.status,
-//           documentUrl: cert.documentUrl || null,
-//           signedDocumentUrl: cert.signedDocumentUrl || null,
-//           isSentToStudent: cert.isSentToStudent,
-//           issuedDate: cert.issuedDate || null,
-//           generatedBy: cert.generatedBy ? cert.generatedBy.name : null,
-//           comments: cert.comments || null,
-//           grNumber: cert.student?.studentDetails?.grNumber || 'N/A',
-//           parentName: cert.student?.studentDetails?.parentDetails?.name || 'N/A',
-//           admissionDate: cert.student?.studentDetails?.admissionDate
-//             ? new Date(cert.student.studentDetails.admissionDate).toISOString().split('T')[0]
-//             : 'N/A',
-//           dob: cert.student?.studentDetails?.dob
-//             ? new Date(cert.student.studentDetails.dob).toISOString().split('T')[0]
-//             : 'N/A',
-//           className: cert.student?.studentDetails?.class
-//             ? `${cert.student.studentDetails.class.name}${cert.student.studentDetails.class.division ? ' ' + cert.student.studentDetails.class.division : ''}`
-//             : 'N/A',
-//           schoolName: req.school?.name || 'N/A',
-//           schoolAddress: req.school?.address || 'N/A',
-//         })),
-//       });
-//     } catch (error) {
-//       console.error('Error in getCertificateHistory:', error);
-//       res.status(500).json({ error: error.message });
-//     }
-//   },
-
-//   generateCertificate: async (req, res) => {
-//     try {
-//       const { certificateId } = req.params;
-//       const { status, comments, pdfData, certificateType } = req.body;
-
-//       const schoolId = req.school._id.toString();
-//       const connection = req.connection;
-//       const Certificate = require('../models/Certificate')(connection);
-//       const User = require('../models/User')(connection);
-
-//       if (!mongoose.Types.ObjectId.isValid(certificateId)) {
-//         return res.status(400).json({ message: 'Invalid certificate ID' });
-//       }
-
-//       const certificate = await Certificate.findOne({ _id: certificateId, school: schoolId });
-//       if (!certificate) {
-//         return res.status(404).json({ message: 'Certificate request not found' });
-//       }
-
-//       if (status === 'rejected') {
-//         certificate.status = 'rejected';
-//         certificate.comments = comments;
-//         await certificate.save();
-//         return res.json({ message: 'Certificate request rejected', certificate });
-//       }
-
-//       if (status !== 'generated') {
-//         return res.status(400).json({ message: 'Invalid status for generation' });
-//       }
-
-//       if (!pdfData || !certificateType) {
-//         return res.status(400).json({ message: 'PDF data and certificate type are required' });
-//       }
-
-//       // Convert base64 PDF data to buffer
-//       const pdfBuffer = Buffer.from(pdfData, 'base64');
-
-//       // Upload the PDF to Cloudinary
-//       const cloudinaryResult = await uploadCertificateToCloudinary(pdfBuffer, certificate._id, certificateType);
-//       const documentUrl = cloudinaryResult.secure_url;
-
-//       // Update certificate with the Cloudinary URL
-//       certificate.documentUrl = documentUrl;
-//       certificate.status = 'generated';
-//       certificate.issuedDate = new Date();
-//       certificate.generatedBy = req.user._id;
-//       certificate.comments = comments;
-//       await certificate.save();
-
-//       res.json({
-//         message: 'Certificate generated successfully',
-//         certificate,
-//       });
-//     } catch (error) {
-//       console.error('Error in generateCertificate:', error);
-//       res.status(500).json({ error: error.message });
-//     }
-//   },
-
-  
- 
-
-//   uploadSignedCertificate: async (req, res) => {
-//     try {
-//       const { certificateId } = req.params;
-//       const file = req.file;
-
-//       const schoolId = req.school._id.toString();
-//       const connection = req.connection;
-//       const Certificate = require('../models/Certificate')(connection);
-//       const User = require('../models/User')(connection);
-
-//       if (!mongoose.Types.ObjectId.isValid(certificateId)) {
-//         return res.status(400).json({ message: 'Invalid certificate ID' });
-//       }
-
-//       const certificate = await Certificate.findOne({ _id: certificateId, school: schoolId });
-//       if (!certificate) {
-//         return res.status(404).json({ message: 'Certificate not found' });
-//       }
-
-//       if (certificate.status !== 'generated') {
-//         return res.status(400).json({ message: 'Certificate must be generated before uploading a signed version' });
-//       }
-
-//       if (!file) {
-//         return res.status(400).json({ message: 'PDF file is required' });
-//       }
-
-//       // Upload the signed PDF to Cloudinary
-//       const cloudinaryResult = await uploadCertificateToCloudinary(file.buffer, `${certificate._id}_signed`, certificate.type);
-//       const signedDocumentUrl = cloudinaryResult.secure_url;
-
-//       // Update certificate with the signed document URL
-//       certificate.signedDocumentUrl = signedDocumentUrl;
-
-//       // Mark the certificate as sent to the student
-//       certificate.isSentToStudent = true;
-//       await certificate.save();
-
-//       // Fetch student details for notification
-//       const student = await User.findById(certificate.student).select('name email studentDetails');
-//       if (!student) {
-//         return res.status(404).json({ message: 'Student not found' });
-//       }
-
-//       // Send notification to student
-//       const notificationResult = await sendCertificateNotification(
-//         student.email,
-//         student.studentDetails?.mobile,
-//         student.name,
-//         certificate.type,
-//         certificate.signedDocumentUrl
-//       );
-
-//       res.json({
-//         message: 'Signed certificate uploaded and sent to student successfully',
-//         certificate,
-//         notificationStatus: {
-//           emailSent: notificationResult.emailSent,
-//           smsSent: notificationResult.smsSent,
-//         },
-//       });
-//     } catch (error) {
-//       console.error('Error in uploadSignedCertificate:', error);
-//       res.status(500).json({ error: error.message });
-//     }
-//   },
-
-//   sendCertificateToStudent: async (req, res) => {
-//     try {
-//       const { certificateId } = req.params;
-
-//       const schoolId = req.school._id.toString();
-//       const connection = req.connection;
-//       const Certificate = require('../models/Certificate')(connection);
-//       const User = require('../models/User')(connection);
-
-//       if (!mongoose.Types.ObjectId.isValid(certificateId)) {
-//         return res.status(400).json({ message: 'Invalid certificate ID' });
-//       }
-
-//       const certificate = await Certificate.findOne({ _id: certificateId, school: schoolId });
-//       if (!certificate) {
-//         return res.status(404).json({ message: 'Certificate not found' });
-//       }
-
-//       if (!certificate.signedDocumentUrl) {
-//         return res.status(400).json({ message: 'Signed certificate must be uploaded before sending to student' });
-//       }
-
-//       if (certificate.isSentToStudent) {
-//         return res.status(400).json({ message: 'Certificate has already been sent to the student' });
-//       }
-
-//       // Mark the certificate as sent
-//       certificate.isSentToStudent = true;
-//       await certificate.save();
-
-//       // Fetch student details for notification
-//       const student = await User.findById(certificate.student).select('name email studentDetails');
-
-//       // Send notification to student
-//       const notificationResult = await sendCertificateNotification(
-//         student.email,
-//         student.studentDetails.mobile,
-//         student.name,
-//         certificate.type,
-//         certificate.signedDocumentUrl
-//       );
-
-//       res.json({
-//         message: 'Certificate sent to student successfully',
-//         certificate,
-//         notificationStatus: {
-//           emailSent: notificationResult.emailSent,
-//           smsSent: notificationResult.smsSent,
-//         },
-//       });
-//     } catch (error) {
-//       console.error('Error in sendCertificateToStudent:', error);
-//       res.status(500).json({ error: error.message });
-//     }
-//   },
- 
-
-//   generateRTEReport: async (req, res) => {
-//     try {
-//       const schoolId = req.school._id.toString();
-//       const { startDate, endDate } = req.body;
-//       const connection = req.connection;
-//       const User = require('../models/User')(connection);
-
-//       const rteStudents = await User.find({
-//         school: schoolId,
-//         'studentDetails.isRTE': true, // Adjusted to studentDetails
-//         'studentDetails.admissionDate': {
-//           $gte: new Date(startDate),
-//           $lte: new Date(endDate),
-//         },
-//       }).lean();
-
-//       const report = {
-//         totalRTEStudents: rteStudents.length,
-//         admissionsByClass: {},
-//         documentVerificationStatus: { verified: 0, pending: 0 },
-//       };
-
-//       // Placeholder: Implement detailed reporting logic
-//       rteStudents.forEach(student => {
-//         const classId = student.studentDetails.class.toString();
-//         report.admissionsByClass[classId] = (report.admissionsByClass[classId] || 0) + 1;
-//         report.documentVerificationStatus[student.studentDetails.status === 'verified' ? 'verified' : 'pending']++;
-//       });
-
-//       res.json({ report });
-//     } catch (error) {
-//       res.status(500).json({ error: error.message });
-//     }
-//   },
-
-//   registerExistingStudent: async (req, res) => {
-//     try {
-//       const {
-//         name,
-//         email,
-//         dob,
-//         gender,
-//         mobile,
-//         parentName,
-//         parentEmail,
-//         parentMobile,
-//         parentOccupation,
-//         address, // Expected as an object { street, city, state, pincode }
-//         grNumber,
-//         classId,
-//         admissionType = 'Regular', // Default to Regular if not provided
-//         password,
-//       } = req.body;
-
-//       const schoolId = req.school._id.toString();
-//       const connection = req.connection;
-//       const User = require('../models/User')(connection);
-//       const Class = require('../models/Class')(connection);
-//       const School = require('../models/School')(require('../config/database').getOwnerConnection());
-
-//       // Input validation
-//       if (!name || !email || !dob || !gender || !mobile || !grNumber || !classId || !password) {
-//         return res.status(400).json({ message: 'All required fields must be provided' });
-//       }
-
-//       // Validate email format
-//       const emailRegex = /^[a-zA-Z0-9._-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,6}$/;
-//       if (!emailRegex.test(email)) {
-//         return res.status(400).json({ message: 'Invalid email format' });
-//       }
-
-//       // Validate mobile number
-//       const mobileRegex = /^[0-9]{10}$/;
-//       if (!mobileRegex.test(mobile) || (parentMobile && !mobileRegex.test(parentMobile))) {
-//         return res.status(400).json({ message: 'Mobile number must be 10 digits' });
-//       }
-
-//       // Check if GR number already exists
-//       const existingGR = await User.findOne({ 'studentDetails.grNumber': grNumber, school: schoolId });
-//       if (existingGR) {
-//         return res.status(400).json({ message: 'GR number already exists' });
-//       }
-
-//       // Check if email already exists
-//       const existingEmail = await User.findOne({ email, school: schoolId });
-//       if (existingEmail) {
-//         return res.status(400).json({ message: 'Email already registered' });
-//       }
-
-//       // Validate class
-//       const selectedClass = await Class.findOne({ _id: classId, school: schoolId });
-//       if (!selectedClass) {
-//         return res.status(404).json({ message: 'Class not found' });
-//       }
-
-//       if (selectedClass.students.length >= selectedClass.capacity) {
-//         return res.status(400).json({ message: 'Class is at full capacity' });
-//       }
-
-//       // Fetch school name
-//       const school = await School.findById(schoolId).select('name');
-//       if (!school) {
-//         return res.status(404).json({ message: 'School not found' });
-//       }
-
-//       // Hash password
-//       const hashedPassword = await bcrypt.hash(password, 10);
-
-//       // Create new student
-//       const student = new User({
-//         school: schoolId,
-//         name,
-//         email,
-//         password: hashedPassword,
-//         role: 'student',
-//         status: 'active',
-//         studentDetails: {
-//           grNumber,
-//           class: classId,
-//           admissionType,
-//           parentDetails: {
-//             name: parentName,
-//             email: parentEmail,
-//             mobile: parentMobile,
-//             occupation: parentOccupation,
-//             address: address || {}, // Default to empty object if not provided
-//           },
-//           dob: new Date(dob),
-//           gender,
-//         },
-//       });
-
-//       // Save student to database
-//       await student.save();
-
-//       // Update class with student ID
-//       await Class.findByIdAndUpdate(classId, { $push: { students: student._id } });
-
-//       // Prepare class name
-//       const className = `${selectedClass.name}${selectedClass.division ? ' ' + selectedClass.division : ''}`;
-
-//       // Send notification
-//       const notificationResult = await sendAdmissionNotification(
-//         student.email,
-//         mobile,
-//         student.name,
-//         password,
-//         school.name,
-//         className,
-//         grNumber
-//       );
-
-//       if (!notificationResult.emailSent || !notificationResult.smsSent) {
-//         console.warn('Notification partially failed:', notificationResult.error);
-//       }
-
-//       res.status(201).json({
-//         message: 'Existing student registered successfully',
-//         studentDetails: {
-//           id: student._id,
-//           name: student.name,
-//           email: student.email,
-//           grNumber,
-//           class: { name: selectedClass.name, division: selectedClass.division },
-//         },
-//         notificationStatus: {
-//           emailSent: notificationResult.emailSent,
-//           smsSent: notificationResult.smsSent,
-//         },
-//       });
-//     } catch (error) {
-//       console.error('Error registering existing student:', error);
-//       res.status(500).json({ error: error.message });
-//     }
-//   },
-// };
-
-// const sendCertificateNotification = async (email, mobile, studentName, certificateType, documentUrl) => {
-//   // Implement email and SMS notification logic here
-//   return {
-//     emailSent: true,
-//     smsSent: true,
-//     error: null,
-//   };
-// };
-
-// // Placeholder helper functions (implement as needed)
-// const getFeeAmount = (type, classId) => 1000; // Placeholder
-// const getFeeDueDate = (type) => new Date(); // Placeholder
-
-// module.exports = {clerkController,upload,};
-
-
-
-//AWS First change
-
-// const mongoose = require('mongoose');
-// const bcrypt = require('bcryptjs');
-// const { sendAdmissionNotification } = require('../utils/notifications');
-// const PDFDocument = require('pdfkit');
-// const { uploadToS3, deleteFromS3, getPresignedUrl } = require('../config/s3Upload'); // Import S3 utilities
-// const multer = require('multer');
-
-// // Configure multer for temporary file storage
-// const storage = multer.memoryStorage();
-// const upload = multer({ storage: storage });
-
-// const clerkController = {
-//   getDashboard: async (req, res) => {
-//     try {
-//       const schoolId = req.school._id.toString();
-//       const clerkId = req.user._id.toString();
-//       const connection = req.connection;
-
-//       const AdmissionApplication = require('../models/AdmissionApplication')(connection);
-//       const Certificate = require('../models/Certificate')(connection);
-//       const User = require('../models/User')(connection);
-//       const Leave = require('../models/Leave')(connection);
-
-//       const today = new Date('2025-03-21');
-//       const startOfDay = new Date(today.setHours(0, 0, 0, 0));
-//       const endOfDay = new Date(today.setHours(23, 59, 59, 999));
-
-//       const pendingVerifications = await AdmissionApplication.countDocuments({
-//         school: schoolId,
-//         $or: [
-//           {
-//             status: { $in: ['pending', 'document_verification'] },
-//             'clerkVerification.status': 'pending',
-//           },
-//           {
-//             status: 'approved',
-//             'feesVerification.status': 'verified',
-//             'clerkVerification.status': 'verified',
-//           },
-//         ],
-//       });
-
-//       const pendingCertificates = await Certificate.countDocuments({
-//         school: schoolId,
-//         status: 'pending',
-//       });
-
-//       const enrolledToday = await User.countDocuments({
-//         school: schoolId,
-//         role: 'student',
-//         createdAt: { $gte: startOfDay, $lte: endOfDay },
-//       });
-
-//       const totalLeaves = await Leave.countDocuments({
-//         school: schoolId,
-//         user: clerkId,
-//       });
-
-//       const leaveSummary = await Leave.aggregate([
-//         {
-//           $match: {
-//             school: new mongoose.Types.ObjectId(schoolId),
-//             user: new mongoose.Types.ObjectId(clerkId),
-//           },
-//         },
-//         {
-//           $group: {
-//             _id: '$status',
-//             count: { $sum: 1 },
-//           },
-//         },
-//         {
-//           $project: {
-//             status: '$_id',
-//             count: 1,
-//             _id: 0,
-//           },
-//         },
-//       ]);
-
-//       const leaveStatus = {
-//         pending: 0,
-//         approved: 0,
-//         rejected: 0,
-//         total: 0,
-//       };
-
-//       leaveSummary.forEach((item) => {
-//         if (item.status in leaveStatus) {
-//           leaveStatus[item.status] = item.count;
-//         }
-//       });
-//       leaveStatus.total = leaveStatus.pending + leaveStatus.approved + leaveStatus.rejected;
-
-//       const rteStudents = await User.countDocuments({
-//         school: schoolId,
-//         'studentDetails.isRTE': true,
-//         'studentDetails.admissionDate': {
-//           $gte: new Date('2025-01-01'),
-//           $lte: new Date('2025-12-31'),
-//         },
-//       });
-
-//       const totalStudents = await User.countDocuments({
-//         school: schoolId,
-//         role: 'student',
-//       });
-
-//       const dashboardData = {
-//         status: 'success',
-//         timestamp: new Date(),
-//         pendingVerifications,
-//         pendingCertificates,
-//         enrolledToday,
-//         totalStudents,
-//         leaveStatus,
-//         rteStudents,
-//         debug: { totalLeaves },
-//       };
-
-//       res.json(dashboardData);
-//     } catch (error) {
-//       console.error('Error in getDashboard:', error);
-//       res.status(500).json({ error: error.message });
-//     }
-//   },
-
-  
-
-//   getPendingVerifications: async (req, res) => {
-//     try {
-//       const schoolId = req.school._id.toString();
-//       const connection = req.connection;
-//       const AdmissionApplication = require('../models/AdmissionApplication')(connection);
-  
-//       const applications = await AdmissionApplication.find({
-//         school: schoolId,
-//         $or: [
-//           {
-//             status: { $in: ['pending', 'document_verification'] },
-//             'clerkVerification.status': 'pending',
-//           },
-//           {
-//             status: 'approved',
-//             'feesVerification.status': 'verified',
-//             'clerkVerification.status': 'verified',
-//           },
-//         ],
-//       }).sort({ createdAt: -1 });
-  
-//       const applicationsWithPresignedUrls = await Promise.all(
-//         applications.map(async (app) => {
-//           const documentsWithPresignedUrls = await Promise.all(
-//             app.documents.map(async (doc) => ({
-//               type: doc.type,
-//               documentUrl: doc.documentUrl,
-//               key: doc.key,
-//               presignedUrl: doc.key ? await getPresignedUrl(doc.key) : null, // Fallback to null if key is missing
-//               verified: doc.verified,
-//             }))
-//           );
-//           return {
-//             id: app._id,
-//             trackingId: app.trackingId,
-//             studentDetails: {
-//               name: app.studentDetails.name,
-//               dob: app.studentDetails.dob,
-//               gender: app.studentDetails.gender,
-//               email: app.studentDetails.email,
-//               mobile: app.studentDetails.mobile,
-//               appliedClass: app.studentDetails.appliedClass,
-//             },
-//             parentDetails: {
-//               name: app.parentDetails.name,
-//               email: app.parentDetails.email,
-//               mobile: app.parentDetails.mobile,
-//               occupation: app.parentDetails.occupation,
-//               address: {
-//                 street: app.parentDetails.address.street,
-//                 city: app.parentDetails.address.city,
-//                 state: app.parentDetails.address.state,
-//                 pincode: app.parentDetails.address.pincode,
-//               },
-//             },
-//             admissionType: app.admissionType,
-//             status: app.status,
-//             submittedOn: app.createdAt,
-//             documents: documentsWithPresignedUrls,
-//             additionalResponses: app.additionalResponses ? Object.fromEntries(app.additionalResponses) : {},
-//             clerkVerification: {
-//               status: app.clerkVerification.status,
-//               comments: app.clerkVerification.comments,
-//             },
-//             feesVerification: {
-//               status: app.feesVerification.status,
-//               receiptNumber: app.feesVerification.receiptNumber,
-//               verifiedAt: app.feesVerification.verifiedAt,
-//             },
-//           };
-//         })
-//       );
-  
-//       res.json({
-//         status: 'success',
-//         count: applications.length,
-//         applications: applicationsWithPresignedUrls,
-//       });
-//     } catch (error) {
-//       console.error('Error in getPendingVerifications:', error);
-//       res.status(500).json({
-//         status: 'error',
-//         error: error.message,
-//       });
-//     }
-//   },
-
-//   clerkVerification: async (req, res) => {
-//     try {
-//       const { applicationId } = req.params;
-//       const { status, comments } = req.body;
-//       const schoolId = req.school._id.toString();
-//       const connection = req.connection;
-//       const AdmissionApplication = require('../models/AdmissionApplication')(connection);
-
-//       const application = await AdmissionApplication.findOne({ _id: applicationId, school: schoolId });
-//       if (!application) {
-//         return res.status(404).json({ message: 'Application not found' });
-//       }
-
-//       const hasAllDocuments = application.validateDocuments();
-//       if (!hasAllDocuments) {
-//         return res.status(400).json({ message: 'Missing required documents' });
-//       }
-
-//       application.clerkVerification = {
-//         status,
-//         verifiedBy: req.user._id,
-//         verifiedAt: new Date(),
-//         comments,
-//       };
-
-//       if (status === 'verified') {
-//         application.status = 'fees_pending';
-//       } else {
-//         application.status = 'rejected';
-//       }
-
-//       await application.save();
-
-//       res.json({
-//         message: 'Verification completed',
-//         nextStep: status === 'verified' ? 'Visit fees department for verification' : 'Application rejected',
-//       });
-//     } catch (error) {
-//       res.status(500).json({ error: error.message });
-//     }
-//   },
-
-//   verifyDocuments: async (req, res) => {
-//     try {
-//       const { studentId } = req.params;
-//       const { verifiedDocuments } = req.body;
-//       const schoolId = req.school._id.toString();
-//       const connection = req.connection;
-//       const User = require('../models/User')(connection);
-
-//       const student = await User.findOne({ _id: studentId, school: schoolId });
-//       if (!student) {
-//         return res.status(404).json({ message: 'Student not found' });
-//       }
-
-//       student.studentDetails.status = 'verified';
-//       await student.save();
-
-//       res.json({ message: 'Documents verified successfully' });
-//     } catch (error) {
-//       res.status(500).json({ error: error.message });
-//     }
-//   },
-
-//   viewApplicationDocuments: async (req, res) => {
-//     try {
-//       const { applicationId } = req.params;
-//       const schoolId = req.school._id.toString();
-//       const connection = req.connection;
-//       const AdmissionApplication = require('../models/AdmissionApplication')(connection);
-
-//       if (!mongoose.Types.ObjectId.isValid(applicationId)) {
-//         return res.status(400).json({ message: 'Invalid application ID' });
-//       }
-
-//       const application = await AdmissionApplication.findOne({
-//         _id: applicationId,
-//         school: schoolId,
-//       });
-
-//       if (!application) {
-//         return res.status(404).json({ message: 'Application not found' });
-//       }
-
-//       if (req.user.role !== 'clerk') {
-//         return res.status(403).json({ message: 'Unauthorized access' });
-//       }
-
-//       const documents = await Promise.all(
-//         application.documents.map(async (doc) => ({
-//           type: doc.type,
-//           documentUrl: doc.documentUrl,
-//           key: doc.key,
-//           presignedUrl: await getPresignedUrl(doc.key),
-//           verified: doc.verified,
-//           uploadedAt: application.createdAt,
-//         }))
-//       );
-
-//       res.json({
-//         status: 'success',
-//         applicationId: application._id,
-//         trackingId: application.trackingId,
-//         studentName: application.studentDetails.name,
-//         admissionType: application.admissionType,
-//         documentCount: documents.length,
-//         documents,
-//       });
-//     } catch (error) {
-//       res.status(500).json({ error: error.message });
-//     }
-//   },
-
-//   getAvailableClasses: async (req, res) => {
-//     try {
-//       const schoolId = req.school._id.toString();
-//       const connection = req.connection;
-//       const Class = require('../models/Class')(connection);
-//       const User = require('../models/User')(connection);
-
-//       const allClasses = await Class.find({ school: schoolId })
-//         .select('name division academicYear capacity students classTeacher')
-//         .populate('classTeacher', 'name', User)
-//         .sort({ name: 1, division: 1 });
-
-//       res.json({
-//         classes: allClasses.map((cls) => ({
-//           _id: cls._id,
-//           name: cls.name,
-//           division: cls.division,
-//           academicYear: cls.academicYear,
-//           teacher: cls.classTeacher ? cls.classTeacher.name : null,
-//           enrolledCount: cls.students ? cls.students.length : 0,
-//           capacity: cls.capacity,
-//           remainingCapacity: cls.capacity - (cls.students ? cls.students.length : 0),
-//         })),
-//       });
-//     } catch (error) {
-//       res.status(500).json({ error: error.message });
-//     }
-//   },
-
-//   enrollStudent: async (req, res) => {
-//     try {
-//       const { applicationId } = req.params;
-//       const { classId, grNumber, password } = req.body;
-//       const schoolId = req.school._id.toString();
-//       const connection = req.connection;
-//       const AdmissionApplication = require('../models/AdmissionApplication')(connection);
-//       const Class = require('../models/Class')(connection);
-//       const User = require('../models/User')(connection);
-//       const School = require('../models/School')(require('../config/database').getOwnerConnection());
-
-//       if (!password) {
-//         return res.status(400).json({ message: 'Password is required' });
-//       }
-
-//       const application = await AdmissionApplication.findOne({ _id: applicationId, school: schoolId });
-//       if (!application) {
-//         return res.status(404).json({ message: 'Application not found' });
-//       }
-
-//       if (application.status !== 'approved') {
-//         return res.status(400).json({ message: 'Only approved applications can be enrolled' });
-//       }
-
-//       const existingGR = await User.findOne({ 'studentDetails.grNumber': grNumber, school: schoolId });
-//       if (existingGR) {
-//         return res.status(400).json({ message: 'GR number already exists' });
-//       }
-
-//       const selectedClass = await Class.findOne({ _id: classId, school: schoolId });
-//       if (!selectedClass) {
-//         return res.status(404).json({ message: 'Class not found' });
-//       }
-
-//       if (selectedClass.students.length >= selectedClass.capacity) {
-//         return res.status(400).json({ message: 'Class is at full capacity' });
-//       }
-
-//       const school = await School.findById(schoolId).select('name');
-//       if (!school) {
-//         return res.status(404).json({ message: 'School not found' });
-//       }
-
-//       const hashedPassword = await bcrypt.hash(password, 10);
-
-//       const student = new User({
-//         school: schoolId,
-//         name: application.studentDetails.name,
-//         email: application.studentDetails.email,
-//         password: hashedPassword,
-//         role: 'student',
-//         status: 'active',
-//         studentDetails: {
-//           grNumber,
-//           class: classId,
-//           admissionType: application.admissionType,
-//           parentDetails: application.parentDetails,
-//           dob: application.studentDetails.dob,
-//           gender: application.studentDetails.gender,
-//         },
-//       });
-
-//       await student.save();
-
-//       await Class.findByIdAndUpdate(classId, { $push: { students: student._id } });
-
-//       application.status = 'enrolled';
-//       application.grNumber = grNumber;
-//       application.assignedClass = classId;
-//       await application.save();
-
-//       const className = `${selectedClass.name}${selectedClass.division ? ' ' + selectedClass.division : ''}`;
-
-//       const notificationResult = await sendAdmissionNotification(
-//         student.email,
-//         application.studentDetails.mobile,
-//         student.name,
-//         password,
-//         school.name,
-//         className
-//       );
-
-//       if (!notificationResult.emailSent || !notificationResult.smsSent) {
-//         console.warn('Notification partially failed:', notificationResult.error);
-//       }
-
-//       res.json({
-//         message: 'Student enrolled successfully',
-//         studentDetails: {
-//           id: student._id,
-//           name: student.name,
-//           email: student.email,
-//           grNumber,
-//           class: { name: selectedClass.name, division: selectedClass.division },
-//         },
-//         notificationStatus: {
-//           emailSent: notificationResult.emailSent,
-//           smsSent: notificationResult.smsSent,
-//         },
-//       });
-//     } catch (error) {
-//       res.status(500).json({ error: error.message });
-//     }
-//   },
-
-//   getStudentsByClass: async (req, res) => {
-//     try {
-//       const { classId } = req.params;
-//       const schoolId = req.school._id.toString();
-//       const connection = req.connection;
-//       const Class = require('../models/Class')(connection);
-//       const User = require('../models/User')(connection);
-
-//       if (!mongoose.Types.ObjectId.isValid(classId)) {
-//         return res.status(400).json({ message: 'Invalid class ID' });
-//       }
-
-//       const selectedClass = await Class.findOne({ _id: classId, school: schoolId });
-//       if (!selectedClass) {
-//         return res.status(404).json({ message: 'Class not found' });
-//       }
-
-//       const students = await User.find({
-//         school: schoolId,
-//         'studentDetails.class': classId,
-//         role: 'student',
-//       })
-//         .select('name email studentDetails')
-//         .lean();
-
-//       res.json({
-//         status: 'success',
-//         class: {
-//           name: selectedClass.name,
-//           division: selectedClass.division,
-//           academicYear: selectedClass.academicYear,
-//           capacity: selectedClass.capacity,
-//           enrolledCount: selectedClass.students.length,
-//         },
-//         count: students.length,
-//         students: students.map((student) => ({
-//           id: student._id,
-//           name: student.name,
-//           email: student.email,
-//           grNumber: student.studentDetails.grNumber,
-//           admissionType: student.studentDetails.admissionType,
-//           dob: student.studentDetails.dob,
-//           gender: student.studentDetails.gender,
-//           parentDetails: student.studentDetails.parentDetails,
-//         })),
-//       });
-//     } catch (error) {
-//       res.status(500).json({ error: error.message });
-//     }
-//   },
-
-//   requestLeave: async (req, res) => {
-//     try {
-//       const schoolId = req.school._id.toString();
-//       const { reason, startDate, endDate, type } = req.body;
-//       const clerkId = req.user._id;
-//       const connection = req.connection;
-//       const Leave = require('../models/Leave')(connection);
-
-//       const leave = new Leave({
-//         school: schoolId,
-//         user: clerkId,
-//         reason,
-//         startDate,
-//         endDate,
-//         type,
-//         status: 'pending',
-//         appliedOn: new Date(),
-//       });
-
-//       await leave.save();
-//       res.status(201).json(leave);
-//     } catch (error) {
-//       res.status(500).json({ error: error.message });
-//     }
-//   },
-
-//   getLeaveStatus: async (req, res) => {
-//     try {
-//       const schoolId = req.school._id.toString();
-//       const clerkId = req.user._id;
-//       const connection = req.connection;
-//       const Leave = require('../models/Leave')(connection);
-
-//       const leaves = await Leave.find({ school: schoolId, user: clerkId })
-//         .sort({ appliedOn: -1 })
-//         .lean();
-
-//       res.json({
-//         status: 'success',
-//         count: leaves.length,
-//         leaves: leaves.map((leave) => ({
-//           id: leave._id,
-//           reason: leave.reason,
-//           startDate: leave.startDate,
-//           endDate: leave.endDate,
-//           type: leave.type,
-//           status: leave.status,
-//           appliedOn: leave.appliedOn,
-//           reviewedBy: leave.reviewedBy,
-//           reviewedAt: leave.reviewedAt,
-//           comments: leave.comments,
-//         })),
-//       });
-//     } catch (error) {
-//       res.status(500).json({ error: error.message });
-//     }
-//   },
-
-//   getPendingCertificates: async (req, res) => {
-//     try {
-//       const schoolId = req.school._id.toString();
-//       const connection = req.connection;
-//       const Certificate = require('../models/Certificate')(connection);
-//       const User = require('../models/User')(connection);
-//       const Class = require('../models/Class')(connection);
-
-//       const certificates = await Certificate.find({
-//         school: schoolId,
-//         status: 'pending',
-//       })
-//         .populate({
-//           path: 'student',
-//           select: 'name email studentDetails',
-//           populate: {
-//             path: 'studentDetails.class',
-//             model: Class,
-//             select: 'name division',
-//           },
-//         })
-//         .populate('generatedBy', 'name email', User)
-//         .sort({ requestDate: -1 });
-
-//       res.json({
-//         status: 'success',
-//         count: certificates.length,
-//         certificates: certificates.map((cert) => ({
-//           id: cert._id,
-//           studentName: cert.student?.name || 'N/A',
-//           studentEmail: cert.student?.email || 'N/A',
-//           type: cert.type,
-//           purpose: cert.purpose,
-//           urgency: cert.urgency,
-//           requestDate: cert.requestDate,
-//           status: cert.status,
-//           grNumber: cert.student?.studentDetails?.grNumber || 'N/A',
-//           parentName: cert.student?.studentDetails?.parentDetails?.name || 'N/A',
-//           admissionDate: cert.student?.studentDetails?.admissionDate
-//             ? new Date(cert.student.studentDetails.admissionDate).toISOString().split('T')[0]
-//             : 'N/A',
-//           dob: cert.student?.studentDetails?.dob
-//             ? new Date(cert.student.studentDetails.dob).toISOString().split('T')[0]
-//             : 'N/A',
-//           className: cert.student?.studentDetails?.class
-//             ? `${cert.student.studentDetails.class.name}${cert.student.studentDetails.class.division ? ' ' + cert.student.studentDetails.class.division : ''}`
-//             : 'N/A',
-//           schoolName: req.school?.name || 'N/A',
-//           schoolAddress: req.school?.address || 'N/A',
-//         })),
-//       });
-//     } catch (error) {
-//       console.error('Error in getPendingCertificates:', error);
-//       res.status(500).json({ error: error.message });
-//     }
-//   },
-
-//   // getCertificateHistory: async (req, res) => {
-//   //   try {
-//   //     const schoolId = req.school._id.toString();
-//   //     const connection = req.connection;
-//   //     const Certificate = require('../models/Certificate')(connection);
-//   //     const User = require('../models/User')(connection);
-//   //     const Class = require('../models/Class')(connection);
-
-//   //     const certificates = await Certificate.find({ school: schoolId })
-//   //       .populate({
-//   //         path: 'student',
-//   //         select: 'name email studentDetails',
-//   //         populate: {
-//   //           path: 'studentDetails.class',
-//   //           model: Class,
-//   //           select: 'name division',
-//   //         },
-//   //       })
-//   //       .populate('generatedBy', 'name email', User)
-//   //       .sort({ requestDate: -1 });
-
-//   //     const certificatesWithPresignedUrls = await Promise.all(
-//   //       certificates.map(async (cert) => ({
-//   //         id: cert._id,
-//   //         studentName: cert.student?.name || 'N/A',
-//   //         studentEmail: cert.student?.email || 'N/A',
-//   //         type: cert.type,
-//   //         purpose: cert.purpose,
-//   //         urgency: cert.urgency,
-//   //         requestDate: cert.requestDate,
-//   //         status: cert.status,
-//   //         documentUrl: cert.documentUrl,
-//   //         signedDocumentUrl: cert.signedDocumentUrl,
-//   //         documentPresignedUrl: cert.documentUrl ? await getPresignedUrl(cert.documentKey) : null,
-//   //         signedDocumentPresignedUrl: cert.signedDocumentUrl ? await getPresignedUrl(cert.signedDocumentKey) : null,
-//   //         isSentToStudent: cert.isSentToStudent,
-//   //         issuedDate: cert.issuedDate || null,
-//   //         generatedBy: cert.generatedBy ? cert.generatedBy.name : null,
-//   //         comments: cert.comments || null,
-//   //         grNumber: cert.student?.studentDetails?.grNumber || 'N/A',
-//   //         parentName: cert.student?.studentDetails?.parentDetails?.name || 'N/A',
-//   //         admissionDate: cert.student?.studentDetails?.admissionDate
-//   //           ? new Date(cert.student.studentDetails.admissionDate).toISOString().split('T')[0]
-//   //           : 'N/A',
-//   //         dob: cert.student?.studentDetails?.dob
-//   //           ? new Date(cert.student.studentDetails.dob).toISOString().split('T')[0]
-//   //           : 'N/A',
-//   //         className: cert.student?.studentDetails?.class
-//   //           ? `${cert.student.studentDetails.class.name}${cert.student.studentDetails.class.division ? ' ' + cert.student.studentDetails.class.division : ''}`
-//   //           : 'N/A',
-//   //         schoolName: req.school?.name || 'N/A',
-//   //         schoolAddress: req.school?.address || 'N/A',
-//   //       }))
-//   //     );
-
-//   //     res.json({
-//   //       status: 'success',
-//   //       count: certificates.length,
-//   //       certificates: certificatesWithPresignedUrls,
-//   //     });
-//   //   } catch (error) {
-//   //     console.error('Error in getCertificateHistory:', error);
-//   //     res.status(500).json({ error: error.message });
-//   //   }
-//   // },
-
-//   getCertificateHistory: async (req, res) => {
-//     try {
-//       const schoolId = req.school._id.toString();
-//       const connection = req.connection;
-//       const Certificate = require('../models/Certificate')(connection);
-//       const User = require('../models/User')(connection);
-//       const Class = require('../models/Class')(connection);
-  
-//       const certificates = await Certificate.find({ school: schoolId })
-//         .populate({
-//           path: 'student',
-//           select: 'name email studentDetails',
-//           populate: {
-//             path: 'studentDetails.class',
-//             model: Class,
-//             select: 'name division',
-//           },
-//         })
-//         .populate('generatedBy', 'name email', User)
-//         .sort({ requestDate: -1 });
-  
-//       const certificatesWithPresignedUrls = await Promise.all(
-//         certificates.map(async (cert) => ({
-//           id: cert._id,
-//           studentName: cert.student?.name || 'N/A',
-//           studentEmail: cert.student?.email || 'N/A',
-//           type: cert.type,
-//           purpose: cert.purpose,
-//           urgency: cert.urgency,
-//           requestDate: cert.requestDate,
-//           status: cert.status,
-//           documentUrl: cert.documentUrl,
-//           signedDocumentUrl: cert.signedDocumentUrl,
-//           documentPresignedUrl: cert.documentKey ? await getPresignedUrl(cert.documentKey) : null, // Check documentKey
-//           signedDocumentPresignedUrl: cert.signedDocumentKey ? await getPresignedUrl(cert.signedDocumentKey) : null, // Check signedDocumentKey
-//           isSentToStudent: cert.isSentToStudent,
-//           issuedDate: cert.issuedDate || null,
-//           generatedBy: cert.generatedBy ? cert.generatedBy.name : null,
-//           comments: cert.comments || null,
-//           grNumber: cert.student?.studentDetails?.grNumber || 'N/A',
-//           parentName: cert.student?.studentDetails?.parentDetails?.name || 'N/A',
-//           admissionDate: cert.student?.studentDetails?.admissionDate
-//             ? new Date(cert.student.studentDetails.admissionDate).toISOString().split('T')[0]
-//             : 'N/A',
-//           dob: cert.student?.studentDetails?.dob
-//             ? new Date(cert.student.studentDetails.dob).toISOString().split('T')[0]
-//             : 'N/A',
-//           className: cert.student?.studentDetails?.class
-//             ? `${cert.student.studentDetails.class.name}${cert.student.studentDetails.class.division ? ' ' + cert.student.studentDetails.class.division : ''}`
-//             : 'N/A',
-//           schoolName: req.school?.name || 'N/A',
-//           schoolAddress: req.school?.address || 'N/A',
-//         }))
-//       );
-  
-//       res.json({
-//         status: 'success',
-//         count: certificates.length,
-//         certificates: certificatesWithPresignedUrls,
-//       });
-//     } catch (error) {
-//       console.error('Error in getCertificateHistory:', error);
-//       res.status(500).json({ error: error.message });
-//     }
-//   },
-
-//   // generateCertificate: async (req, res) => {
-//   //   try {
-//   //     const { certificateId } = req.params;
-//   //     const { status, comments, pdfData, certificateType } = req.body;
-
-//   //     const schoolId = req.school._id.toString();
-//   //     const connection = req.connection;
-//   //     const Certificate = require('../models/Certificate')(connection);
-//   //     const User = require('../models/User')(connection);
-
-//   //     if (!mongoose.Types.ObjectId.isValid(certificateId)) {
-//   //       return res.status(400).json({ message: 'Invalid certificate ID' });
-//   //     }
-
-//   //     const certificate = await Certificate.findOne({ _id: certificateId, school: schoolId });
-//   //     if (!certificate) {
-//   //       return res.status(404).json({ message: 'Certificate request not found' });
-//   //     }
-
-//   //     if (status === 'rejected') {
-//   //       certificate.status = 'rejected';
-//   //       certificate.comments = comments;
-//   //       await certificate.save();
-//   //       return res.json({ message: 'Certificate request rejected', certificate });
-//   //     }
-
-//   //     if (status !== 'generated') {
-//   //       return res.status(400).json({ message: 'Invalid status for generation' });
-//   //     }
-
-//   //     if (!pdfData || !certificateType) {
-//   //       return res.status(400).json({ message: 'PDF data and certificate type are required' });
-//   //     }
-
-//   //     const pdfBuffer = Buffer.from(pdfData, 'base64');
-//   //     const certificateKey = `certificates/${schoolId}/${certificateId}/${certificateType}.pdf`;
-//   //     const uploadResult = await uploadToS3(pdfBuffer, certificateKey);
-//   //     const documentUrl = uploadResult.Location;
-//   //     const presignedUrl = await getPresignedUrl(certificateKey);
-
-//   //     certificate.documentUrl = documentUrl;
-//   //     certificate.documentKey = certificateKey; // Store the S3 key
-//   //     certificate.status = 'generated';
-//   //     certificate.issuedDate = new Date();
-//   //     certificate.generatedBy = req.user._id;
-//   //     certificate.comments = comments;
-//   //     await certificate.save();
-
-//   //     res.json({
-//   //       message: 'Certificate generated successfully',
-//   //       certificate: {
-//   //         ...certificate.toObject(),
-//   //         documentPresignedUrl: presignedUrl,
-//   //       },
-//   //     });
-//   //   } catch (error) {
-//   //     console.error('Error in generateCertificate:', error);
-//   //     res.status(500).json({ error: error.message });
-//   //   }
-//   // },
-
-//   generateCertificate: async (req, res) => {
-//     try {
-//       const { certificateId } = req.params;
-//       const { status, comments, pdfData, certificateType } = req.body;
-  
-//       const schoolId = req.school._id.toString();
-//       const connection = req.connection;
-//       const Certificate = require('../models/Certificate')(connection);
-//       const User = require('../models/User')(connection);
-  
-//       if (!mongoose.Types.ObjectId.isValid(certificateId)) {
-//         return res.status(400).json({ message: 'Invalid certificate ID' });
-//       }
-  
-//       const certificate = await Certificate.findOne({ _id: certificateId, school: schoolId });
-//       if (!certificate) {
-//         return res.status(404).json({ message: 'Certificate request not found' });
-//       }
-  
-//       if (status === 'rejected') {
-//         certificate.status = 'rejected';
-//         certificate.comments = comments;
-//         await certificate.save();
-//         return res.json({ message: 'Certificate request rejected', certificate });
-//       }
-  
-//       if (status !== 'generated') {
-//         return res.status(400).json({ message: 'Invalid status for generation' });
-//       }
-  
-//       if (!pdfData || !certificateType) {
-//         return res.status(400).json({ message: 'PDF data and certificate type are required' });
-//       }
-  
-//       let pdfBuffer;
-//       try {
-//         pdfBuffer = Buffer.from(pdfData, 'base64');
-//       } catch (error) {
-//         return res.status(400).json({ message: 'Invalid base64 PDF data', error: error.message });
-//       }
-  
-//       const certificateKey = `certificates/${schoolId}/${certificateId}/${certificateType}.pdf`;
-//       let uploadResult;
-//       try {
-//         uploadResult = await uploadToS3(pdfBuffer, certificateKey);
-//       } catch (error) {
-//         return res.status(500).json({ message: 'Failed to upload to S3', error: error.message });
-//       }
-  
-//       const documentUrl = uploadResult.Location;
-//       let presignedUrl;
-//       try {
-//         presignedUrl = await getPresignedUrl(certificateKey);
-//       } catch (error) {
-//         return res.status(500).json({ message: 'Failed to generate pre-signed URL', error: error.message });
-//       }
-  
-//       certificate.documentUrl = documentUrl;
-//       certificate.documentKey = certificateKey;
-//       certificate.status = 'generated';
-//       certificate.issuedDate = new Date();
-//       certificate.generatedBy = req.user._id;
-//       certificate.comments = comments;
-  
-//       try {
-//         await certificate.save();
-//       } catch (error) {
-//         await deleteFromS3(certificateKey); // Cleanup on save failure
-//         return res.status(500).json({ message: 'Failed to save certificate', error: error.message });
-//       }
-  
-//       res.json({
-//         message: 'Certificate generated successfully',
-//         certificate: {
-//           ...certificate.toObject(),
-//           documentPresignedUrl: presignedUrl,
-//         },
-//       });
-//     } catch (error) {
-//       console.error('Error in generateCertificate:', error);
-//       res.status(500).json({ error: error.message });
-//     }
-//   },
-
-//   // uploadSignedCertificate: async (req, res) => {
-//   //   try {
-//   //     const { certificateId } = req.params;
-//   //     const file = req.file;
-
-//   //     const schoolId = req.school._id.toString();
-//   //     const connection = req.connection;
-//   //     const Certificate = require('../models/Certificate')(connection);
-//   //     const User = require('../models/User')(connection);
-
-//   //     if (!mongoose.Types.ObjectId.isValid(certificateId)) {
-//   //       return res.status(400).json({ message: 'Invalid certificate ID' });
-//   //     }
-
-//   //     const certificate = await Certificate.findOne({ _id: certificateId, school: schoolId });
-//   //     if (!certificate) {
-//   //       return res.status(404).json({ message: 'Certificate not found' });
-//   //     }
-
-//   //     if (certificate.status !== 'generated') {
-//   //       return res.status(400).json({ message: 'Certificate must be generated before uploading a signed version' });
-//   //     }
-
-//   //     if (!file) {
-//   //       return res.status(400).json({ message: 'PDF file is required' });
-//   //     }
-
-//   //     const signedCertificateKey = `certificates/${schoolId}/${certificateId}/${certificate.type}_signed.pdf`;
-//   //     const uploadResult = await uploadToS3(file.buffer, signedCertificateKey);
-//   //     const signedDocumentUrl = uploadResult.Location;
-//   //     const signedPresignedUrl = await getPresignedUrl(signedCertificateKey);
-
-//   //     certificate.signedDocumentUrl = signedDocumentUrl;
-//   //     certificate.signedDocumentKey = signedCertificateKey; // Store the S3 key
-//   //     certificate.isSentToStudent = true;
-//   //     await certificate.save();
-
-//   //     const student = await User.findById(certificate.student).select('name email studentDetails');
-//   //     if (!student) {
-//   //       return res.status(404).json({ message: 'Student not found' });
-//   //     }
-
-//   //     const notificationResult = await sendCertificateNotification(
-//   //       student.email,
-//   //       student.studentDetails?.mobile,
-//   //       student.name,
-//   //       certificate.type,
-//   //       signedPresignedUrl // Use pre-signed URL in notification
-//   //     );
-
-//   //     res.json({
-//   //       message: 'Signed certificate uploaded and sent to student successfully',
-//   //       certificate: {
-//   //         ...certificate.toObject(),
-//   //         signedDocumentPresignedUrl: signedPresignedUrl,
-//   //       },
-//   //       notificationStatus: {
-//   //         emailSent: notificationResult.emailSent,
-//   //         smsSent: notificationResult.smsSent,
-//   //       },
-//   //     });
-//   //   } catch (error) {
-//   //     console.error('Error in uploadSignedCertificate:', error);
-//   //     res.status(500).json({ error: error.message });
-//   //   }
-//   // },
-
-//   uploadSignedCertificate: async (req, res) => {
-//     try {
-//       const { certificateId } = req.params;
-//       const file = req.file;
-  
-//       const schoolId = req.school._id.toString();
-//       const connection = req.connection;
-//       const Certificate = require('../models/Certificate')(connection);
-//       const User = require('../models/User')(connection);
-  
-//       if (!mongoose.Types.ObjectId.isValid(certificateId)) {
-//         return res.status(400).json({ message: 'Invalid certificate ID' });
-//       }
-  
-//       const certificate = await Certificate.findOne({ _id: certificateId, school: schoolId });
-//       if (!certificate) {
-//         return res.status(404).json({ message: 'Certificate not found' });
-//       }
-  
-//       if (certificate.status !== 'generated') {
-//         return res.status(400).json({ message: 'Certificate must be generated before uploading a signed version' });
-//       }
-  
-//       if (!file) {
-//         return res.status(400).json({ message: 'PDF file is required' });
-//       }
-  
-//       // File is already uploaded to S3 by multer-s3, use req.file.key
-//       const signedCertificateKey = file.key;
-//       const signedDocumentUrl = file.location; // S3 URL
-//       const signedPresignedUrl = await getPresignedUrl(signedCertificateKey);
-  
-//       certificate.signedDocumentUrl = signedDocumentUrl;
-//       certificate.signedDocumentKey = signedCertificateKey;
-//       certificate.isSentToStudent = true;
-//       await certificate.save();
-  
-//       const student = await User.findById(certificate.student).select('name email studentDetails');
-//       if (!student) {
-//         return res.status(404).json({ message: 'Student not found' });
-//       }
-  
-//       const notificationResult = await sendCertificateNotification(
-//         student.email,
-//         student.studentDetails?.mobile,
-//         student.name,
-//         certificate.type,
-//         signedPresignedUrl
-//       );
-  
-//       res.json({
-//         message: 'Signed certificate uploaded and sent to student successfully',
-//         certificate: {
-//           ...certificate.toObject(),
-//           signedDocumentPresignedUrl: signedPresignedUrl,
-//         },
-//         notificationStatus: {
-//           emailSent: notificationResult.emailSent,
-//           smsSent: notificationResult.smsSent,
-//         },
-//       });
-//     } catch (error) {
-//       console.error('Error in uploadSignedCertificate:', error);
-//       res.status(500).json({ error: error.message });
-//     }
-//   },
-
-//   sendCertificateToStudent: async (req, res) => {
-//     try {
-//       const { certificateId } = req.params;
-
-//       const schoolId = req.school._id.toString();
-//       const connection = req.connection;
-//       const Certificate = require('../models/Certificate')(connection);
-//       const User = require('../models/User')(connection);
-
-//       if (!mongoose.Types.ObjectId.isValid(certificateId)) {
-//         return res.status(400).json({ message: 'Invalid certificate ID' });
-//       }
-
-//       const certificate = await Certificate.findOne({ _id: certificateId, school: schoolId });
-//       if (!certificate) {
-//         return res.status(404).json({ message: 'Certificate not found' });
-//       }
-
-//       if (!certificate.signedDocumentUrl) {
-//         return res.status(400).json({ message: 'Signed certificate must be uploaded before sending to student' });
-//       }
-
-//       if (certificate.isSentToStudent) {
-//         return res.status(400).json({ message: 'Certificate has already been sent to the student' });
-//       }
-
-//       certificate.isSentToStudent = true;
-//       await certificate.save();
-
-//       const student = await User.findById(certificate.student).select('name email studentDetails');
-//       const signedPresignedUrl = await getPresignedUrl(certificate.signedDocumentKey);
-
-//       const notificationResult = await sendCertificateNotification(
-//         student.email,
-//         student.studentDetails.mobile,
-//         student.name,
-//         certificate.type,
-//         signedPresignedUrl
-//       );
-
-//       res.json({
-//         message: 'Certificate sent to student successfully',
-//         certificate: {
-//           ...certificate.toObject(),
-//           signedDocumentPresignedUrl: signedPresignedUrl,
-//         },
-//         notificationStatus: {
-//           emailSent: notificationResult.emailSent,
-//           smsSent: notificationResult.smsSent,
-//         },
-//       });
-//     } catch (error) {
-//       console.error('Error in sendCertificateToStudent:', error);
-//       res.status(500).json({ error: error.message });
-//     }
-//   },
-
-//   generateRTEReport: async (req, res) => {
-//     try {
-//       const schoolId = req.school._id.toString();
-//       const { startDate, endDate } = req.body;
-//       const connection = req.connection;
-//       const User = require('../models/User')(connection);
-
-//       const rteStudents = await User.find({
-//         school: schoolId,
-//         'studentDetails.isRTE': true,
-//         'studentDetails.admissionDate': {
-//           $gte: new Date(startDate),
-//           $lte: new Date(endDate),
-//         },
-//       }).lean();
-
-//       const report = {
-//         totalRTEStudents: rteStudents.length,
-//         admissionsByClass: {},
-//         documentVerificationStatus: { verified: 0, pending: 0 },
-//       };
-
-//       rteStudents.forEach((student) => {
-//         const classId = student.studentDetails.class.toString();
-//         report.admissionsByClass[classId] = (report.admissionsByClass[classId] || 0) + 1;
-//         report.documentVerificationStatus[student.studentDetails.status === 'verified' ? 'verified' : 'pending']++;
-//       });
-
-//       res.json({ report });
-//     } catch (error) {
-//       res.status(500).json({ error: error.message });
-//     }
-//   },
-
-//   registerExistingStudent: async (req, res) => {
-//     try {
-//       const {
-//         name,
-//         email,
-//         dob,
-//         gender,
-//         mobile,
-//         parentName,
-//         parentEmail,
-//         parentMobile,
-//         parentOccupation,
-//         address,
-//         grNumber,
-//         classId,
-//         admissionType = 'Regular',
-//         password,
-//       } = req.body;
-
-//       const schoolId = req.school._id.toString();
-//       const connection = req.connection;
-//       const User = require('../models/User')(connection);
-//       const Class = require('../models/Class')(connection);
-//       const School = require('../models/School')(require('../config/database').getOwnerConnection());
-
-//       if (!name || !email || !dob || !gender || !mobile || !grNumber || !classId || !password) {
-//         return res.status(400).json({ message: 'All required fields must be provided' });
-//       }
-
-//       const emailRegex = /^[a-zA-Z0-9._-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,6}$/;
-//       if (!emailRegex.test(email)) {
-//         return res.status(400).json({ message: 'Invalid email format' });
-//       }
-
-//       const mobileRegex = /^[0-9]{10}$/;
-//       if (!mobileRegex.test(mobile) || (parentMobile && !mobileRegex.test(parentMobile))) {
-//         return res.status(400).json({ message: 'Mobile number must be 10 digits' });
-//       }
-
-//       const existingGR = await User.findOne({ 'studentDetails.grNumber': grNumber, school: schoolId });
-//       if (existingGR) {
-//         return res.status(400).json({ message: 'GR number already exists' });
-//       }
-
-//       const existingEmail = await User.findOne({ email, school: schoolId });
-//       if (existingEmail) {
-//         return res.status(400).json({ message: 'Email already registered' });
-//       }
-
-//       const selectedClass = await Class.findOne({ _id: classId, school: schoolId });
-//       if (!selectedClass) {
-//         return res.status(404).json({ message: 'Class not found' });
-//       }
-
-//       if (selectedClass.students.length >= selectedClass.capacity) {
-//         return res.status(400).json({ message: 'Class is at full capacity' });
-//       }
-
-//       const school = await School.findById(schoolId).select('name');
-//       if (!school) {
-//         return res.status(404).json({ message: 'School not found' });
-//       }
-
-//       const hashedPassword = await bcrypt.hash(password, 10);
-
-//       const student = new User({
-//         school: schoolId,
-//         name,
-//         email,
-//         password: hashedPassword,
-//         role: 'student',
-//         status: 'active',
-//         studentDetails: {
-//           grNumber,
-//           class: classId,
-//           admissionType,
-//           parentDetails: {
-//             name: parentName,
-//             email: parentEmail,
-//             mobile: parentMobile,
-//             occupation: parentOccupation,
-//             address: address || {},
-//           },
-//           dob: new Date(dob),
-//           gender,
-//         },
-//       });
-
-//       await student.save();
-
-//       await Class.findByIdAndUpdate(classId, { $push: { students: student._id } });
-
-//       const className = `${selectedClass.name}${selectedClass.division ? ' ' + selectedClass.division : ''}`;
-
-//       const notificationResult = await sendAdmissionNotification(
-//         student.email,
-//         mobile,
-//         student.name,
-//         password,
-//         school.name,
-//         className,
-//         grNumber
-//       );
-
-//       if (!notificationResult.emailSent || !notificationResult.smsSent) {
-//         console.warn('Notification partially failed:', notificationResult.error);
-//       }
-
-//       res.status(201).json({
-//         message: 'Existing student registered successfully',
-//         studentDetails: {
-//           id: student._id,
-//           name: student.name,
-//           email: student.email,
-//           grNumber,
-//           class: { name: selectedClass.name, division: selectedClass.division },
-//         },
-//         notificationStatus: {
-//           emailSent: notificationResult.emailSent,
-//           smsSent: notificationResult.smsSent,
-//         },
-//       });
-//     } catch (error) {
-//       console.error('Error registering existing student:', error);
-//       res.status(500).json({ error: error.message });
-//     }
-//   },
-// };
-
-// const sendCertificateNotification = async (email, mobile, studentName, certificateType, documentUrl) => {
-//   // Implement email and SMS notification logic here
-//   return {
-//     emailSent: true,
-//     smsSent: true,
-//     error: null,
-//   };
-// };
-
-// module.exports = { clerkController, upload };
-
-
-
-
-
-//AWS Second chnage
-
-const mongoose = require('mongoose');
-const bcrypt = require('bcryptjs');
-const { sendAdmissionNotification } = require('../utils/notifications');
-const { uploadToS3, deleteFromS3, streamS3Object } = require('../config/s3Upload');
-const multer = require('multer');
-const QRCode = require('qrcode'); // Import QRCode library
-const jwt = require('jsonwebtoken'); // Import JWT for token generation
+const mongoose = require("mongoose");
+const bcrypt = require("bcryptjs");
+const { sendAdmissionNotification } = require("../utils/notifications");
+const {
+  uploadToS3,
+  deleteFromS3,
+  streamS3Object,
+} = require("../config/s3Upload");
+const multer = require("multer");
+const QRCode = require("qrcode"); 
+const jwt = require("jsonwebtoken"); 
 
 const storage = multer.memoryStorage();
 const upload = multer({ storage: storage });
 
 const clerkController = {
-  // getDashboard: async (req, res) => {
-  //   try {
-  //     const schoolId = req.school._id.toString();
-  //     const clerkId = req.user._id.toString();
-  //     const connection = req.connection;
-
-  //     const AdmissionApplication = require('../models/AdmissionApplication')(connection);
-  //     const Certificate = require('../models/Certificate')(connection);
-  //     const User = require('../models/User')(connection);
-  //     const Leave = require('../models/Leave')(connection);
-
-  //     const today = new Date('2025-03-21');
-  //     const startOfDay = new Date(today.setHours(0, 0, 0, 0));
-  //     const endOfDay = new Date(today.setHours(23, 59, 59, 999));
-
-  //     const pendingVerifications = await AdmissionApplication.countDocuments({
-  //       school: schoolId,
-  //       $or: [
-  //         {
-  //           status: { $in: ['pending', 'document_verification'] },
-  //           'clerkVerification.status': 'pending',
-  //         },
-  //         {
-  //           status: 'approved',
-  //           'feesVerification.status': 'verified',
-  //           'clerkVerification.status': 'verified',
-  //         },
-  //       ],
-  //     });
-
-  //     const pendingCertificates = await Certificate.countDocuments({
-  //       school: schoolId,
-  //       status: 'pending',
-  //     });
-
-  //     const enrolledToday = await User.countDocuments({
-  //       school: schoolId,
-  //       role: 'student',
-  //       createdAt: { $gte: startOfDay, $lte: endOfDay },
-  //     });
-
-  //     const totalLeaves = await Leave.countDocuments({
-  //       school: schoolId,
-  //       user: clerkId,
-  //     });
-
-  //     const leaveSummary = await Leave.aggregate([
-  //       {
-  //         $match: {
-  //           school: new mongoose.Types.ObjectId(schoolId),
-  //           user: new mongoose.Types.ObjectId(clerkId),
-  //         },
-  //       },
-  //       {
-  //         $group: {
-  //           _id: '$status',
-  //           count: { $sum: 1 },
-  //         },
-  //       },
-  //       {
-  //         $project: {
-  //           status: '$_id',
-  //           count: 1,
-  //           _id: 0,
-  //         },
-  //       },
-  //     ]);
-
-  //     const leaveStatus = {
-  //       pending: 0,
-  //       approved: 0,
-  //       rejected: 0,
-  //       total: 0,
-  //     };
-
-  //     leaveSummary.forEach((item) => {
-  //       if (item.status in leaveStatus) {
-  //         leaveStatus[item.status] = item.count;
-  //       }
-  //     });
-  //     leaveStatus.total = leaveStatus.pending + leaveStatus.approved + leaveStatus.rejected;
-
-  //     const rteStudents = await User.countDocuments({
-  //       school: schoolId,
-  //       'studentDetails.isRTE': true,
-  //       'studentDetails.admissionDate': {
-  //         $gte: new Date('2025-01-01'),
-  //         $lte: new Date('2025-12-31'),
-  //       },
-  //     });
-
-  //     const totalStudents = await User.countDocuments({
-  //       school: schoolId,
-  //       role: 'student',
-  //     });
-
-  //     const dashboardData = {
-  //       status: 'success',
-  //       timestamp: new Date(),
-  //       pendingVerifications,
-  //       pendingCertificates,
-  //       enrolledToday,
-  //       totalStudents,
-  //       leaveStatus,
-  //       rteStudents,
-  //       debug: { totalLeaves },
-  //     };
-
-  //     res.json(dashboardData);
-  //   } catch (error) {
-  //     console.error('Error in getDashboard:', error);
-  //     res.status(500).json({ error: error.message });
-  //   }
-  // },
-
-
-
   getDashboard: async (req, res) => {
     try {
       const schoolId = req.school._id.toString();
       const clerkId = req.user._id.toString();
       const connection = req.connection;
 
-      const AdmissionApplication = require('../models/AdmissionApplication')(connection);
-      const Certificate = require('../models/Certificate')(connection);
-      const User = require('../models/User')(connection);
-      const Leave = require('../models/Leave')(connection);
+      const AdmissionApplication = require("../models/AdmissionApplication")(
+        connection
+      );
+      const Certificate = require("../models/Certificate")(connection);
+      const User = require("../models/User")(connection);
+      const Leave = require("../models/Leave")(connection);
 
-      const today = new Date();
-      const startOfDay = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate(), 0, 0, 0, 0));
-      const endOfDay = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate(), 23, 59, 59, 999));
-
-      console.log('Server current date:', today.toISOString());
-      console.log('UTC date for QR token:', startOfDay.toISOString().split('T')[0]);
+      const today = new Date("2025-03-21");
+      const startOfDay = new Date(today.setHours(0, 0, 0, 0));
+      const endOfDay = new Date(today.setHours(23, 59, 59, 999));
 
       const pendingVerifications = await AdmissionApplication.countDocuments({
         school: schoolId,
         $or: [
           {
-            status: { $in: ['pending', 'document_verification'] },
-            'clerkVerification.status': 'pending',
+            status: { $in: ["pending", "document_verification"] },
+            "clerkVerification.status": "pending",
           },
           {
-            status: 'approved',
-            'feesVerification.status': 'verified',
-            'clerkVerification.status': 'verified',
+            status: "approved",
+            "feesVerification.status": "verified",
+            "clerkVerification.status": "verified",
           },
         ],
       });
 
       const pendingCertificates = await Certificate.countDocuments({
         school: schoolId,
-        status: 'pending',
+        status: "pending",
       });
 
       const enrolledToday = await User.countDocuments({
         school: schoolId,
-        role: 'student',
+        role: "student",
         createdAt: { $gte: startOfDay, $lte: endOfDay },
       });
 
@@ -2582,13 +71,13 @@ const clerkController = {
         },
         {
           $group: {
-            _id: '$status',
+            _id: "$status",
             count: { $sum: 1 },
           },
         },
         {
           $project: {
-            status: '$_id',
+            status: "$_id",
             count: 1,
             _id: 0,
           },
@@ -2607,34 +96,25 @@ const clerkController = {
           leaveStatus[item.status] = item.count;
         }
       });
-      leaveStatus.total = leaveStatus.pending + leaveStatus.approved + leaveStatus.rejected;
+      leaveStatus.total =
+        leaveStatus.pending + leaveStatus.approved + leaveStatus.rejected;
 
       const rteStudents = await User.countDocuments({
         school: schoolId,
-        'studentDetails.isRTE': true,
-        'studentDetails.admissionDate': {
-          $gte: new Date('2025-01-01'),
-          $lte: new Date('2025-12-31'),
+        "studentDetails.isRTE": true,
+        "studentDetails.admissionDate": {
+          $gte: new Date("2025-01-01"),
+          $lte: new Date("2025-12-31"),
         },
       });
 
       const totalStudents = await User.countDocuments({
         school: schoolId,
-        role: 'student',
+        role: "student",
       });
 
-      const qrToken = jwt.sign(
-        { schoolId, date: startOfDay.toISOString().split('T')[0] },
-        process.env.JWT_SECRET || 'your-secret-key',
-        { expiresIn: '24h' }
-      );
-      const qrData = `${process.env.APP_URL}/teacher/attendance/verify-qr/${qrToken}`;
-      const qrCodeUrl = await QRCode.toDataURL(qrData);
-
-      console.log('Generated qrToken:', qrToken);
-
       const dashboardData = {
-        status: 'success',
+        status: "success",
         timestamp: new Date(),
         pendingVerifications,
         pendingCertificates,
@@ -2642,40 +122,39 @@ const clerkController = {
         totalStudents,
         leaveStatus,
         rteStudents,
-        qrCodeUrl,
-        qrToken, // For debugging
         debug: { totalLeaves },
       };
 
       res.json(dashboardData);
     } catch (error) {
-      console.error('Error in getDashboard:', error);
+      console.error("Error in getDashboard:", error);
       res.status(500).json({ error: error.message });
     }
   },
-
 
   getPendingVerifications: async (req, res) => {
     try {
       const schoolId = req.school._id.toString();
       const connection = req.connection;
-      const AdmissionApplication = require('../models/AdmissionApplication')(connection);
-  
+      const AdmissionApplication = require("../models/AdmissionApplication")(
+        connection
+      );
+
       const applications = await AdmissionApplication.find({
         school: schoolId,
         $or: [
           {
-            status: { $in: ['pending', 'document_verification'] },
-            'clerkVerification.status': 'pending',
+            status: { $in: ["pending", "document_verification"] },
+            "clerkVerification.status": "pending",
           },
           {
-            status: 'approved',
-            'feesVerification.status': 'verified',
-            'clerkVerification.status': 'verified',
+            status: "approved",
+            "feesVerification.status": "verified",
+            "clerkVerification.status": "verified",
           },
         ],
       }).sort({ createdAt: -1 });
-  
+
       const applicationsWithUrls = applications.map((app) => ({
         id: app._id,
         trackingId: app.trackingId,
@@ -2704,17 +183,24 @@ const clerkController = {
         submittedOn: app.createdAt,
         documents: app.documents.map((doc) => {
           if (!doc.key) {
-            console.error(`Missing key in application ${app._id}, document:`, doc);
+            console.error(
+              `Missing key in application ${app._id}, document:`,
+              doc
+            );
           }
           return {
             type: doc.type,
             documentUrl: doc.documentUrl,
             key: doc.key,
-            accessUrl: doc.key ? `/documents/${app._id}/${doc.key.split('/').pop()}` : null,
+            accessUrl: doc.key
+              ? `/documents/${app._id}/${doc.key.split("/").pop()}`
+              : null,
             verified: doc.verified,
           };
         }),
-        additionalResponses: app.additionalResponses ? Object.fromEntries(app.additionalResponses) : {},
+        additionalResponses: app.additionalResponses
+          ? Object.fromEntries(app.additionalResponses)
+          : {},
         clerkVerification: {
           status: app.clerkVerification.status,
           comments: app.clerkVerification.comments,
@@ -2725,16 +211,16 @@ const clerkController = {
           verifiedAt: app.feesVerification.verifiedAt,
         },
       }));
-  
+
       res.json({
-        status: 'success',
+        status: "success",
         count: applications.length,
         applications: applicationsWithUrls,
       });
     } catch (error) {
-      console.error('Error in getPendingVerifications:', error);
+      console.error("Error in getPendingVerifications:", error);
       res.status(500).json({
-        status: 'error',
+        status: "error",
         error: error.message,
       });
     }
@@ -2746,16 +232,21 @@ const clerkController = {
       const { status, comments } = req.body;
       const schoolId = req.school._id.toString();
       const connection = req.connection;
-      const AdmissionApplication = require('../models/AdmissionApplication')(connection);
+      const AdmissionApplication = require("../models/AdmissionApplication")(
+        connection
+      );
 
-      const application = await AdmissionApplication.findOne({ _id: applicationId, school: schoolId });
+      const application = await AdmissionApplication.findOne({
+        _id: applicationId,
+        school: schoolId,
+      });
       if (!application) {
-        return res.status(404).json({ message: 'Application not found' });
+        return res.status(404).json({ message: "Application not found" });
       }
 
       const hasAllDocuments = application.validateDocuments();
       if (!hasAllDocuments) {
-        return res.status(400).json({ message: 'Missing required documents' });
+        return res.status(400).json({ message: "Missing required documents" });
       }
 
       application.clerkVerification = {
@@ -2765,17 +256,20 @@ const clerkController = {
         comments,
       };
 
-      if (status === 'verified') {
-        application.status = 'fees_pending';
+      if (status === "verified") {
+        application.status = "fees_pending";
       } else {
-        application.status = 'rejected';
+        application.status = "rejected";
       }
 
       await application.save();
 
       res.json({
-        message: 'Verification completed',
-        nextStep: status === 'verified' ? 'Visit fees department for verification' : 'Application rejected',
+        message: "Verification completed",
+        nextStep:
+          status === "verified"
+            ? "Visit fees department for verification"
+            : "Application rejected",
       });
     } catch (error) {
       res.status(500).json({ error: error.message });
@@ -2788,17 +282,17 @@ const clerkController = {
       const { verifiedDocuments } = req.body;
       const schoolId = req.school._id.toString();
       const connection = req.connection;
-      const User = require('../models/User')(connection);
+      const User = require("../models/User")(connection);
 
       const student = await User.findOne({ _id: studentId, school: schoolId });
       if (!student) {
-        return res.status(404).json({ message: 'Student not found' });
+        return res.status(404).json({ message: "Student not found" });
       }
 
-      student.studentDetails.status = 'verified';
+      student.studentDetails.status = "verified";
       await student.save();
 
-      res.json({ message: 'Documents verified successfully' });
+      res.json({ message: "Documents verified successfully" });
     } catch (error) {
       res.status(500).json({ error: error.message });
     }
@@ -2809,10 +303,12 @@ const clerkController = {
       const { applicationId } = req.params;
       const schoolId = req.school._id.toString();
       const connection = req.connection;
-      const AdmissionApplication = require('../models/AdmissionApplication')(connection);
+      const AdmissionApplication = require("../models/AdmissionApplication")(
+        connection
+      );
 
       if (!mongoose.Types.ObjectId.isValid(applicationId)) {
-        return res.status(400).json({ message: 'Invalid application ID' });
+        return res.status(400).json({ message: "Invalid application ID" });
       }
 
       const application = await AdmissionApplication.findOne({
@@ -2821,24 +317,24 @@ const clerkController = {
       });
 
       if (!application) {
-        return res.status(404).json({ message: 'Application not found' });
+        return res.status(404).json({ message: "Application not found" });
       }
 
-      if (req.user.role !== 'clerk') {
-        return res.status(403).json({ message: 'Unauthorized access' });
+      if (req.user.role !== "clerk") {
+        return res.status(403).json({ message: "Unauthorized access" });
       }
 
       const documents = application.documents.map((doc) => ({
         type: doc.type,
         documentUrl: doc.documentUrl,
         key: doc.key,
-        accessUrl: `/documents/${applicationId}/${doc.key.split('/').pop()}`, // Permanent URL
+        accessUrl: `/documents/${applicationId}/${doc.key.split("/").pop()}`, // Permanent URL
         verified: doc.verified,
         uploadedAt: application.createdAt,
       }));
 
       res.json({
-        status: 'success',
+        status: "success",
         applicationId: application._id,
         trackingId: application.trackingId,
         studentName: application.studentDetails.name,
@@ -2856,7 +352,9 @@ const clerkController = {
       const { applicationId, documentKey } = req.params;
       const schoolId = req.school._id.toString();
       const connection = req.connection;
-      const AdmissionApplication = require('../models/AdmissionApplication')(connection);
+      const AdmissionApplication = require("../models/AdmissionApplication")(
+        connection
+      );
 
       const application = await AdmissionApplication.findOne({
         _id: applicationId,
@@ -2864,17 +362,19 @@ const clerkController = {
       });
 
       if (!application) {
-        return res.status(404).json({ message: 'Application not found' });
+        return res.status(404).json({ message: "Application not found" });
       }
 
-      const document = application.documents.find((doc) => doc.key.endsWith(documentKey));
+      const document = application.documents.find((doc) =>
+        doc.key.endsWith(documentKey)
+      );
       if (!document) {
-        return res.status(404).json({ message: 'Document not found' });
+        return res.status(404).json({ message: "Document not found" });
       }
 
       await streamS3Object(document.key, res);
     } catch (error) {
-      console.error('Error streaming document:', error);
+      console.error("Error streaming document:", error);
       res.status(500).json({ error: error.message });
     }
   },
@@ -2883,12 +383,12 @@ const clerkController = {
     try {
       const schoolId = req.school._id.toString();
       const connection = req.connection;
-      const Class = require('../models/Class')(connection);
-      const User = require('../models/User')(connection);
+      const Class = require("../models/Class")(connection);
+      const User = require("../models/User")(connection);
 
       const allClasses = await Class.find({ school: schoolId })
-        .select('name division academicYear capacity students classTeacher')
-        .populate('classTeacher', 'name', User)
+        .select("name division academicYear capacity students classTeacher")
+        .populate("classTeacher", "name", User)
         .sort({ name: 1, division: 1 });
 
       res.json({
@@ -2900,7 +400,8 @@ const clerkController = {
           teacher: cls.classTeacher ? cls.classTeacher.name : null,
           enrolledCount: cls.students ? cls.students.length : 0,
           capacity: cls.capacity,
-          remainingCapacity: cls.capacity - (cls.students ? cls.students.length : 0),
+          remainingCapacity:
+            cls.capacity - (cls.students ? cls.students.length : 0),
         })),
       });
     } catch (error) {
@@ -2908,166 +409,77 @@ const clerkController = {
     }
   },
 
-  // enrollStudent: async (req, res) => {
-  //   try {
-  //     const { applicationId } = req.params;
-  //     const { classId, grNumber, password } = req.body;
-  //     const schoolId = req.school._id.toString();
-  //     const connection = req.connection;
-  //     const AdmissionApplication = require('../models/AdmissionApplication')(connection);
-  //     const Class = require('../models/Class')(connection);
-  //     const User = require('../models/User')(connection);
-  //     const School = require('../models/School')(require('../config/database').getOwnerConnection());
-
-  //     if (!password) {
-  //       return res.status(400).json({ message: 'Password is required' });
-  //     }
-
-  //     const application = await AdmissionApplication.findOne({ _id: applicationId, school: schoolId });
-  //     if (!application) {
-  //       return res.status(404).json({ message: 'Application not found' });
-  //     }
-
-  //     if (application.status !== 'approved') {
-  //       return res.status(400).json({ message: 'Only approved applications can be enrolled' });
-  //     }
-
-  //     const existingGR = await User.findOne({ 'studentDetails.grNumber': grNumber, school: schoolId });
-  //     if (existingGR) {
-  //       return res.status(400).json({ message: 'GR number already exists' });
-  //     }
-
-  //     const selectedClass = await Class.findOne({ _id: classId, school: schoolId });
-  //     if (!selectedClass) {
-  //       return res.status(404).json({ message: 'Class not found' });
-  //     }
-
-  //     if (selectedClass.students.length >= selectedClass.capacity) {
-  //       return res.status(400).json({ message: 'Class is at full capacity' });
-  //     }
-
-  //     const school = await School.findById(schoolId).select('name');
-  //     if (!school) {
-  //       return res.status(404).json({ message: 'School not found' });
-  //     }
-
-  //     const hashedPassword = await bcrypt.hash(password, 10);
-
-  //     const student = new User({
-  //       school: schoolId,
-  //       name: application.studentDetails.name,
-  //       email: application.studentDetails.email,
-  //       password: hashedPassword,
-  //       role: 'student',
-  //       status: 'active',
-  //       studentDetails: {
-  //         grNumber,
-  //         class: classId,
-  //         admissionType: application.admissionType,
-  //         parentDetails: application.parentDetails,
-  //         dob: application.studentDetails.dob,
-  //         gender: application.studentDetails.gender,
-  //       },
-  //     });
-
-  //     await student.save();
-
-  //     await Class.findByIdAndUpdate(classId, { $push: { students: student._id } });
-
-  //     application.status = 'enrolled';
-  //     application.grNumber = grNumber;
-  //     application.assignedClass = classId;
-  //     await application.save();
-
-  //     const className = `${selectedClass.name}${selectedClass.division ? ' ' + selectedClass.division : ''}`;
-
-  //     const notificationResult = await sendAdmissionNotification(
-  //       student.email,
-  //       application.studentDetails.mobile,
-  //       student.name,
-  //       password,
-  //       school.name,
-  //       className
-  //     );
-
-  //     if (!notificationResult.emailSent || !notificationResult.smsSent) {
-  //       console.warn('Notification partially failed:', notificationResult.error);
-  //     }
-
-  //     res.json({
-  //       message: 'Student enrolled successfully',
-  //       studentDetails: {
-  //         id: student._id,
-  //         name: student.name,
-  //         email: student.email,
-  //         grNumber,
-  //         class: { name: selectedClass.name, division: selectedClass.division },
-  //       },
-  //       notificationStatus: {
-  //         emailSent: notificationResult.emailSent,
-  //         smsSent: notificationResult.smsSent,
-  //       },
-  //     });
-  //   } catch (error) {
-  //     res.status(500).json({ error: error.message });
-  //   }
-  // },
-
-
   enrollStudent: async (req, res) => {
     try {
       const { applicationId } = req.params;
       const { classId, grNumber, password, parentPassword } = req.body; // Add parentPassword
       const schoolId = req.school._id.toString();
       const connection = req.connection;
-      const AdmissionApplication = require('../models/AdmissionApplication')(connection);
-      const Class = require('../models/Class')(connection);
-      const User = require('../models/User')(connection);
-      const School = require('../models/School')(require('../config/database').getOwnerConnection());
-  
+      const AdmissionApplication = require("../models/AdmissionApplication")(
+        connection
+      );
+      const Class = require("../models/Class")(connection);
+      const User = require("../models/User")(connection);
+      const School = require("../models/School")(
+        require("../config/database").getOwnerConnection()
+      );
+
       if (!password || !parentPassword) {
-        return res.status(400).json({ message: 'Student and parent passwords are required' });
+        return res
+          .status(400)
+          .json({ message: "Student and parent passwords are required" });
       }
-  
-      const application = await AdmissionApplication.findOne({ _id: applicationId, school: schoolId });
+
+      const application = await AdmissionApplication.findOne({
+        _id: applicationId,
+        school: schoolId,
+      });
       if (!application) {
-        return res.status(404).json({ message: 'Application not found' });
+        return res.status(404).json({ message: "Application not found" });
       }
-  
-      if (application.status !== 'approved') {
-        return res.status(400).json({ message: 'Only approved applications can be enrolled' });
+
+      if (application.status !== "approved") {
+        return res
+          .status(400)
+          .json({ message: "Only approved applications can be enrolled" });
       }
-  
-      const existingGR = await User.findOne({ 'studentDetails.grNumber': grNumber, school: schoolId });
+
+      const existingGR = await User.findOne({
+        "studentDetails.grNumber": grNumber,
+        school: schoolId,
+      });
       if (existingGR) {
-        return res.status(400).json({ message: 'GR number already exists' });
+        return res.status(400).json({ message: "GR number already exists" });
       }
-  
-      const selectedClass = await Class.findOne({ _id: classId, school: schoolId });
+
+      const selectedClass = await Class.findOne({
+        _id: classId,
+        school: schoolId,
+      });
       if (!selectedClass) {
-        return res.status(404).json({ message: 'Class not found' });
+        return res.status(404).json({ message: "Class not found" });
       }
-  
+
       if (selectedClass.students.length >= selectedClass.capacity) {
-        return res.status(400).json({ message: 'Class is at full capacity' });
+        return res.status(400).json({ message: "Class is at full capacity" });
       }
-  
-      const school = await School.findById(schoolId).select('name');
+
+      const school = await School.findById(schoolId).select("name");
       if (!school) {
-        return res.status(404).json({ message: 'School not found' });
+        return res.status(404).json({ message: "School not found" });
       }
-  
+
       const hashedStudentPassword = await bcrypt.hash(password, 10);
       const hashedParentPassword = await bcrypt.hash(parentPassword, 10);
-  
+
       // Create Student User
       const student = new User({
         school: schoolId,
         name: application.studentDetails.name,
         email: application.studentDetails.email,
         password: hashedStudentPassword,
-        role: 'student',
-        status: 'active',
+        role: "student",
+        status: "active",
         studentDetails: {
           grNumber,
           class: classId,
@@ -3077,41 +489,46 @@ const clerkController = {
           gender: application.studentDetails.gender,
         },
       });
-  
+
       await student.save();
-  
+
       // Create Parent User
       const parent = new User({
         school: schoolId,
         name: application.parentDetails.name,
         email: application.parentDetails.email,
         password: hashedParentPassword,
-        role: 'parent',
-        status: 'active',
+        role: "parent",
+        status: "active",
         profile: {
           phone: application.parentDetails.mobile,
-          address: application.parentDetails.address.street // Adjust based on your address structure
+          address: application.parentDetails.address.street, // Adjust based on your address structure
         },
-        studentDetails: { // Optionally link parent to student(s)
-          children: [student._id]
-        }
+        studentDetails: {
+          // Optionally link parent to student(s)
+          children: [student._id],
+        },
       });
-  
+
       await parent.save();
-  
+
       // Update student with parent reference (optional)
       student.studentDetails.parent = parent._id;
       await student.save();
-  
-      await Class.findByIdAndUpdate(classId, { $push: { students: student._id } });
-  
-      application.status = 'enrolled';
+
+      await Class.findByIdAndUpdate(classId, {
+        $push: { students: student._id },
+      });
+
+      application.status = "enrolled";
       application.grNumber = grNumber;
       application.assignedClass = classId;
       await application.save();
-  
-      const className = `${selectedClass.name}${selectedClass.division ? ' ' + selectedClass.division : ''}`;
-  
+
+      const className = `${selectedClass.name}${
+        selectedClass.division ? " " + selectedClass.division : ""
+      }`;
+
       // Notify Student
       const studentNotification = await sendAdmissionNotification(
         student.email,
@@ -3121,7 +538,7 @@ const clerkController = {
         school.name,
         className
       );
-  
+
       // Notify Parent
       const parentNotification = await sendAdmissionNotification(
         parent.email,
@@ -3131,11 +548,11 @@ const clerkController = {
         school.name,
         className,
         null,
-        'Parent Account Creation'
+        "Parent Account Creation"
       );
-  
+
       res.json({
-        message: 'Student and parent enrolled successfully',
+        message: "Student and parent enrolled successfully",
         studentDetails: {
           id: student._id,
           name: student.name,
@@ -3164,50 +581,53 @@ const clerkController = {
     }
   },
 
-
   getAdmissionHistoryByGRNumber: async (req, res) => {
     try {
       const { grNumber } = req.params;
       const schoolId = req.school._id.toString();
       const connection = req.connection;
-      const AdmissionApplication = require('../models/AdmissionApplication')(connection);
-      const User = require('../models/User')(connection);
-      const Class = require('../models/Class')(connection);
+      const AdmissionApplication = require("../models/AdmissionApplication")(
+        connection
+      );
+      const User = require("../models/User")(connection);
+      const Class = require("../models/Class")(connection);
 
-      
       const student = await User.findOne({
         school: schoolId,
-        'studentDetails.grNumber': grNumber,
-        role: 'student',
-      }).select('name email studentDetails');
+        "studentDetails.grNumber": grNumber,
+        role: "student",
+      }).select("name email studentDetails");
 
       if (!student) {
-        return res.status(404).json({ message: 'Student not found with the given GR number' });
+        return res
+          .status(404)
+          .json({ message: "Student not found with the given GR number" });
       }
 
-      
       const application = await AdmissionApplication.findOne({
         school: schoolId,
         grNumber,
       })
-        .populate('assignedClass', 'name division', Class)
-        .populate('clerkVerification.verifiedBy', 'name', User)
-        .populate('feesVerification.verifiedBy', 'name', User);
+        .populate("assignedClass", "name division", Class)
+        .populate("clerkVerification.verifiedBy", "name", User)
+        .populate("feesVerification.verifiedBy", "name", User);
 
       if (!application) {
-        return res.status(404).json({ message: 'Admission application not found for this GR number' });
+        return res
+          .status(404)
+          .json({
+            message: "Admission application not found for this GR number",
+          });
       }
 
-      
       const documentsWithUrls = application.documents.map((doc) => ({
         type: doc.type,
         documentUrl: doc.documentUrl,
         key: doc.key,
-        accessUrl: `/documents/${application._id}/${doc.key.split('/').pop()}`,
+        accessUrl: `/documents/${application._id}/${doc.key.split("/").pop()}`,
         verified: doc.verified,
       }));
 
-      
       const admissionHistory = {
         student: {
           id: student._id,
@@ -3215,8 +635,12 @@ const clerkController = {
           email: student.email,
           grNumber: student.studentDetails.grNumber,
           class: application.assignedClass
-            ? `${application.assignedClass.name}${application.assignedClass.division ? ' ' + application.assignedClass.division : ''}`
-            : 'Not assigned',
+            ? `${application.assignedClass.name}${
+                application.assignedClass.division
+                  ? " " + application.assignedClass.division
+                  : ""
+              }`
+            : "Not assigned",
           admissionType: student.studentDetails.admissionType,
           dob: student.studentDetails.dob,
           gender: student.studentDetails.gender,
@@ -3231,28 +655,32 @@ const clerkController = {
           documents: documentsWithUrls,
           clerkVerification: {
             status: application.clerkVerification.status,
-            verifiedBy: application.clerkVerification.verifiedBy?.name || 'N/A',
+            verifiedBy: application.clerkVerification.verifiedBy?.name || "N/A",
             verifiedAt: application.clerkVerification.verifiedAt,
             comments: application.clerkVerification.comments,
           },
           feesVerification: {
             status: application.feesVerification.status,
-            verifiedBy: application.feesVerification.verifiedBy?.name || 'N/A',
+            verifiedBy: application.feesVerification.verifiedBy?.name || "N/A",
             verifiedAt: application.feesVerification.verifiedAt,
             receiptNumber: application.feesVerification.receiptNumber,
             comments: application.feesVerification.comments,
           },
-          paymentDetails: application.paymentDetails || { note: 'RTE - No payment required' },
-          additionalResponses: application.additionalResponses ? Object.fromEntries(application.additionalResponses) : {},
+          paymentDetails: application.paymentDetails || {
+            note: "RTE - No payment required",
+          },
+          additionalResponses: application.additionalResponses
+            ? Object.fromEntries(application.additionalResponses)
+            : {},
         },
       };
 
       res.json({
-        status: 'success',
+        status: "success",
         admissionHistory,
       });
     } catch (error) {
-      console.error('Error in getAdmissionHistoryByGRNumber:', error);
+      console.error("Error in getAdmissionHistoryByGRNumber:", error);
       res.status(500).json({ error: error.message });
     }
   },
@@ -3262,28 +690,31 @@ const clerkController = {
       const { classId } = req.params;
       const schoolId = req.school._id.toString();
       const connection = req.connection;
-      const Class = require('../models/Class')(connection);
-      const User = require('../models/User')(connection);
+      const Class = require("../models/Class")(connection);
+      const User = require("../models/User")(connection);
 
       if (!mongoose.Types.ObjectId.isValid(classId)) {
-        return res.status(400).json({ message: 'Invalid class ID' });
+        return res.status(400).json({ message: "Invalid class ID" });
       }
 
-      const selectedClass = await Class.findOne({ _id: classId, school: schoolId });
+      const selectedClass = await Class.findOne({
+        _id: classId,
+        school: schoolId,
+      });
       if (!selectedClass) {
-        return res.status(404).json({ message: 'Class not found' });
+        return res.status(404).json({ message: "Class not found" });
       }
 
       const students = await User.find({
         school: schoolId,
-        'studentDetails.class': classId,
-        role: 'student',
+        "studentDetails.class": classId,
+        role: "student",
       })
-        .select('name email studentDetails')
+        .select("name email studentDetails")
         .lean();
 
       res.json({
-        status: 'success',
+        status: "success",
         class: {
           name: selectedClass.name,
           division: selectedClass.division,
@@ -3314,7 +745,7 @@ const clerkController = {
       const { reason, startDate, endDate, type } = req.body;
       const clerkId = req.user._id;
       const connection = req.connection;
-      const Leave = require('../models/Leave')(connection);
+      const Leave = require("../models/Leave")(connection);
 
       const leave = new Leave({
         school: schoolId,
@@ -3323,7 +754,7 @@ const clerkController = {
         startDate,
         endDate,
         type,
-        status: 'pending',
+        status: "pending",
         appliedOn: new Date(),
       });
 
@@ -3339,14 +770,14 @@ const clerkController = {
       const schoolId = req.school._id.toString();
       const clerkId = req.user._id;
       const connection = req.connection;
-      const Leave = require('../models/Leave')(connection);
+      const Leave = require("../models/Leave")(connection);
 
       const leaves = await Leave.find({ school: schoolId, user: clerkId })
         .sort({ appliedOn: -1 })
         .lean();
 
       res.json({
-        status: 'success',
+        status: "success",
         count: leaves.length,
         leaves: leaves.map((leave) => ({
           id: leave._id,
@@ -3370,55 +801,64 @@ const clerkController = {
     try {
       const schoolId = req.school._id.toString();
       const connection = req.connection;
-      const Certificate = require('../models/Certificate')(connection);
-      const User = require('../models/User')(connection);
-      const Class = require('../models/Class')(connection);
+      const Certificate = require("../models/Certificate")(connection);
+      const User = require("../models/User")(connection);
+      const Class = require("../models/Class")(connection);
 
       const certificates = await Certificate.find({
         school: schoolId,
-        status: 'pending',
+        status: "pending",
       })
         .populate({
-          path: 'student',
-          select: 'name email studentDetails',
+          path: "student",
+          select: "name email studentDetails",
           populate: {
-            path: 'studentDetails.class',
+            path: "studentDetails.class",
             model: Class,
-            select: 'name division',
+            select: "name division",
           },
         })
-        .populate('generatedBy', 'name email', User)
+        .populate("generatedBy", "name email", User)
         .sort({ requestDate: -1 });
 
       res.json({
-        status: 'success',
+        status: "success",
         count: certificates.length,
         certificates: certificates.map((cert) => ({
           id: cert._id,
-          studentName: cert.student?.name || 'N/A',
-          studentEmail: cert.student?.email || 'N/A',
+          studentName: cert.student?.name || "N/A",
+          studentEmail: cert.student?.email || "N/A",
           type: cert.type,
           purpose: cert.purpose,
           urgency: cert.urgency,
           requestDate: cert.requestDate,
           status: cert.status,
-          grNumber: cert.student?.studentDetails?.grNumber || 'N/A',
-          parentName: cert.student?.studentDetails?.parentDetails?.name || 'N/A',
+          grNumber: cert.student?.studentDetails?.grNumber || "N/A",
+          parentName:
+            cert.student?.studentDetails?.parentDetails?.name || "N/A",
           admissionDate: cert.student?.studentDetails?.admissionDate
-            ? new Date(cert.student.studentDetails.admissionDate).toISOString().split('T')[0]
-            : 'N/A',
+            ? new Date(cert.student.studentDetails.admissionDate)
+                .toISOString()
+                .split("T")[0]
+            : "N/A",
           dob: cert.student?.studentDetails?.dob
-            ? new Date(cert.student.studentDetails.dob).toISOString().split('T')[0]
-            : 'N/A',
+            ? new Date(cert.student.studentDetails.dob)
+                .toISOString()
+                .split("T")[0]
+            : "N/A",
           className: cert.student?.studentDetails?.class
-            ? `${cert.student.studentDetails.class.name}${cert.student.studentDetails.class.division ? ' ' + cert.student.studentDetails.class.division : ''}`
-            : 'N/A',
-          schoolName: req.school?.name || 'N/A',
-          schoolAddress: req.school?.address || 'N/A',
+            ? `${cert.student.studentDetails.class.name}${
+                cert.student.studentDetails.class.division
+                  ? " " + cert.student.studentDetails.class.division
+                  : ""
+              }`
+            : "N/A",
+          schoolName: req.school?.name || "N/A",
+          schoolAddress: req.school?.address || "N/A",
         })),
       });
     } catch (error) {
-      console.error('Error in getPendingCertificates:', error);
+      console.error("Error in getPendingCertificates:", error);
       res.status(500).json({ error: error.message });
     }
   },
@@ -3427,27 +867,27 @@ const clerkController = {
     try {
       const schoolId = req.school._id.toString();
       const connection = req.connection;
-      const Certificate = require('../models/Certificate')(connection);
-      const User = require('../models/User')(connection);
-      const Class = require('../models/Class')(connection);
+      const Certificate = require("../models/Certificate")(connection);
+      const User = require("../models/User")(connection);
+      const Class = require("../models/Class")(connection);
 
       const certificates = await Certificate.find({ school: schoolId })
         .populate({
-          path: 'student',
-          select: 'name email studentDetails',
+          path: "student",
+          select: "name email studentDetails",
           populate: {
-            path: 'studentDetails.class',
+            path: "studentDetails.class",
             model: Class,
-            select: 'name division',
+            select: "name division",
           },
         })
-        .populate('generatedBy', 'name email', User)
+        .populate("generatedBy", "name email", User)
         .sort({ requestDate: -1 });
 
       const certificatesWithUrls = certificates.map((cert) => ({
         id: cert._id,
-        studentName: cert.student?.name || 'N/A',
-        studentEmail: cert.student?.email || 'N/A',
+        studentName: cert.student?.name || "N/A",
+        studentEmail: cert.student?.email || "N/A",
         type: cert.type,
         purpose: cert.purpose,
         urgency: cert.urgency,
@@ -3455,34 +895,48 @@ const clerkController = {
         status: cert.status,
         documentUrl: cert.documentUrl,
         signedDocumentUrl: cert.signedDocumentUrl,
-        documentAccessUrl: cert.documentKey ? `/certificates/${cert._id}/${cert.documentKey.split('/').pop()}` : null,
-        signedDocumentAccessUrl: cert.signedDocumentKey ? `/certificates/${cert._id}/${cert.signedDocumentKey.split('/').pop()}` : null,
+        documentAccessUrl: cert.documentKey
+          ? `/certificates/${cert._id}/${cert.documentKey.split("/").pop()}`
+          : null,
+        signedDocumentAccessUrl: cert.signedDocumentKey
+          ? `/certificates/${cert._id}/${cert.signedDocumentKey
+              .split("/")
+              .pop()}`
+          : null,
         isSentToStudent: cert.isSentToStudent,
         issuedDate: cert.issuedDate || null,
         generatedBy: cert.generatedBy ? cert.generatedBy.name : null,
         comments: cert.comments || null,
-        grNumber: cert.student?.studentDetails?.grNumber || 'N/A',
-        parentName: cert.student?.studentDetails?.parentDetails?.name || 'N/A',
+        grNumber: cert.student?.studentDetails?.grNumber || "N/A",
+        parentName: cert.student?.studentDetails?.parentDetails?.name || "N/A",
         admissionDate: cert.student?.studentDetails?.admissionDate
-          ? new Date(cert.student.studentDetails.admissionDate).toISOString().split('T')[0]
-          : 'N/A',
+          ? new Date(cert.student.studentDetails.admissionDate)
+              .toISOString()
+              .split("T")[0]
+          : "N/A",
         dob: cert.student?.studentDetails?.dob
-          ? new Date(cert.student.studentDetails.dob).toISOString().split('T')[0]
-          : 'N/A',
+          ? new Date(cert.student.studentDetails.dob)
+              .toISOString()
+              .split("T")[0]
+          : "N/A",
         className: cert.student?.studentDetails?.class
-          ? `${cert.student.studentDetails.class.name}${cert.student.studentDetails.class.division ? ' ' + cert.student.studentDetails.class.division : ''}`
-          : 'N/A',
-        schoolName: req.school?.name || 'N/A',
-        schoolAddress: req.school?.address || 'N/A',
+          ? `${cert.student.studentDetails.class.name}${
+              cert.student.studentDetails.class.division
+                ? " " + cert.student.studentDetails.class.division
+                : ""
+            }`
+          : "N/A",
+        schoolName: req.school?.name || "N/A",
+        schoolAddress: req.school?.address || "N/A",
       }));
 
       res.json({
-        status: 'success',
+        status: "success",
         count: certificates.length,
         certificates: certificatesWithUrls,
       });
     } catch (error) {
-      console.error('Error in getCertificateHistory:', error);
+      console.error("Error in getCertificateHistory:", error);
       res.status(500).json({ error: error.message });
     }
   },
@@ -3494,38 +948,52 @@ const clerkController = {
 
       const schoolId = req.school._id.toString();
       const connection = req.connection;
-      const Certificate = require('../models/Certificate')(connection);
-      const User = require('../models/User')(connection);
+      const Certificate = require("../models/Certificate")(connection);
+      const User = require("../models/User")(connection);
 
       if (!mongoose.Types.ObjectId.isValid(certificateId)) {
-        return res.status(400).json({ message: 'Invalid certificate ID' });
+        return res.status(400).json({ message: "Invalid certificate ID" });
       }
 
-      const certificate = await Certificate.findOne({ _id: certificateId, school: schoolId });
+      const certificate = await Certificate.findOne({
+        _id: certificateId,
+        school: schoolId,
+      });
       if (!certificate) {
-        return res.status(404).json({ message: 'Certificate request not found' });
+        return res
+          .status(404)
+          .json({ message: "Certificate request not found" });
       }
 
-      if (status === 'rejected') {
-        certificate.status = 'rejected';
+      if (status === "rejected") {
+        certificate.status = "rejected";
         certificate.comments = comments;
         await certificate.save();
-        return res.json({ message: 'Certificate request rejected', certificate });
+        return res.json({
+          message: "Certificate request rejected",
+          certificate,
+        });
       }
 
-      if (status !== 'generated') {
-        return res.status(400).json({ message: 'Invalid status for generation' });
+      if (status !== "generated") {
+        return res
+          .status(400)
+          .json({ message: "Invalid status for generation" });
       }
 
       if (!pdfData || !certificateType) {
-        return res.status(400).json({ message: 'PDF data and certificate type are required' });
+        return res
+          .status(400)
+          .json({ message: "PDF data and certificate type are required" });
       }
 
       let pdfBuffer;
       try {
-        pdfBuffer = Buffer.from(pdfData, 'base64');
+        pdfBuffer = Buffer.from(pdfData, "base64");
       } catch (error) {
-        return res.status(400).json({ message: 'Invalid base64 PDF data', error: error.message });
+        return res
+          .status(400)
+          .json({ message: "Invalid base64 PDF data", error: error.message });
       }
 
       const certificateKey = `certificates/${schoolId}/${certificateId}/${certificateType}.pdf`;
@@ -3533,12 +1001,14 @@ const clerkController = {
       try {
         uploadResult = await uploadToS3(pdfBuffer, certificateKey);
       } catch (error) {
-        return res.status(500).json({ message: 'Failed to upload to S3', error: error.message });
+        return res
+          .status(500)
+          .json({ message: "Failed to upload to S3", error: error.message });
       }
 
       certificate.documentUrl = uploadResult.Location;
       certificate.documentKey = certificateKey;
-      certificate.status = 'generated';
+      certificate.status = "generated";
       certificate.issuedDate = new Date();
       certificate.generatedBy = req.user._id;
       certificate.comments = comments;
@@ -3546,14 +1016,16 @@ const clerkController = {
       await certificate.save();
 
       res.json({
-        message: 'Certificate generated successfully',
+        message: "Certificate generated successfully",
         certificate: {
           ...certificate.toObject(),
-          documentAccessUrl: `/certificates/${certificateId}/${certificateKey.split('/').pop()}`,
+          documentAccessUrl: `/certificates/${certificateId}/${certificateKey
+            .split("/")
+            .pop()}`,
         },
       });
     } catch (error) {
-      console.error('Error in generateCertificate:', error);
+      console.error("Error in generateCertificate:", error);
       res.status(500).json({ error: error.message });
     }
   },
@@ -3563,21 +1035,26 @@ const clerkController = {
       const { certificateId, documentKey } = req.params;
       const schoolId = req.school._id.toString();
       const connection = req.connection;
-      const Certificate = require('../models/Certificate')(connection);
+      const Certificate = require("../models/Certificate")(connection);
 
-      const certificate = await Certificate.findOne({ _id: certificateId, school: schoolId });
+      const certificate = await Certificate.findOne({
+        _id: certificateId,
+        school: schoolId,
+      });
       if (!certificate) {
-        return res.status(404).json({ message: 'Certificate not found' });
+        return res.status(404).json({ message: "Certificate not found" });
       }
 
-      const key = certificate.documentKey.endsWith(documentKey) ? certificate.documentKey : certificate.signedDocumentKey;
+      const key = certificate.documentKey.endsWith(documentKey)
+        ? certificate.documentKey
+        : certificate.signedDocumentKey;
       if (!key || !key.endsWith(documentKey)) {
-        return res.status(404).json({ message: 'Document not found' });
+        return res.status(404).json({ message: "Document not found" });
       }
 
       await streamS3Object(key, res);
     } catch (error) {
-      console.error('Error streaming certificate:', error);
+      console.error("Error streaming certificate:", error);
       res.status(500).json({ error: error.message });
     }
   },
@@ -3589,24 +1066,32 @@ const clerkController = {
 
       const schoolId = req.school._id.toString();
       const connection = req.connection;
-      const Certificate = require('../models/Certificate')(connection);
-      const User = require('../models/User')(connection);
+      const Certificate = require("../models/Certificate")(connection);
+      const User = require("../models/User")(connection);
 
       if (!mongoose.Types.ObjectId.isValid(certificateId)) {
-        return res.status(400).json({ message: 'Invalid certificate ID' });
+        return res.status(400).json({ message: "Invalid certificate ID" });
       }
 
-      const certificate = await Certificate.findOne({ _id: certificateId, school: schoolId });
+      const certificate = await Certificate.findOne({
+        _id: certificateId,
+        school: schoolId,
+      });
       if (!certificate) {
-        return res.status(404).json({ message: 'Certificate not found' });
+        return res.status(404).json({ message: "Certificate not found" });
       }
 
-      if (certificate.status !== 'generated') {
-        return res.status(400).json({ message: 'Certificate must be generated before uploading a signed version' });
+      if (certificate.status !== "generated") {
+        return res
+          .status(400)
+          .json({
+            message:
+              "Certificate must be generated before uploading a signed version",
+          });
       }
 
       if (!file) {
-        return res.status(400).json({ message: 'PDF file is required' });
+        return res.status(400).json({ message: "PDF file is required" });
       }
 
       certificate.signedDocumentUrl = file.location;
@@ -3614,12 +1099,16 @@ const clerkController = {
       certificate.isSentToStudent = true;
       await certificate.save();
 
-      const student = await User.findById(certificate.student).select('name email studentDetails');
+      const student = await User.findById(certificate.student).select(
+        "name email studentDetails"
+      );
       if (!student) {
-        return res.status(404).json({ message: 'Student not found' });
+        return res.status(404).json({ message: "Student not found" });
       }
 
-      const signedDocumentAccessUrl = `/certificates/${certificateId}/${file.key.split('/').pop()}`;
+      const signedDocumentAccessUrl = `/certificates/${certificateId}/${file.key
+        .split("/")
+        .pop()}`;
       const notificationResult = await sendCertificateNotification(
         student.email,
         student.studentDetails?.mobile,
@@ -3629,7 +1118,7 @@ const clerkController = {
       );
 
       res.json({
-        message: 'Signed certificate uploaded and sent to student successfully',
+        message: "Signed certificate uploaded and sent to student successfully",
         certificate: {
           ...certificate.toObject(),
           signedDocumentAccessUrl,
@@ -3640,7 +1129,7 @@ const clerkController = {
         },
       });
     } catch (error) {
-      console.error('Error in uploadSignedCertificate:', error);
+      console.error("Error in uploadSignedCertificate:", error);
       res.status(500).json({ error: error.message });
     }
   },
@@ -3651,31 +1140,47 @@ const clerkController = {
 
       const schoolId = req.school._id.toString();
       const connection = req.connection;
-      const Certificate = require('../models/Certificate')(connection);
-      const User = require('../models/User')(connection);
+      const Certificate = require("../models/Certificate")(connection);
+      const User = require("../models/User")(connection);
 
       if (!mongoose.Types.ObjectId.isValid(certificateId)) {
-        return res.status(400).json({ message: 'Invalid certificate ID' });
+        return res.status(400).json({ message: "Invalid certificate ID" });
       }
 
-      const certificate = await Certificate.findOne({ _id: certificateId, school: schoolId });
+      const certificate = await Certificate.findOne({
+        _id: certificateId,
+        school: schoolId,
+      });
       if (!certificate) {
-        return res.status(404).json({ message: 'Certificate not found' });
+        return res.status(404).json({ message: "Certificate not found" });
       }
 
       if (!certificate.signedDocumentUrl) {
-        return res.status(400).json({ message: 'Signed certificate must be uploaded before sending to student' });
+        return res
+          .status(400)
+          .json({
+            message:
+              "Signed certificate must be uploaded before sending to student",
+          });
       }
 
       if (certificate.isSentToStudent) {
-        return res.status(400).json({ message: 'Certificate has already been sent to the student' });
+        return res
+          .status(400)
+          .json({
+            message: "Certificate has already been sent to the student",
+          });
       }
 
       certificate.isSentToStudent = true;
       await certificate.save();
 
-      const student = await User.findById(certificate.student).select('name email studentDetails');
-      const signedDocumentAccessUrl = `/certificates/${certificateId}/${certificate.signedDocumentKey.split('/').pop()}`;
+      const student = await User.findById(certificate.student).select(
+        "name email studentDetails"
+      );
+      const signedDocumentAccessUrl = `/certificates/${certificateId}/${certificate.signedDocumentKey
+        .split("/")
+        .pop()}`;
 
       const notificationResult = await sendCertificateNotification(
         student.email,
@@ -3686,7 +1191,7 @@ const clerkController = {
       );
 
       res.json({
-        message: 'Certificate sent to student successfully',
+        message: "Certificate sent to student successfully",
         certificate: {
           ...certificate.toObject(),
           signedDocumentAccessUrl,
@@ -3697,7 +1202,7 @@ const clerkController = {
         },
       });
     } catch (error) {
-      console.error('Error in sendCertificateToStudent:', error);
+      console.error("Error in sendCertificateToStudent:", error);
       res.status(500).json({ error: error.message });
     }
   },
@@ -3707,12 +1212,12 @@ const clerkController = {
       const schoolId = req.school._id.toString();
       const { startDate, endDate } = req.body;
       const connection = req.connection;
-      const User = require('../models/User')(connection);
+      const User = require("../models/User")(connection);
 
       const rteStudents = await User.find({
         school: schoolId,
-        'studentDetails.isRTE': true,
-        'studentDetails.admissionDate': {
+        "studentDetails.isRTE": true,
+        "studentDetails.admissionDate": {
           $gte: new Date(startDate),
           $lte: new Date(endDate),
         },
@@ -3726,8 +1231,11 @@ const clerkController = {
 
       rteStudents.forEach((student) => {
         const classId = student.studentDetails.class.toString();
-        report.admissionsByClass[classId] = (report.admissionsByClass[classId] || 0) + 1;
-        report.documentVerificationStatus[student.studentDetails.status === 'verified' ? 'verified' : 'pending']++;
+        report.admissionsByClass[classId] =
+          (report.admissionsByClass[classId] || 0) + 1;
+        report.documentVerificationStatus[
+          student.studentDetails.status === "verified" ? "verified" : "pending"
+        ]++;
       });
 
       res.json({ report });
@@ -3735,134 +1243,6 @@ const clerkController = {
       res.status(500).json({ error: error.message });
     }
   },
-
-  // registerExistingStudent: async (req, res) => {
-  //   try {
-  //     const {
-  //       name,
-  //       email,
-  //       dob,
-  //       gender,
-  //       mobile,
-  //       parentName,
-  //       parentEmail,
-  //       parentMobile,
-  //       parentOccupation,
-  //       address,
-  //       grNumber,
-  //       classId,
-  //       admissionType = 'Regular',
-  //       password,
-  //     } = req.body;
-
-  //     const schoolId = req.school._id.toString();
-  //     const connection = req.connection;
-  //     const User = require('../models/User')(connection);
-  //     const Class = require('../models/Class')(connection);
-  //     const School = require('../models/School')(require('../config/database').getOwnerConnection());
-
-  //     if (!name || !email || !dob || !gender || !mobile || !grNumber || !classId || !password) {
-  //       return res.status(400).json({ message: 'All required fields must be provided' });
-  //     }
-
-  //     const emailRegex = /^[a-zA-Z0-9._-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,6}$/;
-  //     if (!emailRegex.test(email)) {
-  //       return res.status(400).json({ message: 'Invalid email format' });
-  //     }
-
-  //     const mobileRegex = /^[0-9]{10}$/;
-  //     if (!mobileRegex.test(mobile) || (parentMobile && !mobileRegex.test(parentMobile))) {
-  //       return res.status(400).json({ message: 'Mobile number must be 10 digits' });
-  //     }
-
-  //     const existingGR = await User.findOne({ 'studentDetails.grNumber': grNumber, school: schoolId });
-  //     if (existingGR) {
-  //       return res.status(400).json({ message: 'GR number already exists' });
-  //     }
-
-  //     const existingEmail = await User.findOne({ email, school: schoolId });
-  //     if (existingEmail) {
-  //       return res.status(400).json({ message: 'Email already registered' });
-  //     }
-
-  //     const selectedClass = await Class.findOne({ _id: classId, school: schoolId });
-  //     if (!selectedClass) {
-  //       return res.status(404).json({ message: 'Class not found' });
-  //     }
-
-  //     if (selectedClass.students.length >= selectedClass.capacity) {
-  //       return res.status(400).json({ message: 'Class is at full capacity' });
-  //     }
-
-  //     const school = await School.findById(schoolId).select('name');
-  //     if (!school) {
-  //       return res.status(404).json({ message: 'School not found' });
-  //     }
-
-  //     const hashedPassword = await bcrypt.hash(password, 10);
-
-  //     const student = new User({
-  //       school: schoolId,
-  //       name,
-  //       email,
-  //       password: hashedPassword,
-  //       role: 'student',
-  //       status: 'active',
-  //       studentDetails: {
-  //         grNumber,
-  //         class: classId,
-  //         admissionType,
-  //         parentDetails: {
-  //           name: parentName,
-  //           email: parentEmail,
-  //           mobile: parentMobile,
-  //           occupation: parentOccupation,
-  //           address: address || {},
-  //         },
-  //         dob: new Date(dob),
-  //         gender,
-  //       },
-  //     });
-
-  //     await student.save();
-
-  //     await Class.findByIdAndUpdate(classId, { $push: { students: student._id } });
-
-  //     const className = `${selectedClass.name}${selectedClass.division ? ' ' + selectedClass.division : ''}`;
-
-  //     const notificationResult = await sendAdmissionNotification(
-  //       student.email,
-  //       mobile,
-  //       student.name,
-  //       password,
-  //       school.name,
-  //       className,
-  //       grNumber
-  //     );
-
-  //     if (!notificationResult.emailSent || !notificationResult.smsSent) {
-  //       console.warn('Notification partially failed:', notificationResult.error);
-  //     }
-
-  //     res.status(201).json({
-  //       message: 'Existing student registered successfully',
-  //       studentDetails: {
-  //         id: student._id,
-  //         name: student.name,
-  //         email: student.email,
-  //         grNumber,
-  //         class: { name: selectedClass.name, division: selectedClass.division },
-  //       },
-  //       notificationStatus: {
-  //         emailSent: notificationResult.emailSent,
-  //         smsSent: notificationResult.smsSent,
-  //       },
-  //     });
-  //   } catch (error) {
-  //     console.error('Error registering existing student:', error);
-  //     res.status(500).json({ error: error.message });
-  //   }
-  // },
 
   registerExistingStudent: async (req, res) => {
     try {
@@ -3879,88 +1259,134 @@ const clerkController = {
         address,
         grNumber,
         classId,
-        admissionType = 'Regular',
+        admissionType = "Regular",
         password,
         parentPassword, // New field for parent password
       } = req.body;
-  
+
       const schoolId = req.school._id.toString();
       const connection = req.connection;
-      const User = require('../models/User')(connection);
-      const Class = require('../models/Class')(connection);
-      const School = require('../models/School')(require('../config/database').getOwnerConnection());
-  
+      const User = require("../models/User")(connection);
+      const Class = require("../models/Class")(connection);
+      const School = require("../models/School")(
+        require("../config/database").getOwnerConnection()
+      );
+
       // Validation for required fields
-      if (!name || !email || !dob || !gender || !mobile || !grNumber || !classId || !password || !parentPassword) {
-        return res.status(400).json({ message: 'All required fields, including student and parent passwords, must be provided' });
+      if (
+        !name ||
+        !email ||
+        !dob ||
+        !gender ||
+        !mobile ||
+        !grNumber ||
+        !classId ||
+        !password ||
+        !parentPassword
+      ) {
+        return res
+          .status(400)
+          .json({
+            message:
+              "All required fields, including student and parent passwords, must be provided",
+          });
       }
-  
+
       // Email validation
       const emailRegex = /^[a-zA-Z0-9._-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,6}$/;
       if (!emailRegex.test(email)) {
-        return res.status(400).json({ message: 'Invalid student email format' });
+        return res
+          .status(400)
+          .json({ message: "Invalid student email format" });
       }
       if (parentEmail && !emailRegex.test(parentEmail)) {
-        return res.status(400).json({ message: 'Invalid parent email format' });
+        return res.status(400).json({ message: "Invalid parent email format" });
       }
-  
+
       // Mobile validation
       const mobileRegex = /^[0-9]{10}$/;
       if (!mobileRegex.test(mobile)) {
-        return res.status(400).json({ message: 'Student mobile number must be 10 digits' });
+        return res
+          .status(400)
+          .json({ message: "Student mobile number must be 10 digits" });
       }
       if (parentMobile && !mobileRegex.test(parentMobile)) {
-        return res.status(400).json({ message: 'Parent mobile number must be 10 digits' });
+        return res
+          .status(400)
+          .json({ message: "Parent mobile number must be 10 digits" });
       }
-  
+
       // Check for existing GR number
-      const existingGR = await User.findOne({ 'studentDetails.grNumber': grNumber, school: schoolId });
+      const existingGR = await User.findOne({
+        "studentDetails.grNumber": grNumber,
+        school: schoolId,
+      });
       if (existingGR) {
-        return res.status(400).json({ message: 'GR number already exists' });
+        return res.status(400).json({ message: "GR number already exists" });
       }
-  
+
       // Check for existing student email
-      const existingStudentEmail = await User.findOne({ email, school: schoolId });
+      const existingStudentEmail = await User.findOne({
+        email,
+        school: schoolId,
+      });
       if (existingStudentEmail) {
-        return res.status(400).json({ message: 'Student email already registered' });
+        return res
+          .status(400)
+          .json({ message: "Student email already registered" });
       }
-  
+
       // Check for existing parent email (optional, depending on your policy)
       if (parentEmail) {
-        const existingParentEmail = await User.findOne({ email: parentEmail, school: schoolId, role: 'parent' });
-        if (existingParentEmail && !existingParentEmail.studentDetails.children.length) {
-          return res.status(400).json({ message: 'Parent email already registered with no linked students' });
+        const existingParentEmail = await User.findOne({
+          email: parentEmail,
+          school: schoolId,
+          role: "parent",
+        });
+        if (
+          existingParentEmail &&
+          !existingParentEmail.studentDetails.children.length
+        ) {
+          return res
+            .status(400)
+            .json({
+              message:
+                "Parent email already registered with no linked students",
+            });
         }
       }
-  
+
       // Validate class
-      const selectedClass = await Class.findOne({ _id: classId, school: schoolId });
+      const selectedClass = await Class.findOne({
+        _id: classId,
+        school: schoolId,
+      });
       if (!selectedClass) {
-        return res.status(404).json({ message: 'Class not found' });
+        return res.status(404).json({ message: "Class not found" });
       }
-  
+
       if (selectedClass.students.length >= selectedClass.capacity) {
-        return res.status(400).json({ message: 'Class is at full capacity' });
+        return res.status(400).json({ message: "Class is at full capacity" });
       }
-  
+
       // Validate school
-      const school = await School.findById(schoolId).select('name');
+      const school = await School.findById(schoolId).select("name");
       if (!school) {
-        return res.status(404).json({ message: 'School not found' });
+        return res.status(404).json({ message: "School not found" });
       }
-  
+
       // Hash passwords
       const hashedStudentPassword = await bcrypt.hash(password, 10);
       const hashedParentPassword = await bcrypt.hash(parentPassword, 10);
-  
+
       // Create Student User
       const student = new User({
         school: schoolId,
         name,
         email,
         password: hashedStudentPassword,
-        role: 'student',
-        status: 'active',
+        role: "student",
+        status: "active",
         studentDetails: {
           grNumber,
           class: classId,
@@ -3976,15 +1402,22 @@ const clerkController = {
           gender,
         },
       });
-  
+
       await student.save();
-  
+
       // Check if parent already exists by email, otherwise create new parent
-      let parent = parentEmail ? await User.findOne({ email: parentEmail, role: 'parent', school: schoolId }) : null;
+      let parent = parentEmail
+        ? await User.findOne({
+            email: parentEmail,
+            role: "parent",
+            school: schoolId,
+          })
+        : null;
       if (parent) {
         // If parent exists, link the new student
         if (!parent.studentDetails) parent.studentDetails = {};
-        if (!parent.studentDetails.children) parent.studentDetails.children = [];
+        if (!parent.studentDetails.children)
+          parent.studentDetails.children = [];
         parent.studentDetails.children.push(student._id);
         await parent.save();
       } else {
@@ -3992,13 +1425,17 @@ const clerkController = {
         parent = new User({
           school: schoolId,
           name: parentName,
-          email: parentEmail || `${grNumber}_parent@${school.name.toLowerCase().replace(/\s+/g, '')}.com`, // Fallback email if not provided
+          email:
+            parentEmail ||
+            `${grNumber}_parent@${school.name
+              .toLowerCase()
+              .replace(/\s+/g, "")}.com`, // Fallback email if not provided
           password: hashedParentPassword,
-          role: 'parent',
-          status: 'active',
+          role: "parent",
+          status: "active",
           profile: {
             phone: parentMobile,
-            address: address?.street || '', // Adjust based on your address structure
+            address: address?.street || "", // Adjust based on your address structure
           },
           studentDetails: {
             children: [student._id],
@@ -4006,16 +1443,20 @@ const clerkController = {
         });
         await parent.save();
       }
-  
+
       // Link student to parent
       student.studentDetails.parent = parent._id;
       await student.save();
-  
+
       // Update class with student
-      await Class.findByIdAndUpdate(classId, { $push: { students: student._id } });
-  
-      const className = `${selectedClass.name}${selectedClass.division ? ' ' + selectedClass.division : ''}`;
-  
+      await Class.findByIdAndUpdate(classId, {
+        $push: { students: student._id },
+      });
+
+      const className = `${selectedClass.name}${
+        selectedClass.division ? " " + selectedClass.division : ""
+      }`;
+
       // Send notification to student
       const studentNotification = await sendAdmissionNotification(
         student.email,
@@ -4026,7 +1467,7 @@ const clerkController = {
         className,
         grNumber
       );
-  
+
       // Send notification to parent
       const parentNotification = await sendAdmissionNotification(
         parent.email,
@@ -4036,12 +1477,12 @@ const clerkController = {
         school.name,
         className,
         grNumber,
-        'Parent Account Creation'
+        "Parent Account Creation"
       );
-  
+
       // Response
       res.status(201).json({
-        message: 'Existing student and parent registered successfully',
+        message: "Existing student and parent registered successfully",
         studentDetails: {
           id: student._id,
           name: student.name,
@@ -4066,125 +1507,140 @@ const clerkController = {
         },
       });
     } catch (error) {
-      console.error('Error registering existing student:', error);
+      console.error("Error registering existing student:", error);
       res.status(500).json({ error: error.message });
     }
   },
 
-// Add this to clerkController object
-upgradeStudentClass: async (req, res) => {
-  try {
-    const { studentId, newClassId } = req.body;
-    const schoolId = req.school._id.toString();
-    const connection = req.connection;
-    const User = require('../models/User')(connection);
-    const Class = require('../models/Class')(connection);
+  // Add this to clerkController object
+  upgradeStudentClass: async (req, res) => {
+    try {
+      const { studentId, newClassId } = req.body;
+      const schoolId = req.school._id.toString();
+      const connection = req.connection;
+      const User = require("../models/User")(connection);
+      const Class = require("../models/Class")(connection);
 
-    // Validate input
-    if (!mongoose.Types.ObjectId.isValid(studentId) || !mongoose.Types.ObjectId.isValid(newClassId)) {
-      return res.status(400).json({ message: 'Invalid student or class ID' });
-    }
-
-    // Find the student
-    const student = await User.findOne({
-      _id: studentId,
-      school: schoolId,
-      role: 'student'
-    });
-    
-    if (!student) {
-      return res.status(404).json({ message: 'Student not found' });
-    }
-
-    // Find current class and new class
-    const currentClass = await Class.findOne({
-      _id: student.studentDetails.class,
-      school: schoolId
-    });
-
-    const newClass = await Class.findOne({
-      _id: newClassId,
-      school: schoolId
-    });
-
-    if (!newClass) {
-      return res.status(404).json({ message: 'New class not found' });
-    }
-
-    // Check class capacity
-    if (newClass.students.length >= newClass.capacity) {
-      return res.status(400).json({ message: 'New class is at full capacity' });
-    }
-
-    // Extract class numbers from names (e.g., "Class 1" -> 1, "Class 2" -> 2)
-    const getClassNumber = (className) => {
-      if (!className) return 0;
-      const match = className.match(/\d+/); // Extract first number from string
-      return match ? parseInt(match[0]) : 0;
-    };
-
-    const currentClassNum = getClassNumber(currentClass?.name);
-    const newClassNum = getClassNumber(newClass.name);
-
-    // Check if it's a logical upgrade
-    if (newClassNum <= currentClassNum) {
-      return res.status(400).json({ 
-        message: 'New class must be higher than current class' 
-      });
-    }
-
-    // Update student class
-    student.studentDetails.class = newClassId;
-    student.studentDetails.admissionDate = new Date(); // Update admission date to new class
-    await student.save();
-
-    // Update class records
-    if (currentClass) {
-      await Class.findByIdAndUpdate(
-        currentClass._id,
-        { $pull: { students: student._id } }
-      );
-    }
-
-    await Class.findByIdAndUpdate(
-      newClassId,
-      { $push: { students: student._id } }
-    );
-
-    // Send notification
-    const notificationResult = await sendAdmissionNotification(
-      student.email,
-      student.studentDetails?.mobile || '',
-      student.name,
-      null, // No password change
-      req.school.name,
-      `${newClass.name}${newClass.division ? ' ' + newClass.division : ''}`,
-      student.studentDetails.grNumber,
-      'Class Upgrade Notification'
-    );
-
-    res.json({
-      message: 'Student class upgraded successfully',
-      student: {
-        id: student._id,
-        name: student.name,
-        grNumber: student.studentDetails.grNumber,
-        previousClass: currentClass ? `${currentClass.name}${currentClass.division ? ' ' + currentClass.division : ''}` : 'N/A',
-        newClass: `${newClass.name}${newClass.division ? ' ' + newClass.division : ''}`
-      },
-      notificationStatus: {
-        emailSent: notificationResult.emailSent,
-        smsSent: notificationResult.smsSent
+      // Validate input
+      if (
+        !mongoose.Types.ObjectId.isValid(studentId) ||
+        !mongoose.Types.ObjectId.isValid(newClassId)
+      ) {
+        return res.status(400).json({ message: "Invalid student or class ID" });
       }
-    });
-  } catch (error) {
-    console.error('Error in upgradeStudentClass:', error);
-    res.status(500).json({ error: error.message });
-  }
-},
+
+      // Find the student
+      const student = await User.findOne({
+        _id: studentId,
+        school: schoolId,
+        role: "student",
+      });
+
+      if (!student) {
+        return res.status(404).json({ message: "Student not found" });
+      }
+
+      // Find current class and new class
+      const currentClass = await Class.findOne({
+        _id: student.studentDetails.class,
+        school: schoolId,
+      });
+
+      const newClass = await Class.findOne({
+        _id: newClassId,
+        school: schoolId,
+      });
+
+      if (!newClass) {
+        return res.status(404).json({ message: "New class not found" });
+      }
+
+      // Check class capacity
+      if (newClass.students.length >= newClass.capacity) {
+        return res
+          .status(400)
+          .json({ message: "New class is at full capacity" });
+      }
+
+      // Extract class numbers from names (e.g., "Class 1" -> 1, "Class 2" -> 2)
+      const getClassNumber = (className) => {
+        if (!className) return 0;
+        const match = className.match(/\d+/); // Extract first number from string
+        return match ? parseInt(match[0]) : 0;
+      };
+
+      const currentClassNum = getClassNumber(currentClass?.name);
+      const newClassNum = getClassNumber(newClass.name);
+
+      // Check if it's a logical upgrade
+      if (newClassNum <= currentClassNum) {
+        return res.status(400).json({
+          message: "New class must be higher than current class",
+        });
+      }
+
+      // Update student class
+      student.studentDetails.class = newClassId;
+      student.studentDetails.admissionDate = new Date(); // Update admission date to new class
+      await student.save();
+
+      // Update class records
+      if (currentClass) {
+        await Class.findByIdAndUpdate(currentClass._id, {
+          $pull: { students: student._id },
+        });
+      }
+
+      await Class.findByIdAndUpdate(newClassId, {
+        $push: { students: student._id },
+      });
+
+      // Send notification
+      const notificationResult = await sendAdmissionNotification(
+        student.email,
+        student.studentDetails?.mobile || "",
+        student.name,
+        null, // No password change
+        req.school.name,
+        `${newClass.name}${newClass.division ? " " + newClass.division : ""}`,
+        student.studentDetails.grNumber,
+        "Class Upgrade Notification"
+      );
+
+      res.json({
+        message: "Student class upgraded successfully",
+        student: {
+          id: student._id,
+          name: student.name,
+          grNumber: student.studentDetails.grNumber,
+          previousClass: currentClass
+            ? `${currentClass.name}${
+                currentClass.division ? " " + currentClass.division : ""
+              }`
+            : "N/A",
+          newClass: `${newClass.name}${
+            newClass.division ? " " + newClass.division : ""
+          }`,
+        },
+        notificationStatus: {
+          emailSent: notificationResult.emailSent,
+          smsSent: notificationResult.smsSent,
+        },
+      });
+    } catch (error) {
+      console.error("Error in upgradeStudentClass:", error);
+      res.status(500).json({ error: error.message });
+    }
+  },
 };
 
-const sendCertificateNotification = async (email, mobile, studentName, certificateType, documentUrl) => {
+const sendCertificateNotification = async (
+  email,
+  mobile,
+  studentName,
+  certificateType,
+  documentUrl
+) => {
   return {
     emailSent: true,
     smsSent: true,
@@ -4192,24 +1648,31 @@ const sendCertificateNotification = async (email, mobile, studentName, certifica
   };
 };
 
-const sendAdmissionNotification1 = async (email, mobile, studentName, password, schoolName, className, grNumber = null, notificationType = 'Admission') => {
-  let message = '';
-  if (notificationType === 'Class Upgrade Notification') {
+const sendAdmissionNotification1 = async (
+  email,
+  mobile,
+  studentName,
+  password,
+  schoolName,
+  className,
+  grNumber = null,
+  notificationType = "Admission"
+) => {
+  let message = "";
+  if (notificationType === "Class Upgrade Notification") {
     message = `Dear ${studentName}, your class has been upgraded to ${className} at ${schoolName}. Your GR Number remains ${grNumber}.`;
   } else {
-    message = `Dear ${studentName}, your admission to ${schoolName} in class ${className} is confirmed. Your credentials - Email: ${email}, Password: ${password}${grNumber ? ', GR Number: ' + grNumber : ''}`;
+    message = `Dear ${studentName}, your admission to ${schoolName} in class ${className} is confirmed. Your credentials - Email: ${email}, Password: ${password}${
+      grNumber ? ", GR Number: " + grNumber : ""
+    }`;
   }
-  
+
   return {
     emailSent: true,
     smsSent: true,
     error: null,
-    message // Optional: for debugging
+    message, // Optional: for debugging
   };
 };
 
-
-
-
-
-module.exports = { clerkController, upload,sendAdmissionNotification };
+module.exports = { clerkController, upload, sendAdmissionNotification };

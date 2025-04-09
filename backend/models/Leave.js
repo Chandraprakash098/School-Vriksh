@@ -1,113 +1,55 @@
-// const mongoose = require('mongoose');
-
-// const LeaveSchema = new mongoose.Schema({
-//   school: {
-//     type: mongoose.Schema.Types.ObjectId,
-//     ref: 'School',
-//     required: true
-//   },
-//   user: {
-//     type: mongoose.Schema.Types.ObjectId,
-//     ref: 'User',
-//     required: true
-//   },
-//   reason: {
-//     type: String,
-//     required: true
-//   },
-//   startDate: {
-//     type: Date,
-//     required: true
-//   },
-//   endDate: {
-//     type: Date,
-//     required: true
-//   },
-//   type: {
-//     type: String,
-//     enum: ['sick', 'casual', 'vacation', 'other'],
-//     required: true
-//   },
-//   status: {
-//     type: String,
-//     enum: ['pending', 'approved', 'rejected'],
-//     default: 'pending'
-//   },
-//   appliedOn: {
-//     type: Date,
-//     default: Date.now
-//   },
-//   approvedBy: {
-//     type: mongoose.Schema.Types.ObjectId,
-//     ref: 'User',
-//     default: null
-//   },
-//   approvedOn: {
-//     type: Date,
-//     default: null
-//   },
-//   remarks: {
-//     type: String,
-//     default: ''
-//   }
-// });
-
-// // module.exports = mongoose.model('Leave', LeaveSchema);
-// module.exports = (connection) => connection.model('Leave', LeaveSchema);
-
-
-const mongoose = require('mongoose');
+const mongoose = require("mongoose");
 
 const LeaveSchema = new mongoose.Schema({
   school: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'School',
-    required: true
+    ref: "School",
+    required: true,
   },
   user: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    required: true
+    ref: "User",
+    required: true,
   },
   reason: {
     type: String,
-    required: true
+    required: true,
   },
   startDate: {
     type: Date,
-    required: true
+    required: true,
   },
   endDate: {
     type: Date,
-    required: true
+    required: true,
   },
   type: {
     type: String,
-    enum: ['sick', 'casual', 'vacation', 'other'],
-    required: true
+    enum: ["sick", "casual", "vacation", "other"],
+    required: true,
   },
   status: {
     type: String,
-    enum: ['pending', 'approved', 'rejected'],
-    default: 'pending'
+    enum: ["pending", "approved", "rejected"],
+    default: "pending",
   },
   appliedOn: {
     type: Date,
-    default: Date.now
+    default: Date.now,
   },
   reviewedBy: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    default: null
+    ref: "User",
+    default: null,
   },
   reviewedAt: {
     type: Date,
-    default: null
+    default: null,
   },
   comments: {
     type: String,
-    default: ''
-  }
+    default: "",
+  },
 });
 
-module.exports = (connection) => connection.model('Leave', LeaveSchema);
+module.exports = (connection) => connection.model("Leave", LeaveSchema);
