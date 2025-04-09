@@ -134,6 +134,12 @@ router.get(
   teacherController.getLeaveStatus
 );
 
+router.get(
+  "/exams",
+  [auth, roleCheck(["teacher"])],
+  teacherController.getExamsForTeacher
+);
+
 // Exam Marks Workflow
 router.post(
   "/exams/:examId/marks",

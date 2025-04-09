@@ -986,6 +986,131 @@ const teacherController = {
     }
   },
 
+  // getExamsForTeacher: async (req, res) => {
+  //   try {
+  //     const mongoose = require("mongoose");
+  //     const teacherId = new mongoose.Types.ObjectId(req.user._id);
+  //     const schoolId = new mongoose.Types.ObjectId(req.school._id.toString());
+  //     const connection = req.connection;
+  //     const Exam = require("../models/Exam")(connection);
+  //     const Subject = require("../models/Subject")(connection);
+  //     const Class = require("../models/Class")(connection); // Register Class model
+  
+  //     console.log("teacherId:", teacherId.toString());
+  //     console.log("schoolId:", schoolId.toString());
+  //     console.log("Connection name:", connection.name);
+  //     console.log("Exam collection:", Exam.collection.collectionName);
+  
+  //     // Find subjects where the teacher is assigned
+  //     const subjects = await Subject.find({
+  //       school: schoolId,
+  //       "teachers.teacher": teacherId,
+  //     }).select("_id name");
+  //     console.log("Assigned subjects:", subjects);
+  
+  //     const subjectIds = subjects.map((subject) => new mongoose.Types.ObjectId(subject._id));
+  //     console.log("subjectIds:", subjectIds);
+  
+  //     // Test specific exam
+  //     const testExam = await Exam.findOne({ _id: "67c956f43db5ec6dd69f1909" });
+  //     console.log("Test exam (direct fetch):", testExam);
+  
+  //     // Find exams
+  //     const query = {
+  //       school: schoolId,
+  //       subject: { $in: subjectIds },
+  //       $or: [{ status: "draft" }, { status: { $exists: false } }],
+  //     };
+  //     console.log("Query:", JSON.stringify(query, null, 2));
+  //     const exams = await Exam.find(query)
+  //       .populate("class", "name division") // Now safe with Class registered
+  //       .populate("subject", "name")
+  //       .select(
+  //         "_id examType customExamType startDate endDate examDate totalMarks class subject status"
+  //       )
+  //       .lean();
+  //     console.log("Found exams:", exams);
+  
+  //     res.json({
+  //       message: "Exams retrieved successfully",
+  //       exams: exams.map((exam) => ({
+  //         examId: exam._id,
+  //         examType: exam.examType === "Other" ? exam.customExamType : exam.examType,
+  //         class: `${exam.class.name} ${exam.class.division || ""}`,
+  //         subject: exam.subject.name,
+  //         examDate: exam.examDate,
+  //         totalMarks: exam.totalMarks,
+  //         status: exam.status || "default (draft)",
+  //       })),
+  //     });
+  //   } catch (error) {
+  //     console.error("Error in getExamsForTeacher:", error);
+  //     res.status(500).json({ error: error.message });
+  //   }
+  // },
+
+
+  getExamsForTeacher: async (req, res) => {
+    try {
+      const mongoose = require("mongoose");
+      const teacherId = new mongoose.Types.ObjectId(req.user._id);
+      const schoolId = new mongoose.Types.ObjectId(req.school._id.toString());
+      const connection = req.connection;
+      const Exam = require("../models/Exam")(connection);
+      const Subject = require("../models/Subject")(connection);
+      const Class = require("../models/Class")(connection);
+  
+      const subjects = await Subject.find({
+        school: schoolId,
+        "teachers.teacher": teacherId,
+      }).select("_id name");
+      const subjectIds = subjects.map((subject) => new mongoose.Types.ObjectId(subject._id));
+  
+      const exams = await Exam.find({
+        school: schoolId,
+        subject: { $in: subjectIds },
+        $or: [{ status: "draft" }, { status: { $exists: false } }],
+      })
+        .populate("class", "name division students")
+        .populate("subject", "name")
+        .select(
+          "_id examType customExamType startDate endDate examDate totalMarks class subject status"
+        )
+        .lean();
+  
+      const User = require("../models/User")(connection);
+      const formattedExams = await Promise.all(
+        exams.map(async (exam) => {
+          const students = await User.find({ _id: { $in: exam.class.students } })
+            .select("name rollNumber")
+            .lean();
+          return {
+            examId: exam._id,
+            examType: exam.examType === "Other" ? exam.customExamType : exam.examType,
+            class: `${exam.class.name} ${exam.class.division || ""}`,
+            subject: exam.subject.name,
+            examDate: exam.examDate,
+            totalMarks: exam.totalMarks,
+            status: exam.status || "default (draft)",
+            students: students.map((student) => ({
+              studentId: student._id,
+              name: student.name,
+              rollNumber: student.rollNumber,
+            })),
+          };
+        })
+      );
+  
+      res.json({
+        message: "Exams retrieved successfully",
+        exams: formattedExams,
+      });
+    } catch (error) {
+      console.error("Error in getExamsForTeacher:", error);
+      res.status(500).json({ error: error.message });
+    }
+  },
+
   // Enter marks for a subject (by subject teacher)
   enterSubjectMarks: async (req, res) => {
     try {
