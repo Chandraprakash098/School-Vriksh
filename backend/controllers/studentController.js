@@ -1482,7 +1482,7 @@ const studentController = {
     try {
       const { studentId } = req.params;
       const schoolId = req.school._id.toString();
-      const connection = req.connection;
+      const connection = req.dbConnection;
       const User = require('../models/User')(connection);
       const StudyMaterial = require('../models/StudyMaterial')(connection);
 

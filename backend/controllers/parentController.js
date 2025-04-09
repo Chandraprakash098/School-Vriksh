@@ -76,7 +76,7 @@ const parentController = {
       const { studentId } = req.params;
       const parentId = req.user._id;
       const schoolId = req.school._id.toString();
-      const connection = req.connection;
+      const connection = req.dbConnection;
       const User = require("../models/User")(connection);
       const StudyMaterial = require("../models/StudyMaterial")(connection);
 
