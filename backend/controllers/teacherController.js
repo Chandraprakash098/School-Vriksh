@@ -986,6 +986,8 @@ const teacherController = {
     }
   },
 
+  
+
   // getExamsForTeacher: async (req, res) => {
   //   try {
   //     const mongoose = require("mongoose");
@@ -994,54 +996,52 @@ const teacherController = {
   //     const connection = req.connection;
   //     const Exam = require("../models/Exam")(connection);
   //     const Subject = require("../models/Subject")(connection);
-  //     const Class = require("../models/Class")(connection); // Register Class model
+  //     const Class = require("../models/Class")(connection);
   
-  //     console.log("teacherId:", teacherId.toString());
-  //     console.log("schoolId:", schoolId.toString());
-  //     console.log("Connection name:", connection.name);
-  //     console.log("Exam collection:", Exam.collection.collectionName);
-  
-  //     // Find subjects where the teacher is assigned
   //     const subjects = await Subject.find({
   //       school: schoolId,
   //       "teachers.teacher": teacherId,
   //     }).select("_id name");
-  //     console.log("Assigned subjects:", subjects);
-  
   //     const subjectIds = subjects.map((subject) => new mongoose.Types.ObjectId(subject._id));
-  //     console.log("subjectIds:", subjectIds);
   
-  //     // Test specific exam
-  //     const testExam = await Exam.findOne({ _id: "67c956f43db5ec6dd69f1909" });
-  //     console.log("Test exam (direct fetch):", testExam);
-  
-  //     // Find exams
-  //     const query = {
+  //     const exams = await Exam.find({
   //       school: schoolId,
   //       subject: { $in: subjectIds },
   //       $or: [{ status: "draft" }, { status: { $exists: false } }],
-  //     };
-  //     console.log("Query:", JSON.stringify(query, null, 2));
-  //     const exams = await Exam.find(query)
-  //       .populate("class", "name division") // Now safe with Class registered
+  //     })
+  //       .populate("class", "name division students")
   //       .populate("subject", "name")
   //       .select(
   //         "_id examType customExamType startDate endDate examDate totalMarks class subject status"
   //       )
   //       .lean();
-  //     console.log("Found exams:", exams);
+  
+  //     const User = require("../models/User")(connection);
+  //     const formattedExams = await Promise.all(
+  //       exams.map(async (exam) => {
+  //         const students = await User.find({ _id: { $in: exam.class.students } })
+  //           .select("name rollNumber")
+  //           .lean();
+  //         return {
+  //           examId: exam._id,
+  //           examType: exam.examType === "Other" ? exam.customExamType : exam.examType,
+  //           class: `${exam.class.name} ${exam.class.division || ""}`,
+  //           subject: exam.subject.name,
+  //           examDate: exam.examDate,
+  //           totalMarks: exam.totalMarks,
+  //           status: exam.status || "default (draft)",
+  //           students: students.map((student) => ({
+  //             studentId: student._id,
+  //             name: student.name,
+  //             rollNumber: student.rollNumber,
+  //           })),
+  //         };
+  //       })
+  //     );
   
   //     res.json({
   //       message: "Exams retrieved successfully",
-  //       exams: exams.map((exam) => ({
-  //         examId: exam._id,
-  //         examType: exam.examType === "Other" ? exam.customExamType : exam.examType,
-  //         class: `${exam.class.name} ${exam.class.division || ""}`,
-  //         subject: exam.subject.name,
-  //         examDate: exam.examDate,
-  //         totalMarks: exam.totalMarks,
-  //         status: exam.status || "default (draft)",
-  //       })),
+  //       exams: formattedExams,
   //     });
   //   } catch (error) {
   //     console.error("Error in getExamsForTeacher:", error);
@@ -1049,36 +1049,40 @@ const teacherController = {
   //   }
   // },
 
-
   getExamsForTeacher: async (req, res) => {
     try {
-      const mongoose = require("mongoose");
-      const teacherId = new mongoose.Types.ObjectId(req.user._id);
-      const schoolId = new mongoose.Types.ObjectId(req.school._id.toString());
+      const teacherId = req.user._id;
+      const schoolId = req.school._id.toString();
+      const { classId } = req.query; // Optional filter by class
       const connection = req.connection;
       const Exam = require("../models/Exam")(connection);
       const Subject = require("../models/Subject")(connection);
       const Class = require("../models/Class")(connection);
-  
-      const subjects = await Subject.find({
+      const User = require("../models/User")(connection);
+
+      // Find subjects taught by the teacher
+      const subjectQuery = {
         school: schoolId,
         "teachers.teacher": teacherId,
-      }).select("_id name");
-      const subjectIds = subjects.map((subject) => new mongoose.Types.ObjectId(subject._id));
-  
-      const exams = await Exam.find({
+      };
+      if (classId) subjectQuery.class = classId;
+
+      const subjects = await Subject.find(subjectQuery).select("_id name class");
+      const subjectIds = subjects.map((s) => s._id);
+
+      // Find exams for those subjects
+      const examQuery = {
         school: schoolId,
         subject: { $in: subjectIds },
-        $or: [{ status: "draft" }, { status: { $exists: false } }],
-      })
+        status: { $in: ["draft", "pending"] }, // Exams available for mark entry
+      };
+      if (classId) examQuery.class = classId;
+
+      const exams = await Exam.find(examQuery)
         .populate("class", "name division students")
         .populate("subject", "name")
-        .select(
-          "_id examType customExamType startDate endDate examDate totalMarks class subject status"
-        )
         .lean();
-  
-      const User = require("../models/User")(connection);
+
       const formattedExams = await Promise.all(
         exams.map(async (exam) => {
           const students = await User.find({ _id: { $in: exam.class.students } })
@@ -1087,31 +1091,77 @@ const teacherController = {
           return {
             examId: exam._id,
             examType: exam.examType === "Other" ? exam.customExamType : exam.examType,
-            class: `${exam.class.name} ${exam.class.division || ""}`,
+            class: `${exam.class.name}${exam.class.division ? " " + exam.class.division : ""}`,
             subject: exam.subject.name,
             examDate: exam.examDate,
             totalMarks: exam.totalMarks,
-            status: exam.status || "default (draft)",
-            students: students.map((student) => ({
-              studentId: student._id,
-              name: student.name,
-              rollNumber: student.rollNumber,
+            status: exam.status || "draft",
+            students: students.map((s) => ({
+              studentId: s._id,
+              name: s.name,
+              rollNumber: s.rollNumber,
             })),
           };
         })
       );
-  
-      res.json({
-        message: "Exams retrieved successfully",
-        exams: formattedExams,
-      });
+
+      res.json({ message: "Exams retrieved successfully", exams: formattedExams });
     } catch (error) {
       console.error("Error in getExamsForTeacher:", error);
       res.status(500).json({ error: error.message });
     }
   },
 
-  // Enter marks for a subject (by subject teacher)
+  // // Enter marks for a subject (by subject teacher)
+  // enterSubjectMarks: async (req, res) => {
+  //   try {
+  //     const { examId } = req.params;
+  //     const { studentsMarks } = req.body; // [{ studentId, marks, remarks }]
+  //     const teacherId = req.user._id;
+  //     const schoolId = req.school._id.toString();
+  //     const connection = req.connection;
+  //     const Exam = require("../models/Exam")(connection);
+  //     const Subject = require("../models/Subject")(connection);
+
+  //     const exam = await Exam.findOne({ _id: examId, school: schoolId });
+  //     if (!exam) return res.status(404).json({ message: "Exam not found" });
+
+  //     const subject = await Subject.findById(exam.subject);
+  //     const isAuthorized = subject.teachers.some(
+  //       (t) => t.teacher.toString() === teacherId.toString()
+  //     );
+  //     if (!isAuthorized) {
+  //       return res
+  //         .status(403)
+  //         .json({ message: "Not authorized to enter marks for this exam" });
+  //     }
+
+  //     // Validate marks
+  //     for (const entry of studentsMarks) {
+  //       if (entry.marks > exam.totalMarks || entry.marks < 0) {
+  //         return res.status(400).json({
+  //           message: `Marks for student ${entry.studentId} must be between 0 and ${exam.totalMarks}`,
+  //         });
+  //       }
+  //     }
+
+  //     exam.results = studentsMarks.map((entry) => ({
+  //       student: entry.studentId,
+  //       marksObtained: entry.marks,
+  //       remarks: entry.remarks || "",
+  //     }));
+  //     exam.marksEnteredBy = teacherId;
+  //     exam.marksEnteredAt = new Date();
+  //     exam.status = "draft";
+
+  //     await exam.save();
+  //     res.json({ message: "Marks entered successfully", exam });
+  //   } catch (error) {
+  //     res.status(500).json({ error: error.message });
+  //   }
+  // },
+
+  // Enter marks for a specific exam (subject teacher)
   enterSubjectMarks: async (req, res) => {
     try {
       const { examId } = req.params;
@@ -1121,22 +1171,28 @@ const teacherController = {
       const connection = req.connection;
       const Exam = require("../models/Exam")(connection);
       const Subject = require("../models/Subject")(connection);
+      const User = require("../models/User")(connection);
 
-      const exam = await Exam.findOne({ _id: examId, school: schoolId });
+      const exam = await Exam.findOne({ _id: examId, school: schoolId })
+        .populate("subject")
+        .populate("class", "students");
       if (!exam) return res.status(404).json({ message: "Exam not found" });
 
-      const subject = await Subject.findById(exam.subject);
+      // Verify teacher is assigned to the subject
+      const subject = exam.subject;
       const isAuthorized = subject.teachers.some(
         (t) => t.teacher.toString() === teacherId.toString()
       );
       if (!isAuthorized) {
-        return res
-          .status(403)
-          .json({ message: "Not authorized to enter marks for this exam" });
+        return res.status(403).json({ message: "Not authorized to enter marks for this exam" });
       }
 
-      // Validate marks
+      // Validate students and marks
+      const validStudentIds = exam.class.students.map((s) => s.toString());
       for (const entry of studentsMarks) {
+        if (!validStudentIds.includes(entry.studentId)) {
+          return res.status(400).json({ message: `Invalid student ID: ${entry.studentId}` });
+        }
         if (entry.marks > exam.totalMarks || entry.marks < 0) {
           return res.status(400).json({
             message: `Marks for student ${entry.studentId} must be between 0 and ${exam.totalMarks}`,
@@ -1144,6 +1200,7 @@ const teacherController = {
         }
       }
 
+      // Update exam with marks
       exam.results = studentsMarks.map((entry) => ({
         student: entry.studentId,
         marksObtained: entry.marks,
@@ -1151,7 +1208,7 @@ const teacherController = {
       }));
       exam.marksEnteredBy = teacherId;
       exam.marksEnteredAt = new Date();
-      exam.status = "draft";
+      exam.status = "pending"; // Changed from "draft" to "pending" for clarity
 
       await exam.save();
       res.json({ message: "Marks entered successfully", exam });
@@ -1159,6 +1216,49 @@ const teacherController = {
       res.status(500).json({ error: error.message });
     }
   },
+
+  // submitMarksToClassTeacher: async (req, res) => {
+  //   try {
+  //     const { examId } = req.params;
+  //     const teacherId = req.user._id;
+  //     const schoolId = req.school._id.toString();
+  //     const connection = req.connection;
+  //     const Exam = require("../models/Exam")(connection);
+  //     const Class = require("../models/Class")(connection);
+
+  //     const exam = await Exam.findOne({ _id: examId, school: schoolId });
+  //     if (!exam) return res.status(404).json({ message: "Exam not found" });
+
+  //     if (exam.marksEnteredBy.toString() !== teacherId.toString()) {
+  //       return res
+  //         .status(403)
+  //         .json({ message: "Not authorized to submit these marks" });
+  //     }
+  //     if (exam.status !== "draft") {
+  //       return res
+  //         .status(400)
+  //         .json({ message: "Marks already submitted or in invalid state" });
+  //     }
+
+  //     const classInfo = await Class.findById(exam.class);
+  //     if (!classInfo.classTeacher) {
+  //       return res
+  //         .status(400)
+  //         .json({ message: "No class teacher assigned to this class" });
+  //     }
+
+  //     exam.status = "submittedToClassTeacher";
+  //     exam.submittedToClassTeacherAt = new Date();
+  //     await exam.save();
+
+  //     res.json({
+  //       message: "Marks submitted to class teacher successfully",
+  //       exam,
+  //     });
+  //   } catch (error) {
+  //     res.status(500).json({ error: error.message });
+  //   }
+  // },
 
   submitMarksToClassTeacher: async (req, res) => {
     try {
@@ -1169,39 +1269,69 @@ const teacherController = {
       const Exam = require("../models/Exam")(connection);
       const Class = require("../models/Class")(connection);
 
-      const exam = await Exam.findOne({ _id: examId, school: schoolId });
+      const exam = await Exam.findOne({ _id: examId, school: schoolId })
+        .populate("class", "classTeacher");
       if (!exam) return res.status(404).json({ message: "Exam not found" });
 
       if (exam.marksEnteredBy.toString() !== teacherId.toString()) {
-        return res
-          .status(403)
-          .json({ message: "Not authorized to submit these marks" });
+        return res.status(403).json({ message: "Not authorized to submit these marks" });
       }
-      if (exam.status !== "draft") {
-        return res
-          .status(400)
-          .json({ message: "Marks already submitted or in invalid state" });
+      if (exam.status !== "pending") {
+        return res.status(400).json({ message: "Marks already submitted or in invalid state" });
       }
 
-      const classInfo = await Class.findById(exam.class);
-      if (!classInfo.classTeacher) {
-        return res
-          .status(400)
-          .json({ message: "No class teacher assigned to this class" });
+      if (!exam.class.classTeacher) {
+        return res.status(400).json({ message: "No class teacher assigned to this class" });
       }
 
       exam.status = "submittedToClassTeacher";
       exam.submittedToClassTeacherAt = new Date();
       await exam.save();
 
-      res.json({
-        message: "Marks submitted to class teacher successfully",
-        exam,
-      });
+      res.json({ message: "Marks submitted to class teacher successfully", exam });
     } catch (error) {
       res.status(500).json({ error: error.message });
     }
   },
+  // reviewSubjectMarks: async (req, res) => {
+  //   try {
+  //     const { classId, examId } = req.params;
+  //     const teacherId = req.user._id;
+  //     const schoolId = req.school._id.toString();
+  //     const connection = req.connection;
+
+  //     // Explicitly register all models with the connection
+  //     const Exam = require("../models/Exam")(connection);
+  //     const Class = require("../models/Class")(connection);
+  //     const Subject = require("../models/Subject")(connection); // Add this line
+
+  //     const classInfo = await Class.findOne({ _id: classId, school: schoolId });
+  //     if (
+  //       !classInfo ||
+  //       classInfo.classTeacher.toString() !== teacherId.toString()
+  //     ) {
+  //       return res
+  //         .status(403)
+  //         .json({ message: "Not authorized as class teacher" });
+  //     }
+
+  //     const query = {
+  //       school: schoolId,
+  //       class: classId,
+  //       status: "submittedToClassTeacher",
+  //     };
+  //     if (examId) query._id = examId;
+
+  //     const exams = await Exam.find(query)
+  //       .populate("subject", "name")
+  //       .populate("results.student", "name")
+  //       .lean();
+
+  //     res.json(exams);
+  //   } catch (error) {
+  //     res.status(500).json({ error: error.message });
+  //   }
+  // },
 
   reviewSubjectMarks: async (req, res) => {
     try {
@@ -1209,20 +1339,12 @@ const teacherController = {
       const teacherId = req.user._id;
       const schoolId = req.school._id.toString();
       const connection = req.connection;
-
-      // Explicitly register all models with the connection
       const Exam = require("../models/Exam")(connection);
       const Class = require("../models/Class")(connection);
-      const Subject = require("../models/Subject")(connection); // Add this line
 
       const classInfo = await Class.findOne({ _id: classId, school: schoolId });
-      if (
-        !classInfo ||
-        classInfo.classTeacher.toString() !== teacherId.toString()
-      ) {
-        return res
-          .status(403)
-          .json({ message: "Not authorized as class teacher" });
+      if (!classInfo || classInfo.classTeacher.toString() !== teacherId.toString()) {
+        return res.status(403).json({ message: "Not authorized as class teacher" });
       }
 
       const query = {
@@ -1243,50 +1365,112 @@ const teacherController = {
     }
   },
 
-  // submitResultsToAdmin: async (req, res) => {
+  
+  // compileAndSubmitResults: async (req, res) => {
   //   try {
-  //     const { classId, examId } = req.params;
+  //     const { classId, examType } = req.params; // examType to identify the exam (e.g., "Midterm")
   //     const teacherId = req.user._id;
   //     const schoolId = req.school._id.toString();
-  //     const connection = req.dbConnection;
-  //     const Exam = require('../models/Exam')(connection);
-  //     const Class = require('../models/Class')(connection);
-  //     const Subject = require('../models/Subject')(connection);
+  //     const connection = req.connection;
+  //     const Exam = require("../models/Exam")(connection);
+  //     const Class = require("../models/Class")(connection);
+  //     const Subject = require("../models/Subject")(connection);
+  //     const User = require("../models/User")(connection);
 
+  //     // Verify that the teacher is the class teacher
   //     const classInfo = await Class.findOne({ _id: classId, school: schoolId });
-  //     if (!classInfo || classInfo.classTeacher.toString() !== teacherId.toString()) {
-  //       return res.status(403).json({ message: 'Not authorized as class teacher' });
+  //     if (
+  //       !classInfo ||
+  //       classInfo.classTeacher.toString() !== teacherId.toString()
+  //     ) {
+  //       return res
+  //         .status(403)
+  //         .json({ message: "Not authorized as class teacher" });
   //     }
 
-  //     const query = {
+  //     // Get all subjects for the class
+  //     const subjects = await Subject.find({ class: classId });
+  //     if (!subjects.length) {
+  //       return res
+  //         .status(404)
+  //         .json({ message: "No subjects found for this class" });
+  //     }
+
+  //     // Get all exams for the given examType and class
+  //     const exams = await Exam.find({
   //       school: schoolId,
   //       class: classId,
-  //       status: 'submittedToClassTeacher',
-  //     };
-  //     if (examId) query._id = examId;
+  //       examType: examType,
+  //       status: "submittedToClassTeacher",
+  //     }).populate("subject", "name");
 
-  //     const exams = await Exam.find(query);
-  //     if (!exams.length) {
-  //       return res.status(404).json({ message: 'No submitted marks found for this class and exam' });
-  //     }
-
-  //     const subjects = await Subject.find({ class: classId });
+  //     // Check if all subjects have submitted marks
   //     if (exams.length !== subjects.length) {
-  //       return res.status(400).json({ message: 'Not all subjects have submitted marks' });
+  //       return res.status(400).json({
+  //         message: `Not all subjects have submitted marks. Expected: ${subjects.length}, Found: ${exams.length}`,
+  //       });
   //     }
 
+  //     // Get all students in the class
+  //     const students = await User.find({ _id: { $in: classInfo.students } })
+  //       .select("name rollNumber")
+  //       .lean();
+
+  //     // Compile marks for each student
+  //     const compiledResults = students.map((student) => {
+  //       const studentResult = {
+  //         rollNumber: student.rollNumber,
+  //         name: student.name,
+  //         studentId: student._id,
+  //         subjects: {},
+  //         totalMarks: 0,
+  //         percentage: 0,
+  //       };
+
+  //       // Initialize marks for each subject
+  //       subjects.forEach((subject) => {
+  //         studentResult.subjects[subject.name] = 0; // Default to 0
+  //       });
+
+  //       // Populate marks from each exam
+  //       exams.forEach((exam) => {
+  //         const result = exam.results.find(
+  //           (r) => r.student.toString() === student._id.toString()
+  //         );
+  //         if (result) {
+  //           studentResult.subjects[exam.subject.name] = result.marksObtained;
+  //           studentResult.totalMarks += result.marksObtained;
+  //         }
+  //       });
+
+  //       // Calculate percentage (total marks out of 500 for 5 subjects, each out of 100)
+  //       const maxTotalMarks = subjects.length * 100; // e.g., 500 for 5 subjects
+  //       studentResult.percentage =
+  //         (studentResult.totalMarks / maxTotalMarks) * 100;
+
+  //       return studentResult;
+  //     });
+
+  //     // Update exam statuses to 'submittedToAdmin'
   //     const session = await connection.startSession();
   //     session.startTransaction();
 
   //     try {
   //       for (const exam of exams) {
-  //         exam.status = 'submittedToAdmin';
+  //         exam.status = "submittedToAdmin";
   //         exam.submittedToAdminAt = new Date();
   //         await exam.save({ session });
   //       }
 
   //       await session.commitTransaction();
-  //       res.json({ message: 'Results submitted to admin successfully' });
+
+  //       // Return the compiled results (similar to the marksheet)
+  //       res.json({
+  //         message: "Results compiled and submitted to admin successfully",
+  //         class: `${classInfo.name} ${classInfo.division}`,
+  //         examType: examType,
+  //         results: compiledResults,
+  //       });
   //     } catch (error) {
   //       await session.abortTransaction();
   //       throw error;
@@ -1298,10 +1482,9 @@ const teacherController = {
   //   }
   // },
 
-  // Compile marks for all subjects, calculate totals and percentages, and submit to admin (by class teacher)
   compileAndSubmitResults: async (req, res) => {
     try {
-      const { classId, examType } = req.params; // examType to identify the exam (e.g., "Midterm")
+      const { classId, examType } = req.params;
       const teacherId = req.user._id;
       const schoolId = req.school._id.toString();
       const connection = req.connection;
@@ -1310,26 +1493,14 @@ const teacherController = {
       const Subject = require("../models/Subject")(connection);
       const User = require("../models/User")(connection);
 
-      // Verify that the teacher is the class teacher
+      // Verify class teacher role
       const classInfo = await Class.findOne({ _id: classId, school: schoolId });
-      if (
-        !classInfo ||
-        classInfo.classTeacher.toString() !== teacherId.toString()
-      ) {
-        return res
-          .status(403)
-          .json({ message: "Not authorized as class teacher" });
+      if (!classInfo || classInfo.classTeacher.toString() !== teacherId.toString()) {
+        return res.status(403).json({ message: "Not authorized as class teacher" });
       }
 
-      // Get all subjects for the class
+      // Get all subjects and exams
       const subjects = await Subject.find({ class: classId });
-      if (!subjects.length) {
-        return res
-          .status(404)
-          .json({ message: "No subjects found for this class" });
-      }
-
-      // Get all exams for the given examType and class
       const exams = await Exam.find({
         school: schoolId,
         class: classId,
@@ -1337,71 +1508,57 @@ const teacherController = {
         status: "submittedToClassTeacher",
       }).populate("subject", "name");
 
-      // Check if all subjects have submitted marks
       if (exams.length !== subjects.length) {
         return res.status(400).json({
           message: `Not all subjects have submitted marks. Expected: ${subjects.length}, Found: ${exams.length}`,
         });
       }
 
-      // Get all students in the class
       const students = await User.find({ _id: { $in: classInfo.students } })
         .select("name rollNumber")
         .lean();
 
-      // Compile marks for each student
+      // Compile results
       const compiledResults = students.map((student) => {
         const studentResult = {
-          rollNumber: student.rollNumber,
-          name: student.name,
           studentId: student._id,
+          name: student.name,
+          rollNumber: student.rollNumber,
           subjects: {},
           totalMarks: 0,
           percentage: 0,
         };
 
-        // Initialize marks for each subject
-        subjects.forEach((subject) => {
-          studentResult.subjects[subject.name] = 0; // Default to 0
-        });
-
-        // Populate marks from each exam
         exams.forEach((exam) => {
           const result = exam.results.find(
             (r) => r.student.toString() === student._id.toString()
           );
-          if (result) {
-            studentResult.subjects[exam.subject.name] = result.marksObtained;
-            studentResult.totalMarks += result.marksObtained;
-          }
+          studentResult.subjects[exam.subject.name] = result ? result.marksObtained : 0;
+          studentResult.totalMarks += result ? result.marksObtained : 0;
         });
 
-        // Calculate percentage (total marks out of 500 for 5 subjects, each out of 100)
-        const maxTotalMarks = subjects.length * 100; // e.g., 500 for 5 subjects
-        studentResult.percentage =
-          (studentResult.totalMarks / maxTotalMarks) * 100;
+        const maxTotalMarks = subjects.length * 100;
+        studentResult.percentage = (studentResult.totalMarks / maxTotalMarks) * 100;
 
         return studentResult;
       });
 
-      // Update exam statuses to 'submittedToAdmin'
+      // Update exam statuses in a transaction
       const session = await connection.startSession();
       session.startTransaction();
 
       try {
-        for (const exam of exams) {
-          exam.status = "submittedToAdmin";
-          exam.submittedToAdminAt = new Date();
-          await exam.save({ session });
-        }
+        await Exam.updateMany(
+          { _id: { $in: exams.map((e) => e._id) } },
+          { status: "submittedToAdmin", submittedToAdminAt: new Date() },
+          { session }
+        );
 
         await session.commitTransaction();
-
-        // Return the compiled results (similar to the marksheet)
         res.json({
           message: "Results compiled and submitted to admin successfully",
-          class: `${classInfo.name} ${classInfo.division}`,
-          examType: examType,
+          class: `${classInfo.name}${classInfo.division ? " " + classInfo.division : ""}`,
+          examType,
           results: compiledResults,
         });
       } catch (error) {
@@ -1411,6 +1568,7 @@ const teacherController = {
         session.endSession();
       }
     } catch (error) {
+      console.error("Error in compileAndSubmitResults:", error);
       res.status(500).json({ error: error.message });
     }
   },

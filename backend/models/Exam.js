@@ -58,6 +58,7 @@ const examSchema = new mongoose.Schema(
       type: String,
       enum: [
         "draft",
+        "pending",
         "submittedToClassTeacher",
         "submittedToAdmin",
         "published",
