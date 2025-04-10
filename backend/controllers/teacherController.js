@@ -1091,6 +1091,7 @@ const teacherController = {
           return {
             examId: exam._id,
             examType: exam.examType === "Other" ? exam.customExamType : exam.examType,
+            classId: exam.class._id,
             class: `${exam.class.name}${exam.class.division ? " " + exam.class.division : ""}`,
             subject: exam.subject.name,
             examDate: exam.examDate,
