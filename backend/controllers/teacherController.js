@@ -5,6 +5,61 @@ const jwt = require("jsonwebtoken");
 const axios = require("axios");
 
 const teacherController = {
+
+  submitDailyWork: async (req, res) => {
+    try {
+      const { date, description } = req.body;
+      const teacherId = req.user._id;
+      const schoolId = req.school._id.toString();
+      const connection = req.connection;
+      const DailyWork = require("../models/DailyWork")(connection);
+
+      // Validate input
+      if (!date || !description) {
+        return res.status(400).json({ message: "Date and description are required" });
+      }
+
+      const workDate = new Date(date);
+      if (isNaN(workDate.getTime())) {
+        return res.status(400).json({ message: "Invalid date format" });
+      }
+
+      // Check if work already submitted for this date
+      const existingWork = await DailyWork.findOne({
+        school: schoolId,
+        teacher: teacherId,
+        date: {
+          $gte: new Date(workDate.setHours(0, 0, 0, 0)),
+          $lte: new Date(workDate.setHours(23, 59, 59, 999)),
+        },
+      });
+
+      if (existingWork) {
+        return res.status(400).json({ message: "Daily work already submitted for this date" });
+      }
+
+      // Create new daily work entry
+      const dailyWork = new DailyWork({
+        school: schoolId,
+        teacher: teacherId,
+        date: workDate,
+        description,
+        status: "pending",
+      });
+
+      await dailyWork.save();
+
+      res.status(201).json({
+        message: "Daily work submitted successfully",
+        dailyWork,
+      });
+    } catch (error) {
+      console.error("Error in submitDailyWork:", error);
+      res.status(500).json({ error: error.message });
+    }
+  },
+
+  
   enterSubjectProgress: async (req, res) => {
     try {
       const { classId, subjectId } = req.params;
@@ -1270,8 +1325,13 @@ const teacherController = {
       const Exam = require("../models/Exam")(connection);
       const Class = require("../models/Class")(connection);
 
+      // const exam = await Exam.findOne({ _id: examId, school: schoolId })
+      //   .populate("class", "classTeacher");
+
       const exam = await Exam.findOne({ _id: examId, school: schoolId })
-        .populate("class", "classTeacher");
+        .populate("class", "classTeacher")
+        .populate("subject", "name"); // Add this to populate the subject
+        
       if (!exam) return res.status(404).json({ message: "Exam not found" });
 
       if (exam.marksEnteredBy.toString() !== teacherId.toString()) {

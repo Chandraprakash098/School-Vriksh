@@ -191,4 +191,10 @@ router.post(
   teacherController.compileAndSubmitProgressReports
 );
 
+router.post(
+  "/daily-work",
+  [auth, roleCheck(["teacher"])],
+  teacherController.submitDailyWork
+);
+
 module.exports = router;

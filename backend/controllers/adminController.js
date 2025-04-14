@@ -8,6 +8,45 @@ const fs = require("fs");
 const { getSchoolConnection } = require("../config/database");
 
 const adminController = {
+
+  getDailyWorkForAdmin: async (req, res) => {
+    try {
+      const schoolId = req.school._id.toString();
+      const connection = req.connection;
+      const DailyWork = require("../models/DailyWork")(connection);
+
+      // Fetch daily work entries with teacher details
+      const dailyWorkEntries = await DailyWork.find({ school: schoolId })
+        .populate("teacher", "name email") // Populate teacher name and email
+        .sort({ date: -1, createdAt: -1 })
+        .lean();
+
+      res.json({
+        message: "Daily work entries retrieved successfully",
+        count: dailyWorkEntries.length,
+        dailyWork: dailyWorkEntries.map((entry) => ({
+          id: entry._id,
+          teacher: {
+            id: entry.teacher._id,
+            name: entry.teacher.name,
+            email: entry.teacher.email,
+          },
+          date: entry.date,
+          description: entry.description,
+          status: entry.status,
+          createdAt: entry.createdAt,
+          reviewedBy: entry.reviewedBy,
+          reviewedAt: entry.reviewedAt,
+          comments: entry.comments,
+        })),
+      });
+    } catch (error) {
+      console.error("Error in getDailyWorkForAdmin:", error);
+      res.status(500).json({ error: error.message });
+    }
+  },
+
+  
   createUser: async (req, res) => {
     try {
       const { name, email, password, role, profile } = req.body;

@@ -21,7 +21,8 @@ const models = {
   ClassResult: require('../models/ClassResult'),
   School: require('../models/School'),
   StudyMaterial:require('../models/StudyMaterial'),
-  ProgressReport:require('../models/ProgressReport')
+  ProgressReport:require('../models/ProgressReport'),
+  DailyWork: require('../models/DailyWork')
 };
 
 console.log('Loaded models:', Object.keys(models).map(name => ({
