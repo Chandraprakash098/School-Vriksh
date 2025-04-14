@@ -1325,13 +1325,13 @@ const teacherController = {
       const Exam = require("../models/Exam")(connection);
       const Class = require("../models/Class")(connection);
 
-      // const exam = await Exam.findOne({ _id: examId, school: schoolId })
-      //   .populate("class", "classTeacher");
-
       const exam = await Exam.findOne({ _id: examId, school: schoolId })
-        .populate("class", "classTeacher")
-        .populate("subject", "name"); // Add this to populate the subject
-        
+        .populate("class", "classTeacher");
+
+      // const exam = await Exam.findOne({ _id: examId, school: schoolId })
+      //   .populate("class", "classTeacher")
+      //   .populate("subject", "name"); // Add this to populate the subject
+
       if (!exam) return res.status(404).json({ message: "Exam not found" });
 
       if (exam.marksEnteredBy.toString() !== teacherId.toString()) {
