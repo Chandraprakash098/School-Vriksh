@@ -156,11 +156,7 @@ router.get(
   [auth, roleCheck(["teacher"])],
   teacherController.reviewSubjectMarks
 );
-// router.post(
-//   '/classes/:classId/exams/:examId/submit-to-admin',
-//   [auth, roleCheck(['teacher'])],
-//   teacherController.submitResultsToAdmin
-// );
+
 
 // Compile marks and submit to admin (new endpoint)
 router.post(

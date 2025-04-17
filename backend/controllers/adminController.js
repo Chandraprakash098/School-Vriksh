@@ -1472,63 +1472,338 @@ const adminController = {
     }
   },
 
+  // reviewClassResults: async (req, res) => {
+  //   try {
+  //     const { examId, classId } = req.params;
+  //     const schoolId = req.school._id.toString();
+  //     const connection = req.connection;
+  //     const Exam = getModel("Exam", connection);
+  //     const Class = getModel("Class", connection);
+  //     const User = getModel("User", connection);
+  //     const Subject = getModel("Subject", connection);
+  
+  //     // Validate class
+  //     const classInfo = await Class.findOne({
+  //       _id: classId,
+  //       school: schoolId,
+  //     }).lean();
+  //     if (!classInfo) {
+  //       return res.status(404).json({ message: "Class not found" });
+  //     }
+  
+  //     // Build query for exams
+  //     const query = {
+  //       school: schoolId,
+  //       class: classId,
+  //       status: "submittedToAdmin",
+  //     };
+  //     if (examId) {
+  //       query._id = examId; // Use examId as the _id of the Exam document
+  //     }
+  
+  //     // Fetch exams with populated data
+  //     const exams = await Exam.find(query)
+  //       .populate("class", "name division")
+  //       .populate("subject", "name")
+  //       .populate("results.student", "name rollNumber")
+  //       .populate("marksEnteredBy", "name")
+  //       .lean();
+  
+  //     if (!exams.length) {
+  //       return res
+  //         .status(404)
+  //         .json({ message: "No submitted results found for review" });
+  //     }
+  
+  //     // Fetch all subjects for the class to ensure completeness
+  //     const subjects = await Subject.find({
+  //       class: classId,
+  //       school: schoolId,
+  //     }).lean();
+  //     const subjectMap = subjects.reduce((acc, subj) => {
+  //       acc[subj._id.toString()] = subj.name;
+  //       return acc;
+  //     }, {});
+  
+  //     // Aggregate results by student
+  //     const studentResults = new Map();
+  //     const examMetadata = [];
+  //     exams.forEach((exam) => {
+  //       exam.results.forEach((result) => {
+  //         const studentId = result.student._id.toString();
+  //         if (!studentResults.has(studentId)) {
+  //           studentResults.set(studentId, {
+  //             student: {
+  //               id: studentId,
+  //               name: result.student.name,
+  //               rollNumber: result.student.rollNumber,
+  //             },
+  //             subjects: {},
+  //             totalMarks: 0,
+  //             percentage: 0,
+  //           });
+  //         }
+  //         const studentData = studentResults.get(studentId);
+  //         studentData.subjects[exam.subject._id.toString()] = {
+  //           subjectName: exam.subject.name,
+  //           marksObtained: result.marksObtained,
+  //           totalMarks: exam.totalMarks,
+  //           remarks: result.remarks || "",
+  //         };
+  //         studentData.totalMarks += result.marksObtained;
+  //       });
+  
+  //       examMetadata.push({
+  //         examId: exam._id,
+  //         examType:
+  //           exam.examType === "Other" ? exam.customExamType : exam.examType,
+  //         subject: exam.subject.name,
+  //         examDate: exam.examDate,
+  //         totalMarks: exam.totalMarks,
+  //         submittedBy: exam.marksEnteredBy?.name || "Unknown",
+  //         submittedAt: exam.submittedToAdminAt,
+  //       });
+  //     });
+  
+  //     // Calculate percentages and statistics
+  //     const resultsArray = Array.from(studentResults.values()).map((result) => {
+  //       const maxTotalMarks = Object.values(result.subjects).reduce(
+  //         (sum, subj) => sum + subj.totalMarks,
+  //         0
+  //       );
+  //       result.percentage = maxTotalMarks
+  //         ? (result.totalMarks / maxTotalMarks) * 100
+  //         : 0;
+  //       result.grade = calculateGrade([result]);
+  //       return result;
+  //     });
+  
+  //     // Calculate class statistics
+  //     const classStats = calculateClassStatistics(resultsArray, subjects.length);
+  
+  //     // Format response
+  //     const response = {
+  //       success: true,
+  //       class: {
+  //         id: classInfo._id,
+  //         name: classInfo.name,
+  //         division: classInfo.division,
+  //       },
+  //       examMetadata,
+  //       results: resultsArray,
+  //       statistics: classStats,
+  //       subjects: subjects.map((s) => ({ id: s._id, name: s.name })),
+  //       totalStudents: resultsArray.length,
+  //       totalSubjects: subjects.length,
+  //       message: "Results retrieved successfully for review",
+  //     };
+  
+  //     res.json(response);
+  //   } catch (error) {
+  //     console.error("Error in reviewClassResults:", error);
+  //     res.status(500).json({
+  //       success: false,
+  //       error: error.message,
+  //       message: "Failed to retrieve results for review",
+  //     });
+  //   }
+  // },
+
   reviewClassResults: async (req, res) => {
     try {
       const { examId, classId } = req.params;
-      const schoolId = req.school._id;
+      const { status = "submittedToAdmin", page = 1, limit = 20 } = req.query;
+      const schoolId = req.school._id.toString();
       const connection = req.connection;
       const Exam = getModel("Exam", connection);
       const Class = getModel("Class", connection);
       const User = getModel("User", connection);
       const Subject = getModel("Subject", connection);
 
-      const exams = await Exam.find({
+      // Validate class
+      const classInfo = await Class.findOne({
+        _id: classId,
+        school: schoolId,
+      }).lean();
+      if (!classInfo) {
+        return res.status(404).json({ message: "Class not found" });
+      }
+
+      // Validate status
+      const validStatuses = ["submittedToAdmin", "published", "all"];
+      const queryStatus = status === "all" ? ["submittedToAdmin", "published"] : [status];
+      if (!validStatuses.includes(status) && status !== "all") {
+        return res.status(400).json({ message: "Invalid status filter" });
+      }
+
+      // Build query for exams
+      const query = {
         school: schoolId,
         class: classId,
-        examDate: examId ? { $eq: new Date(examId) } : { $exists: true },
-        status: "submittedToAdmin",
-      })
-        .populate("class", "name division", Class)
-        .populate("subject", "name", Subject)
-        .populate("results.student", "name", User)
+        status: { $in: queryStatus },
+      };
+      if (examId) {
+        query._id = examId;
+      }
+
+      // Fetch exams with populated data and pagination
+      const exams = await Exam.find(query)
+        .populate("class", "name division")
+        .populate("subject", "name")
+        .populate("results.student", "name  studentDetails.grNumber") // Include grNumber
+        .populate("marksEnteredBy", "name")
+        .populate("publishedBy", "name")
+        .skip((page - 1) * limit)
+        .limit(Number(limit))
         .lean();
 
       if (!exams.length) {
         return res
           .status(404)
-          .json({ message: "No submitted results found for review" });
+          .json({ message: "No results found for the specified criteria" });
       }
 
-      res.json(exams);
+      // Fetch total count for pagination
+      const totalExams = await Exam.countDocuments(query);
+
+      // Fetch all subjects for the class
+      const subjects = await Subject.find({
+        class: classId,
+        school: schoolId,
+      }).lean();
+      const subjectMap = subjects.reduce((acc, subj) => {
+        acc[subj._id.toString()] = subj.name;
+        return acc;
+      }, {});
+
+      // Aggregate results by student
+      const studentResults = new Map();
+      const examMetadata = [];
+      exams.forEach((exam) => {
+        exam.results.forEach((result) => {
+          const studentId = result.student._id.toString();
+          if (!studentResults.has(studentId)) {
+            studentResults.set(studentId, {
+              student: {
+                id: studentId,
+                name: result.student.name,
+                // rollNumber: result.student.rollNumber || "N/A",
+                grNumber: result.student.studentDetails?.grNumber || "N/A", // Include grNumber
+              },
+              subjects: {},
+              totalMarks: 0,
+              percentage: 0,
+            });
+          }
+          const studentData = studentResults.get(studentId);
+          studentData.subjects[exam.subject._id.toString()] = {
+            subjectName: exam.subject.name,
+            marksObtained: result.marksObtained,
+            totalMarks: exam.totalMarks,
+            remarks: result.remarks || "",
+          };
+          studentData.totalMarks += result.marksObtained;
+        });
+
+        examMetadata.push({
+          examId: exam._id,
+          examType:
+            exam.examType === "Other" ? exam.customExamType : exam.examType,
+          subject: exam.subject.name,
+          examDate: exam.examDate,
+          totalMarks: exam.totalMarks,
+          status: exam.status,
+          submittedBy: exam.marksEnteredBy?.name || "Unknown",
+          submittedAt: exam.submittedToAdminAt,
+          publishedBy: exam.publishedBy?.name || "N/A",
+          publishedAt: exam.publishedAt || null,
+        });
+      });
+
+      // Calculate percentages and statistics
+      const resultsArray = Array.from(studentResults.values()).map((result) => {
+        const maxTotalMarks = Object.values(result.subjects).reduce(
+          (sum, subj) => sum + subj.totalMarks,
+          0
+        );
+        result.percentage = maxTotalMarks
+          ? (result.totalMarks / maxTotalMarks) * 100
+          : 0;
+        result.grade = calculateGrade([result]);
+        return result;
+      });
+
+      // Calculate class statistics
+      const classStats = calculateClassStatistics(resultsArray, subjects.length);
+
+      // Format response
+      const response = {
+        success: true,
+        class: {
+          id: classInfo._id,
+          name: classInfo.name,
+          division: classInfo.division,
+        },
+        examMetadata,
+        results: resultsArray,
+        statistics: classStats,
+        subjects: subjects.map((s) => ({ id: s._id, name: s.name })),
+        totalStudents: resultsArray.length,
+        totalSubjects: subjects.length,
+        pagination: {
+          page: Number(page),
+          limit: Number(limit),
+          totalExams,
+          totalPages: Math.ceil(totalExams / limit),
+        },
+        message: "Results retrieved successfully",
+      };
+
+      res.json(response);
     } catch (error) {
-      res.status(500).json({ error: error.message });
+      console.error("Error in reviewClassResults:", error);
+      res.status(500).json({
+        success: false,
+        error: error.message,
+        message: "Failed to retrieve results",
+      });
     }
   },
+
+
 
   publishResults: async (req, res) => {
     try {
       const { examId, classId } = req.params;
       const adminId = req.user._id;
-      const schoolId = req.school._id;
+      const schoolId = req.school._id.toString();
       const connection = req.connection;
       const Exam = getModel("Exam", connection);
       const Result = getModel("Result", connection);
-
+  
       const session = await connection.startSession();
       session.startTransaction();
-
+  
       try {
-        const exams = await Exam.find({
+        // Build query for exams
+        const query = {
           school: schoolId,
           class: classId,
-          examDate: examId ? { $eq: new Date(examId) } : { $exists: true },
           status: "submittedToAdmin",
-        }).lean();
-
-        if (!exams.length) {
-          return res.status(404).json({ message: "No results to publish" });
+        };
+        if (examId) {
+          query._id = examId; // Use examId as ObjectId to match _id
         }
-
+  
+        const exams = await Exam.find(query).lean();
+  
+        if (!exams.length) {
+          return res.status(404).json({
+            success: false,
+            message: "No results to publish",
+          });
+        }
+  
         const results = [];
         exams.forEach((exam) => {
           exam.results.forEach((result) => {
@@ -1546,11 +1821,8 @@ const adminController = {
               publishedAt: new Date(),
             });
           });
-          exam.status = "published";
-          exam.publishedAt = new Date();
-          exam.publishedBy = adminId;
         });
-
+  
         await Result.insertMany(results, { session });
         await Promise.all(
           exams.map((exam) =>
@@ -1565,9 +1837,13 @@ const adminController = {
             )
           )
         );
-
+  
         await session.commitTransaction();
-        res.json({ message: "Results published successfully" });
+        res.json({
+          success: true,
+          message: "Results published successfully",
+          examsPublished: exams.length,
+        });
       } catch (error) {
         await session.abortTransaction();
         throw error;
@@ -1575,7 +1851,12 @@ const adminController = {
         session.endSession();
       }
     } catch (error) {
-      res.status(500).json({ error: error.message });
+      console.error("Error in publishResults:", error);
+      res.status(500).json({
+        success: false,
+        error: error.message,
+        message: "Failed to publish results",
+      });
     }
   },
 
@@ -2930,8 +3211,19 @@ const generateAttendanceCharts = (attendanceData) => {
   };
 };
 
-const calculateGrade = (subjects) => {
-  const percentage = calculatePercentage(subjects);
+// const calculateGrade = (subjects) => {
+//   const percentage = calculatePercentage(subjects);
+//   if (percentage >= 90) return "A+";
+//   if (percentage >= 80) return "A";
+//   if (percentage >= 70) return "B+";
+//   if (percentage >= 60) return "B";
+//   if (percentage >= 50) return "C+";
+//   if (percentage >= 40) return "C";
+//   return "F";
+// };
+
+const calculateGrade = (results) => {
+  const percentage = results[0].percentage || 0;
   if (percentage >= 90) return "A+";
   if (percentage >= 80) return "A";
   if (percentage >= 70) return "B+";
@@ -3102,56 +3394,182 @@ const isValidTimeFormat = (time) => {
   return timeRegex.test(time);
 };
 
-const calculateClassStatistics = (results) => {
+// const calculateClassStatistics = (results) => {
+//   const stats = {
+//     totalStudents: new Set(results.map((r) => r.student.toString())).size,
+//     averagePercentage: 0,
+//     highestPercentage: 0,
+//     lowestPercentage: Infinity,
+//     subjectAverages: new Map(),
+//   };
+
+//   if (!results.length) return stats;
+
+//   const studentPercentages = new Map();
+//   results.forEach((result) => {
+//     const studentId = result.student.toString();
+//     const percentage = (result.marksObtained / result.totalMarks) * 100;
+//     if (!studentPercentages.has(studentId))
+//       studentPercentages.set(studentId, []);
+//     studentPercentages.get(studentId).push(percentage);
+
+//     if (!stats.subjectAverages.has(result.subject._id.toString())) {
+//       stats.subjectAverages.set(result.subject._id.toString(), {
+//         total: 0,
+//         count: 0,
+//       });
+//     }
+//     const subjectStats = stats.subjectAverages.get(
+//       result.subject._id.toString()
+//     );
+//     subjectStats.total += result.marksObtained;
+//     subjectStats.count++;
+//   });
+
+//   let totalPercentage = 0;
+//   studentPercentages.forEach((percentages) => {
+//     const avg = percentages.reduce((a, b) => a + b, 0) / percentages.length;
+//     totalPercentage += avg;
+//     stats.highestPercentage = Math.max(stats.highestPercentage, avg);
+//     stats.lowestPercentage = Math.min(stats.lowestPercentage, avg);
+//   });
+//   stats.averagePercentage = totalPercentage / stats.totalStudents;
+//   stats.subjectAverages = Array.from(
+//     stats.subjectAverages,
+//     ([subjectId, { total, count }]) => ({
+//       subjectId,
+//       average: total / count,
+//     })
+//   );
+
+//   return stats;
+// };
+
+
+
+
+// const calculateClassStatistics = (results, totalSubjects) => {
+//   if (!results.length) {
+//     return {
+//       averagePercentage: 0,
+//       highestPercentage: 0,
+//       lowestPercentage: 0,
+//       passRate: 0,
+//       totalStudents: 0,
+//       subjectAverages: {},
+//     };
+//   }
+
+//   const stats = {
+//     averagePercentage: 0,
+//     highestPercentage: 0,
+//     lowestPercentage: Infinity,
+//     passRate: 0,
+//     totalStudents: results.length,
+//     subjectAverages: {},
+//   };
+
+//   results.forEach((result) => {
+//     stats.averagePercentage += result.percentage;
+//     stats.highestPercentage = Math.max(
+//       stats.highestPercentage,
+//       result.percentage
+//     );
+//     stats.lowestPercentage = Math.min(
+//       stats.lowestPercentage,
+//       result.percentage
+//     );
+//     if (result.percentage >= 40) stats.passRate++;
+
+//     Object.entries(result.subjects).forEach(([subjectId, subjectData]) => {
+//       if (!stats.subjectAverages[subjectId]) {
+//         stats.subjectAverages[subjectId] = {
+//           name: subjectData.subjectName,
+//           totalMarks: 0,
+//           count: 0,
+//         };
+//       }
+//       stats.subjectAverages[subjectId].totalMarks += subjectData.marksObtained;
+//       stats.subjectAverages[subjectId].count++;
+//     });
+//   });
+
+//   stats.averagePercentage /= results.length;
+//   stats.passRate = (stats.passRate / results.length) * 100;
+
+//   stats.subjectAverages = Object.entries(stats.subjectAverages).map(
+//     ([subjectId, data]) => ({
+//       subjectId,
+//       name: data.name,
+//       averageMarks: data.totalMarks / data.count,
+//       averagePercentage: (data.totalMarks / data.count / 100) * 100, // Assuming 100 as max marks per subject
+//     })
+//   );
+
+//   return stats;
+// };
+
+const calculateClassStatistics = (results, totalSubjects) => {
+  if (!results.length) {
+    return {
+      averagePercentage: 0,
+      highestPercentage: 0,
+      lowestPercentage: 0,
+      passRate: 0,
+      totalStudents: 0,
+      subjectAverages: {},
+    };
+  }
+
   const stats = {
-    totalStudents: new Set(results.map((r) => r.student.toString())).size,
     averagePercentage: 0,
     highestPercentage: 0,
     lowestPercentage: Infinity,
-    subjectAverages: new Map(),
+    passRate: 0,
+    totalStudents: results.length,
+    subjectAverages: {},
   };
 
-  if (!results.length) return stats;
-
-  const studentPercentages = new Map();
   results.forEach((result) => {
-    const studentId = result.student.toString();
-    const percentage = (result.marksObtained / result.totalMarks) * 100;
-    if (!studentPercentages.has(studentId))
-      studentPercentages.set(studentId, []);
-    studentPercentages.get(studentId).push(percentage);
-
-    if (!stats.subjectAverages.has(result.subject._id.toString())) {
-      stats.subjectAverages.set(result.subject._id.toString(), {
-        total: 0,
-        count: 0,
-      });
-    }
-    const subjectStats = stats.subjectAverages.get(
-      result.subject._id.toString()
+    stats.averagePercentage += result.percentage;
+    stats.highestPercentage = Math.max(
+      stats.highestPercentage,
+      result.percentage
     );
-    subjectStats.total += result.marksObtained;
-    subjectStats.count++;
+    stats.lowestPercentage = Math.min(
+      stats.lowestPercentage,
+      result.percentage
+    );
+    if (result.percentage >= 40) stats.passRate++;
+
+    Object.entries(result.subjects).forEach(([subjectId, subjectData]) => {
+      if (!stats.subjectAverages[subjectId]) {
+        stats.subjectAverages[subjectId] = {
+          name: subjectData.subjectName,
+          totalMarks: 0,
+          count: 0,
+        };
+      }
+      stats.subjectAverages[subjectId].totalMarks += subjectData.marksObtained;
+      stats.subjectAverages[subjectId].count++;
+    });
   });
 
-  let totalPercentage = 0;
-  studentPercentages.forEach((percentages) => {
-    const avg = percentages.reduce((a, b) => a + b, 0) / percentages.length;
-    totalPercentage += avg;
-    stats.highestPercentage = Math.max(stats.highestPercentage, avg);
-    stats.lowestPercentage = Math.min(stats.lowestPercentage, avg);
-  });
-  stats.averagePercentage = totalPercentage / stats.totalStudents;
-  stats.subjectAverages = Array.from(
-    stats.subjectAverages,
-    ([subjectId, { total, count }]) => ({
+  stats.averagePercentage /= results.length;
+  stats.passRate = (stats.passRate / results.length) * 100;
+
+  stats.subjectAverages = Object.entries(stats.subjectAverages).map(
+    ([subjectId, data]) => ({
       subjectId,
-      average: total / count,
+      name: data.name,
+      averageMarks: data.totalMarks / data.count,
+      averagePercentage: (data.totalMarks / data.count / 100) * 100, // Assuming 100 as max marks per subject
     })
   );
 
   return stats;
 };
+
 
 const generateReportCard = (result, classStats) => {
   const totalMarks = calculateTotalMarks(result.subjects);

@@ -1,71 +1,160 @@
 const Inventory = require('../models/Inventory');
 
 const inventoryController = {
-  // Add new item
-  addItem: async (req, res) => {
+  // Create a new procurement/restocking order
+  createOrder: async (req, res) => {
     try {
-      const { schoolId } = req.params;
-      const itemData = req.body;
-
-      const item = new Inventory({
-        school: schoolId,
-        ...itemData,
-        status: determineStatus(itemData.quantity, itemData.minThreshold)
+      const { orderId, itemName, quantityOrdered, vendor, status, expectedDelivery } = req.body;
+      const newOrder = new Inventory({
+        type: 'procurement',
+        orderId,
+        itemName,
+        quantityOrdered,
+        vendor,
+        status,
+        expectedDelivery,
       });
+      const savedOrder = await newOrder.save();
+      res.status(201).json(savedOrder);
+    } catch (error) {
+      res.status(400).json({ error: error.message });
+    }
+  },
 
-      await item.save();
-      res.status(201).json(item);
+  // Get all procurement/restocking orders
+  getOrders: async (req, res) => {
+    try {
+      const orders = await Inventory.find({ type: 'procurement' });
+      res.status(200).json(orders);
     } catch (error) {
       res.status(500).json({ error: error.message });
     }
   },
 
-  // Update stock
+  // Update order status (e.g., Mark as Received, Cancel Order, Request Urgent Delivery)
+  updateOrder: async (req, res) => {
+    try {
+      const { orderId } = req.params;
+      const { status } = req.body;
+      const updatedOrder = await Inventory.findOneAndUpdate(
+        { orderId, type: 'procurement' },
+        { status },
+        { new: true }
+      );
+      if (!updatedOrder) return res.status(404).json({ error: 'Order not found' });
+      res.status(200).json(updatedOrder);
+    } catch (error) {
+      res.status(400).json({ error: error.message });
+    }
+  },
+
+  // Add a new library book
+  addLibraryItem: async (req, res) => {
+    try {
+      const { title, author, isbn, purchaseDate, qty, amount } = req.body;
+      const newItem = new Inventory({
+        type: 'library',
+        title,
+        author,
+        isbn,
+        purchaseDate,
+        qty,
+        amount,
+      });
+      const savedItem = await newItem.save();
+      res.status(201).json(savedItem);
+    } catch (error) {
+      res.status(400).json({ error: error.message });
+    }
+  },
+
+  // Get all library items
+  getLibraryItems: async (req, res) => {
+    try {
+      const items = await Inventory.find({ type: 'library' });
+      res.status(200).json(items);
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  },
+
+  // Add a new asset
+  addAsset: async (req, res) => {
+    try {
+      const { assetName, category, serialNo, condition, assignedTo, location, status } = req.body;
+      const newAsset = new Inventory({
+        type: 'asset',
+        assetName,
+        category,
+        serialNo,
+        condition,
+        assignedTo,
+        location,
+        status,
+      });
+      const savedAsset = await newAsset.save();
+      res.status(201).json(savedAsset);
+    } catch (error) {
+      res.status(400).json({ error: error.message });
+    }
+  },
+
+  // Get all assets
+  getAssets: async (req, res) => {
+    try {
+      const assets = await Inventory.find({ type: 'asset' });
+      res.status(200).json(assets);
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  },
+
+  // Add stock
+  addStock: async (req, res) => {
+    try {
+      const { itemName, quantityAvailable, supplierName, purchaseDate, expiryDate } = req.body;
+      const newStock = new Inventory({
+        type: 'stock',
+        itemName,
+        quantityAvailable,
+        supplierName,
+        purchaseDate,
+        expiryDate,
+        minimumStockLevel: 10, // Default value, can be adjusted
+      });
+      const savedStock = await newStock.save();
+      res.status(201).json(savedStock);
+    } catch (error) {
+      res.status(400).json({ error: error.message });
+    }
+  },
+
+  // Get all stock items
+  getStock: async (req, res) => {
+    try {
+      const stock = await Inventory.find({ type: 'stock' });
+      res.status(200).json(stock);
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  },
+
+  // Update stock quantity
   updateStock: async (req, res) => {
     try {
-      const { itemId } = req.params;
-      const { quantity, lastPurchasePrice, lastPurchaseDate } = req.body;
-
-      const item = await Inventory.findById(itemId);
-      if (!item) {
-        return res.status(404).json({ message: 'Item not found' });
-      }
-
-      item.quantity = quantity;
-      item.lastPurchasePrice = lastPurchasePrice || item.lastPurchasePrice;
-      item.lastPurchaseDate = lastPurchaseDate || new Date();
-      item.status = determineStatus(quantity, item.minThreshold);
-
-      await item.save();
-      res.json(item);
+      const { itemName } = req.params;
+      const { quantityAvailable } = req.body;
+      const updatedStock = await Inventory.findOneAndUpdate(
+        { itemName, type: 'stock' },
+        { quantityAvailable },
+        { new: true }
+      );
+      if (!updatedStock) return res.status(404).json({ error: 'Stock item not found' });
+      res.status(200).json(updatedStock);
     } catch (error) {
-      res.status(500).json({ error: error.message });
+      res.status(400).json({ error: error.message });
     }
   },
-
-  // Get low stock items
-  getLowStockItems: async (req, res) => {
-    try {
-      const { schoolId } = req.params;
-
-      const items = await Inventory.find({
-        school: schoolId,
-        status: { $in: ['low', 'critical'] }
-      }).sort({ quantity: 1 });
-
-      res.json(items);
-    } catch (error) {
-      res.status(500).json({ error: error.message });
-    }
-  }
 };
-
-// Helper function to determine inventory status
-function determineStatus(quantity, minThreshold) {
-  if (quantity === 0) return 'critical';
-  if (quantity < minThreshold) return 'low';
-  if (quantity > minThreshold * 2) return 'excess';
-  return 'sufficient';
-}
 
 module.exports = inventoryController;
