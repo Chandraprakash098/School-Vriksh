@@ -1287,7 +1287,8 @@ const teacherController = {
         class: classId,
         status: "submittedToClassTeacher",
       };
-      if (examId) query._id = examId;
+      // if (examId) query._id = examId;
+      if (examId && examId !== "all") query._id = examId;
 
       const exams = await Exam.find(query)
         .populate("subject", "name")
