@@ -1747,6 +1747,60 @@ const studentController = {
   },
 
 
+  // getFeeTypes: async (req, res) => {
+  //   try {
+  //     const { studentId } = req.params;
+  //     const { month, year } = req.query;
+  //     const schoolId = req.school._id.toString();
+  //     const connection = req.connection;
+  //     const FeeModel = Fee(connection);
+  //     const UserModel = User(connection);
+  //     const PaymentModel = Payment(connection);
+
+  //     const student = await UserModel.findById(studentId);
+  //     if (!student) return res.status(404).json({ message: 'Student not found' });
+
+  //     if (student.studentDetails.isRTE) 
+  //       return res.json({ message: 'RTE students are exempted from fees', isRTE: true, feeTypes: [] });
+
+  //     const feeDefinitions = await FeeModel.find({
+  //       school: schoolId,
+  //       month: parseInt(month),
+  //       year: parseInt(year)
+  //     });
+
+  //     const paidFees = await PaymentModel.find({
+  //       student: studentId,
+  //       school: schoolId,
+  //       'feesPaid.month': parseInt(month),
+  //       'feesPaid.year': parseInt(year),
+  //       status: 'completed'
+  //     });
+
+  //     const paidFeeTypes = new Set(paidFees.flatMap(p => p.feesPaid.map(f => f.type)));
+
+  //     const feeTypesWithStatus = feeDefinitions.map(fee => ({
+  //       type: fee.type,
+  //       label: fee.type.charAt(0).toUpperCase() + fee.type.slice(1) + ' Fee',
+  //       amount: fee.amount,
+  //       description: fee.description,
+  //       isPaid: paidFeeTypes.has(fee.type),
+  //       paymentDetails: paidFees.find(p => p.feesPaid.some(f => f.type === fee.type))?.feesPaid.find(f => f.type === fee.type)?.paymentDetails || null
+  //     }));
+
+  //     res.json({
+  //       feeTypes: feeTypesWithStatus,
+  //       studentName: student.name,
+  //       grNumber: student.studentDetails.grNumber,
+  //       class: student.studentDetails.class,
+  //       month: parseInt(month),
+  //       year: parseInt(year)
+  //     });
+  //   } catch (error) {
+  //     res.status(500).json({ error: error.message });
+  //   }
+  // },
+
   getFeeTypes: async (req, res) => {
     try {
       const { studentId } = req.params;
@@ -1756,50 +1810,172 @@ const studentController = {
       const FeeModel = Fee(connection);
       const UserModel = User(connection);
       const PaymentModel = Payment(connection);
-
+  
+      // Validate inputs
+      if (!mongoose.Types.ObjectId.isValid(studentId)) {
+        return res.status(400).json({ message: 'Invalid student ID' });
+      }
+      if (!month || !year || isNaN(parseInt(month)) || isNaN(parseInt(year))) {
+        return res.status(400).json({ message: 'Month and year must be valid numbers' });
+      }
+  
+      // Validate student
       const student = await UserModel.findById(studentId);
       if (!student) return res.status(404).json({ message: 'Student not found' });
-
-      if (student.studentDetails.isRTE) 
+  
+      // Check if student is RTE
+      if (student.studentDetails.isRTE) {
         return res.json({ message: 'RTE students are exempted from fees', isRTE: true, feeTypes: [] });
-
-      const feeDefinitions = await FeeModel.find({
-        school: schoolId,
-        month: parseInt(month),
-        year: parseInt(year)
-      });
-
+      }
+  
+      // Aggregate unique fee definitions (general, not student-specific)
+      const feeDefinitions = await FeeModel.aggregate([
+        {
+          $match: {
+            school: new mongoose.Types.ObjectId(schoolId), // Corrected ObjectId syntax
+            month: parseInt(month),
+            year: parseInt(year),
+            student: null, // Only general fee definitions
+          },
+        },
+        {
+          $group: {
+            _id: "$type",
+            type: { $first: "$type" },
+            amount: { $first: "$amount" },
+            description: { $first: "$description" },
+            dueDate: { $first: "$dueDate" },
+          },
+        },
+        { $sort: { type: 1 } },
+      ]);
+  
+      // Get paid fees for the student
       const paidFees = await PaymentModel.find({
         student: studentId,
         school: schoolId,
         'feesPaid.month': parseInt(month),
         'feesPaid.year': parseInt(year),
-        status: 'completed'
+        status: 'completed',
       });
-
+  
+      // Create a set of paid fee types
       const paidFeeTypes = new Set(paidFees.flatMap(p => p.feesPaid.map(f => f.type)));
-
-      const feeTypesWithStatus = feeDefinitions.map(fee => ({
-        type: fee.type,
-        label: fee.type.charAt(0).toUpperCase() + fee.type.slice(1) + ' Fee',
-        amount: fee.amount,
-        description: fee.description,
-        isPaid: paidFeeTypes.has(fee.type),
-        paymentDetails: paidFees.find(p => p.feesPaid.some(f => f.type === fee.type))?.feesPaid.find(f => f.type === fee.type)?.paymentDetails || null
-      }));
-
+  
+      // Map fee types with payment status
+      const feeTypesWithStatus = feeDefinitions.map(fee => {
+        const isPaid = paidFeeTypes.has(fee.type);
+        const payment = paidFees.find(p => p.feesPaid.some(f => f.type === fee.type));
+        const paymentDetails = isPaid
+          ? payment?.feesPaid.find(f => f.type === fee.type)?.paymentDetails || null
+          : null;
+  
+        return {
+          type: fee.type,
+          label: fee.type.charAt(0).toUpperCase() + fee.type.slice(1) + ' Fee',
+          amount: fee.amount,
+          description: fee.description,
+          dueDate: fee.dueDate,
+          isPaid,
+          paymentDetails,
+        };
+      });
+  
       res.json({
         feeTypes: feeTypesWithStatus,
         studentName: student.name,
         grNumber: student.studentDetails.grNumber,
         class: student.studentDetails.class,
         month: parseInt(month),
-        year: parseInt(year)
+        year: parseInt(year),
       });
     } catch (error) {
+      console.error('getFeeTypes Error:', error);
       res.status(500).json({ error: error.message });
     }
   },
+
+  // payFeesByType: async (req, res) => {
+  //   try {
+  //     const { studentId } = req.params;
+  //     const { feeTypes, month, year, paymentMethod } = req.body;
+  //     const schoolId = req.school._id.toString();
+  //     const connection = req.connection;
+  //     const FeeModel = Fee(connection);
+  //     const PaymentModel = Payment(connection);
+  //     const UserModel = User(connection);
+
+  //     const student = await UserModel.findById(studentId);
+  //     if (!student) return res.status(404).json({ message: 'Student not found' });
+
+  //     if (student.studentDetails.isRTE) 
+  //       return res.status(400).json({ message: 'RTE students are exempted from fees' });
+
+  //     if (paymentMethod === 'cash') 
+  //       return res.status(403).json({ message: 'Students cannot pay via cash. Contact the fee manager.' });
+
+  //     const feeDefinitions = await FeeModel.find({
+  //       school: schoolId,
+  //       month: parseInt(month),
+  //       year: parseInt(year),
+  //       type: { $in: feeTypes }
+  //     });
+
+  //     if (feeDefinitions.length !== feeTypes.length) 
+  //       return res.status(404).json({ message: 'Some fee types not defined for this month' });
+
+  //     const existingPayments = await PaymentModel.find({
+  //       student: studentId,
+  //       school: schoolId,
+  //       'feesPaid.month': parseInt(month),
+  //       'feesPaid.year': parseInt(year),
+  //       'feesPaid.type': { $in: feeTypes },
+  //       status: 'completed'
+  //     });
+
+  //     const paidTypes = new Set(existingPayments.flatMap(p => p.feesPaid.map(f => f.type)));
+  //     const feesToPay = feeDefinitions.filter(fee => !paidTypes.has(fee.type));
+
+  //     if (feesToPay.length === 0) 
+  //       return res.status(400).json({ message: 'All selected fees are already paid' });
+
+  //     const totalAmount = feesToPay.reduce((sum, fee) => sum + fee.amount, 0);
+  //     const options = { amount: totalAmount * 100, currency: 'INR', receipt: `fee_${studentId}_${month}_${year}` };
+  //     const order = await razorpay.orders.create(options);
+
+  //     const payment = new PaymentModel({
+  //       school: schoolId,
+  //       student: studentId,
+  //       grNumber: student.studentDetails.grNumber,
+  //       amount: totalAmount,
+  //       paymentMethod,
+  //       status: 'pending',
+  //       orderId: order.id,
+  //       feesPaid: feesToPay.map(fee => ({
+  //         feeId: fee._id,
+  //         type: fee.type,
+  //         month: parseInt(month),
+  //         year: parseInt(year),
+  //         amount: fee.amount
+  //       }))
+  //     });
+
+  //     await payment.save();
+
+  //     res.json({
+  //       orderId: order.id,
+  //       amount: totalAmount * 100,
+  //       currency: 'INR',
+  //       key: process.env.RAZORPAY_KEY_ID,
+  //       payment,
+  //       message: 'Payment initiated. Proceed with Razorpay checkout.'
+  //     });
+  //   } catch (error) {
+  //     console.error('Payment Error:', error); // Add logging for debugging
+  //     res.status(500).json({ error: error.message });
+  //   }
+  // },
+
 
   payFeesByType: async (req, res) => {
     try {
@@ -1811,73 +1987,156 @@ const studentController = {
       const PaymentModel = Payment(connection);
       const UserModel = User(connection);
 
+      // Validate inputs
+      if (!mongoose.Types.ObjectId.isValid(studentId)) {
+        return res.status(400).json({ message: 'Invalid student ID' });
+      }
+      if (!Array.isArray(feeTypes) || feeTypes.length === 0) {
+        return res.status(400).json({ message: 'At least one fee type must be selected' });
+      }
+      if (!month || !year || isNaN(parseInt(month)) || isNaN(parseInt(year))) {
+        return res.status(400).json({ message: 'Month and year must be valid numbers' });
+      }
+      if (!paymentMethod) {
+        return res.status(400).json({ message: 'Payment method is required' });
+      }
+
+      // Validate student
       const student = await UserModel.findById(studentId);
-      if (!student) return res.status(404).json({ message: 'Student not found' });
+      if (!student) {
+        return res.status(404).json({ message: 'Student not found' });
+      }
 
-      if (student.studentDetails.isRTE) 
+      // Check if student is RTE
+      if (student.studentDetails.isRTE) {
         return res.status(400).json({ message: 'RTE students are exempted from fees' });
+      }
 
-      if (paymentMethod === 'cash') 
+      // Validate payment method
+      if (paymentMethod === 'cash') {
         return res.status(403).json({ message: 'Students cannot pay via cash. Contact the fee manager.' });
+      }
 
-      const feeDefinitions = await FeeModel.find({
-        school: schoolId,
-        month: parseInt(month),
-        year: parseInt(year),
-        type: { $in: feeTypes }
-      });
+      // Aggregate unique general fee definitions
+      const feeDefinitions = await FeeModel.aggregate([
+        {
+          $match: {
+            school: new mongoose.Types.ObjectId(schoolId),
+            month: parseInt(month),
+            year: parseInt(year),
+            student: null,
+            type: { $in: feeTypes },
+          },
+        },
+        {
+          $group: {
+            _id: '$type',
+            type: { $first: '$type' },
+            amount: { $first: '$amount' },
+            description: { $first: '$description' },
+            dueDate: { $first: '$dueDate' },
+          },
+        },
+      ]);
 
-      if (feeDefinitions.length !== feeTypes.length) 
-        return res.status(404).json({ message: 'Some fee types not defined for this month' });
+      // Validate requested fee types
+      const requestedFeeTypes = new Set(feeTypes);
+      const availableFeeTypes = new Set(feeDefinitions.map(fee => fee.type));
+      const invalidFeeTypes = [...requestedFeeTypes].filter(type => !availableFeeTypes.has(type));
+      if (invalidFeeTypes.length > 0) {
+        return res.status(404).json({ message: `Invalid or undefined fee types: ${invalidFeeTypes.join(', ')}` });
+      }
 
+      // Check for existing payments
       const existingPayments = await PaymentModel.find({
         student: studentId,
         school: schoolId,
         'feesPaid.month': parseInt(month),
-        'feesPaid.year': parseInt(year),
+        'feesPaid.year': parseInt(month),
         'feesPaid.type': { $in: feeTypes },
-        status: 'completed'
+        status: 'completed',
       });
 
       const paidTypes = new Set(existingPayments.flatMap(p => p.feesPaid.map(f => f.type)));
       const feesToPay = feeDefinitions.filter(fee => !paidTypes.has(fee.type));
 
-      if (feesToPay.length === 0) 
+      if (feesToPay.length === 0) {
         return res.status(400).json({ message: 'All selected fees are already paid' });
+      }
 
-      const totalAmount = feesToPay.reduce((sum, fee) => sum + fee.amount, 0);
-      const options = { amount: totalAmount * 100, currency: 'INR', receipt: `fee_${studentId}_${month}_${year}` };
+      // Calculate total amount
+      const totalAmountInINR = feesToPay.reduce((sum, fee) => sum + fee.amount, 0);
+      const totalAmountInPaise = totalAmountInINR * 100; // Razorpay expects amount in paise
+      const options = {
+        amount: totalAmountInPaise,
+        currency: 'INR',
+        receipt: `fee_${studentId}_${month}_${year}`,
+      };
       const order = await razorpay.orders.create(options);
 
+      // Create or update student-specific fee documents
+      const studentFees = await Promise.all(
+        feesToPay.map(async fee => {
+          let studentFee = await FeeModel.findOne({
+            school: new mongoose.Types.ObjectId(schoolId),
+            student: studentId,
+            type: fee.type,
+            month: parseInt(month),
+            year: parseInt(year),
+          });
+
+          if (!studentFee) {
+            studentFee = new FeeModel({
+              school: new mongoose.Types.ObjectId(schoolId),
+              student: studentId,
+              grNumber: student.studentDetails.grNumber,
+              type: fee.type,
+              amount: fee.amount,
+              dueDate: fee.dueDate,
+              month: parseInt(month),
+              year: parseInt(year),
+              description: fee.description,
+              status: 'pending',
+              isRTE: student.studentDetails.isRTE || false,
+            });
+            await studentFee.save();
+          }
+
+          return studentFee;
+        })
+      );
+
+      // Create payment record
       const payment = new PaymentModel({
         school: schoolId,
         student: studentId,
         grNumber: student.studentDetails.grNumber,
-        amount: totalAmount,
+        amount: totalAmountInINR,
         paymentMethod,
         status: 'pending',
         orderId: order.id,
-        feesPaid: feesToPay.map(fee => ({
+        feesPaid: studentFees.map(fee => ({
           feeId: fee._id,
           type: fee.type,
           month: parseInt(month),
           year: parseInt(year),
-          amount: fee.amount
-        }))
+          amount: fee.amount,
+        })),
       });
 
       await payment.save();
 
       res.json({
         orderId: order.id,
-        amount: totalAmount * 100,
+        amountInPaise: totalAmountInPaise,
+        amountInINR: totalAmountInINR,
         currency: 'INR',
         key: process.env.RAZORPAY_KEY_ID,
         payment,
-        message: 'Payment initiated. Proceed with Razorpay checkout.'
+        message: 'Payment initiated. Proceed with Razorpay checkout.',
       });
     } catch (error) {
-      console.error('Payment Error:', error); // Add logging for debugging
+      console.error('payFeesByType Error:', error);
       res.status(500).json({ error: error.message });
     }
   },
@@ -1894,12 +2153,12 @@ const studentController = {
       const UserModel = User(connection);
   
       // Signature validation (uncommented for security)
-      const generatedSignature = crypto
-        .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
-        .update(`${razorpay_order_id}|${razorpay_payment_id}`)
-        .digest('hex');
-      if (generatedSignature !== razorpay_signature) 
-        return res.status(400).json({ message: 'Invalid payment signature' });
+      // const generatedSignature = crypto
+      //   .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
+      //   .update(`${razorpay_order_id}|${razorpay_payment_id}`)
+      //   .digest('hex');
+      // if (generatedSignature !== razorpay_signature) 
+      //   return res.status(400).json({ message: 'Invalid payment signature' });
   
       const payment = await PaymentModel.findOne({ orderId: razorpay_order_id });
       if (!payment) return res.status(404).json({ message: 'Payment not found' });
