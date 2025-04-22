@@ -1,10 +1,23 @@
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+const nodemailer = require("nodemailer");
 const {
   getOwnerConnection,
   getSchoolConnection,
 } = require("../config/database");
 const getModel = require("../models/index");
+
+const transporter = nodemailer.createTransport({
+  service: "Gmail",
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS,
+  },
+});
+
+const generateOTP = () => {
+  return Math.floor(100000 + Math.random() * 900000).toString(); // 6-digit OTP
+};
 
 const authController = {
   registerOwner: async (req, res) => {
@@ -140,6 +153,104 @@ const authController = {
       });
     } catch (error) {
       console.error("Login error:", error);
+      res.status(500).json({ error: error.message });
+    }
+  },
+
+
+  forgetPassword: async (req, res) => {
+    try {
+      const { email } = req.body;
+
+      const ownerConnection = await getOwnerConnection();
+      const OwnerUser = require("../models/User")(ownerConnection);
+      let user = await OwnerUser.findOne({ email });
+
+      let connection = ownerConnection;
+      let schoolId = null;
+
+      if (!user) {
+        const School = require("../models/School");
+        const ownerSchoolModel = ownerConnection.model(
+          "School",
+          School.schema || School(ownerConnection).schema
+        );
+
+        const schools = await ownerSchoolModel.find({});
+        for (const school of schools) {
+          const schoolConnection = await getSchoolConnection(school._id);
+          const SchoolUser = require("../models/User")(schoolConnection);
+
+          user = await SchoolUser.findOne({ email });
+          if (user) {
+            connection = schoolConnection;
+            schoolId = school._id;
+            break;
+          }
+        }
+      }
+
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      const OTPModel = require("../models/otpModel")(connection);
+      const otp = generateOTP();
+
+      await OTPModel.create({ email, otp });
+
+      const mailOptions = {
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: "Password Reset OTP",
+        text: `Your OTP for password reset is: ${otp}. It is valid for 5 minutes.`,
+      };
+
+      await transporter.sendMail(mailOptions);
+
+      res.json({
+        message: "OTP sent to your email",
+        schoolId, // Include schoolId for non-owner users to use in resetPassword
+      });
+    } catch (error) {
+      console.error("Forget Password error:", error);
+      res.status(500).json({ error: error.message });
+    }
+  },
+
+  resetPassword: async (req, res) => {
+    try {
+      const { email, otp, newPassword, schoolId } = req.body;
+
+      let connection;
+      if (schoolId) {
+        connection = await getSchoolConnection(schoolId);
+      } else {
+        connection = await getOwnerConnection();
+      }
+
+      const OTPModel = require("../models/otpModel")(connection);
+      const User = require("../models/User")(connection);
+
+      const otpRecord = await OTPModel.findOne({ email, otp });
+      if (!otpRecord) {
+        return res.status(400).json({ message: "Invalid or expired OTP" });
+      }
+
+      const user = await User.findOne({ email });
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      const hashedPassword = await bcrypt.hash(newPassword, 10);
+      user.password = hashedPassword;
+      await user.save();
+
+      await OTPModel.deleteOne({ email, otp });
+
+      res.json({ message: "Password reset successfully" });
+    } catch (error) {
+      console.error("Reset Password error:", error);
       res.status(500).json({ error: error.message });
     }
   },

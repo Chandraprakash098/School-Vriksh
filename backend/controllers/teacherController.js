@@ -385,6 +385,7 @@ const teacherController = {
     }
   },
 
+
   getAssignedClasses: async (req, res) => {
     try {
       const teacherId = req.user._id;

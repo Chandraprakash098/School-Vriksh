@@ -22,7 +22,9 @@ const models = {
   School: require('../models/School'),
   StudyMaterial:require('../models/StudyMaterial'),
   ProgressReport:require('../models/ProgressReport'),
-  DailyWork: require('../models/DailyWork')
+  DailyWork: require('../models/DailyWork'),
+  AuditLogModel : require("../models/AuditLog"),
+  DiscountModel : require("../models/Discount")
 };
 
 console.log('Loaded models:', Object.keys(models).map(name => ({
