@@ -1483,7 +1483,7 @@ const User = require("../models/User");
 const Payment = require("../models/Payment");
 const mongoose = require("mongoose");
 const { generateFeeSlip } = require("../utils/helpers");
-const { AuditLog } = require("../models/AuditLog");
+const  AuditLog  = require("../models/AuditLog");
 const Discount = require("../models/Discount");
 const Class = require("../models/Class");
 
@@ -1596,6 +1596,8 @@ const feesController = {
         entity: "Fee",
         details: { year, feeTypes, createdCount, updatedCount },
       });
+
+      
 
       res.status(201).json({
         message: `Fees for ${year} processed successfully`,
