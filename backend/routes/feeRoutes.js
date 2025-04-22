@@ -63,31 +63,31 @@ router.get(
 
 
 // New Routes
-router.post(
-  "/apply-discount",
-  authMiddleware,
-  feesController.applyDiscount
-);
-router.post(
-  "/bulk-assign-fees",
-  authMiddleware,
-  feesController.bulkAssignFees
-);
-router.get(
-  "/fee-analytics/:year",
-  authMiddleware,
-  feesController.getFeeAnalytics
-);
-router.post(
-  "/configure-late-fee",
-  authMiddleware,
-  feesController.configureLateFee
-);
-router.get(
-  "/audit-logs",
-  authMiddleware,
-  feesController.getAuditLogs
-);
+// router.post(
+//   "/apply-discount",
+//   authMiddleware,
+//   feesController.applyDiscount
+// );
+// router.post(
+//   "/bulk-assign-fees",
+//   authMiddleware,
+//   feesController.bulkAssignFees
+// );
+// router.get(
+//   "/fee-analytics/:year",
+//   authMiddleware,
+//   feesController.getFeeAnalytics
+// );
+// router.post(
+//   "/configure-late-fee",
+//   authMiddleware,
+//   feesController.configureLateFee
+// );
+// router.get(
+//   "/audit-logs",
+//   authMiddleware,
+//   feesController.getAuditLogs
+// );
 
 router.get("/school-details", authMiddleware, async (req, res) => {
   try {
