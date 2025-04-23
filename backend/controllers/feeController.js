@@ -1500,207 +1500,208 @@ module.exports = feesController;
 // });
 
 // const feesController = {
-  // defineFeesForYear: async (req, res) => {
-  //   try {
-  //     const { year, feeTypes, overrideExisting = false, currency = "INR" } = req.body;
-  //     const schoolId = req.school._id.toString();
-  //     const connection = req.connection;
-  //     const FeeModel = Fee(connection);
-  //     const AuditLogModel = AuditLog(connection)
+//   defineFeesForYear: async (req, res) => {
+//     try {
+//       const { year, feeTypes, overrideExisting = false, currency = "INR" } = req.body;
+//       const schoolId = req.school._id.toString();
+//       const connection = req.connection;
+//       const FeeModel = Fee(connection);
+//       const AuditLogModel = AuditLog(connection)
 
-  //     if (!req.user.permissions.canManageFees) {
-  //       return res.status(403).json({
-  //         message: "Unauthorized: Only fee managers can define fees",
-  //       });
-  //     }
+//       if (!req.user.permissions.canManageFees) {
+//         return res.status(403).json({
+//           message: "Unauthorized: Only fee managers can define fees",
+//         });
+//       }
 
-  //     if (!year || !feeTypes || !Array.isArray(feeTypes)) {
-  //       return res.status(400).json({
-  //         message: "Year and feeTypes array are required",
-  //       });
-  //     }
+//       if (!year || !feeTypes || !Array.isArray(feeTypes)) {
+//         return res.status(400).json({
+//           message: "Year and feeTypes array are required",
+//         });
+//       }
 
-  //     if (!Number.isInteger(Number(year))) {
-  //       return res.status(400).json({
-  //         message: "Year must be a valid integer",
-  //       });
-  //     }
+//       if (!Number.isInteger(Number(year))) {
+//         return res.status(400).json({
+//           message: "Year must be a valid integer",
+//         });
+//       }
 
-  //     const existingFees = await FeeModel.find({
-  //       school: schoolId,
-  //       student: { $exists: false },
-  //       year: parseInt(year),
-  //     });
+//       const existingFees = await FeeModel.find({
+//         school: schoolId,
+//         student: { $exists: false },
+//         year: parseInt(year),
+//       });
 
-  //     if (existingFees.length > 0 && !overrideExisting) {
-  //       return res.status(409).json({
-  //         message: `Fees for ${year} are already defined. Use overrideExisting: true to update.`,
-  //       });
-  //     }
+//       if (existingFees.length > 0 && !overrideExisting) {
+//         return res.status(409).json({
+//           message: `Fees for ${year} are already defined. Use overrideExisting: true to update.`,
+//         });
+//       }
 
-  //     const feeDefinitions = [];
-  //     const operations = [];
+//       const feeDefinitions = [];
+//       const operations = [];
 
-  //     for (let month = 1; month <= 12; month++) {
-  //       for (const feeType of feeTypes) {
-  //         const { type, amount, description } = feeType;
-  //         const dueDate = new Date(year, month - 1, 28);
+//       for (let month = 1; month <= 12; month++) {
+//         for (const feeType of feeTypes) {
+//           const { type, amount, description } = feeType;
+//           const dueDate = new Date(year, month - 1, 28);
 
-  //         const feeData = {
-  //           school: schoolId,
-  //           type,
-  //           amount,
-  //           dueDate,
-  //           month,
-  //           year: parseInt(year),
-  //           description: description || `${type} fee for ${month}/${year}`,
-  //           status: "pending",
-  //           updatedAt: new Date(),
-  //           currency,
-  //         };
+//           const feeData = {
+//             school: schoolId,
+//             type,
+//             amount,
+//             dueDate,
+//             month,
+//             year: parseInt(year),
+//             description: description || `${type} fee for ${month}/${year}`,
+//             status: "pending",
+//             updatedAt: new Date(),
+//             currency,
+//           };
 
-  //         const existingFee = existingFees.find(
-  //           (f) => f.type === type && f.month === month
-  //         );
+//           const existingFee = existingFees.find(
+//             (f) => f.type === type && f.month === month
+//           );
 
-  //         if (existingFee && overrideExisting) {
-  //           operations.push({
-  //             updateOne: {
-  //               filter: { _id: existingFee._id },
-  //               update: { $set: feeData },
-  //             },
-  //           });
-  //         } else if (!existingFee) {
-  //           feeDefinitions.push(new FeeModel(feeData));
-  //         }
-  //       }
-  //     }
+//           if (existingFee && overrideExisting) {
+//             operations.push({
+//               updateOne: {
+//                 filter: { _id: existingFee._id },
+//                 update: { $set: feeData },
+//               },
+//             });
+//           } else if (!existingFee) {
+//             feeDefinitions.push(new FeeModel(feeData));
+//           }
+//         }
+//       }
 
-  //     let createdCount = 0;
-  //     let updatedCount = 0;
+//       let createdCount = 0;
+//       let updatedCount = 0;
 
-  //     if (feeDefinitions.length > 0) {
-  //       const created = await FeeModel.insertMany(feeDefinitions);
-  //       createdCount = created.length;
-  //     }
+//       if (feeDefinitions.length > 0) {
+//         const created = await FeeModel.insertMany(feeDefinitions);
+//         createdCount = created.length;
+//       }
 
-  //     if (operations.length > 0) {
-  //       const result = await FeeModel.bulkWrite(operations);
-  //       updatedCount = result.modifiedCount;
-  //     }
+//       if (operations.length > 0) {
+//         const result = await FeeModel.bulkWrite(operations);
+//         updatedCount = result.modifiedCount;
+//       }
 
-  //     // Log fee definition action
-  //     await AuditLogModel.create({
-  //       school: schoolId,
-  //       user: req.user._id,
-  //       action: overrideExisting ? "fee_updated" : "fee_defined",
-  //       entity: "Fee",
-  //       details: { year, feeTypes, createdCount, updatedCount },
-  //     });
+//       // Log fee definition action
+//       await AuditLogModel.create({
+//         school: schoolId,
+//         user: req.user._id,
+//         action: overrideExisting ? "fee_updated" : "fee_defined",
+//         entity: "Fee",
+//         details: { year, feeTypes, createdCount, updatedCount },
+//       });
 
       
 
-  //     res.status(201).json({
-  //       message: `Fees for ${year} processed successfully`,
-  //       createdCount,
-  //       updatedCount,
-  //       totalProcessed: createdCount + updatedCount,
-  //     });
-  //   } catch (error) {
-  //     console.error("Error defining fees:", error);
-  //     res.status(500).json({
-  //       error: "Internal server error",
-  //       details: error.message,
-  //     });
-  //   }
-  // },
+//       res.status(201).json({
+//         message: `Fees for ${year} processed successfully`,
+//         createdCount,
+//         updatedCount,
+//         totalProcessed: createdCount + updatedCount,
+//       });
+//     } catch (error) {
+//       console.error("Error defining fees:", error);
+//       res.status(500).json({
+//         error: "Internal server error",
+//         details: error.message,
+//       });
+//     }
+//   },
 
-  // getFeeDefinitionsByYear: async (req, res) => {
-  //   try {
-  //     const { year } = req.params;
-  //     const schoolId = req.school._id.toString();
-  //     const connection = req.connection;
-  //     const FeeModel = Fee(connection);
+//   getFeeDefinitionsByYear: async (req, res) => {
+//     try {
+//       const { year } = req.params;
+//       const schoolId = req.school._id.toString();
+//       const connection = req.connection;
+//       const FeeModel = Fee(connection);
 
-  //     if (!req.user.permissions.canManageFees) {
-  //       return res.status(403).json({
-  //         message: "Unauthorized: Only fee managers can view fee definitions",
-  //       });
-  //     }
+//       if (!req.user.permissions.canManageFees) {
+//         return res.status(403).json({
+//           message: "Unauthorized: Only fee managers can view fee definitions",
+//         });
+//       }
 
-  //     if (!Number.isInteger(Number(year))) {
-  //       return res.status(400).json({ message: "Year must be a valid integer" });
-  //     }
+//       if (!Number.isInteger(Number(year))) {
+//         return res.status(400).json({ message: "Year must be a valid integer" });
+//       }
 
-  //     const feeDefinitions = await FeeModel.find({
-  //       school: schoolId,
-  //       student: { $exists: false },
-  //       year: parseInt(year),
-  //     }).sort({ type: 1, month: 1 });
+//       const feeDefinitions = await FeeModel.find({
+//         school: schoolId,
+//         // student: { $exists: false },
+//         student:null,
+//         year: parseInt(year),
+//       }).sort({ type: 1, month: 1 });
 
-  //     if (!feeDefinitions.length) {
-  //       return res.status(404).json({ message: `No fee definitions found for ${year}` });
-  //     }
+//       if (!feeDefinitions.length) {
+//         return res.status(404).json({ message: `No fee definitions found for ${year}` });
+//       }
 
-  //     const feeSummary = {};
-  //     feeDefinitions.forEach((fee) => {
-  //       if (!feeSummary[fee.type]) {
-  //         feeSummary[fee.type] = {
-  //           amount: fee.amount,
-  //           description: fee.description,
-  //           currency: fee.currency,
-  //           isConsistent: true,
-  //           monthlyDetails: {},
-  //         };
-  //       }
+//       const feeSummary = {};
+//       feeDefinitions.forEach((fee) => {
+//         if (!feeSummary[fee.type]) {
+//           feeSummary[fee.type] = {
+//             amount: fee.amount,
+//             description: fee.description,
+//             currency: fee.currency,
+//             isConsistent: true,
+//             monthlyDetails: {},
+//           };
+//         }
 
-  //       feeSummary[fee.type].monthlyDetails[fee.month] = {
-  //         amount: fee.amount,
-  //         dueDate: fee.dueDate,
-  //         description: fee.description,
-  //         status: fee.status,
-  //         id: fee._id,
-  //       };
+//         feeSummary[fee.type].monthlyDetails[fee.month] = {
+//           amount: fee.amount,
+//           dueDate: fee.dueDate,
+//           description: fee.description,
+//           status: fee.status,
+//           id: fee._id,
+//         };
 
-  //       if (fee.amount !== feeSummary[fee.type].amount) {
-  //         feeSummary[fee.type].isConsistent = false;
-  //       }
-  //     });
+//         if (fee.amount !== feeSummary[fee.type].amount) {
+//           feeSummary[fee.type].isConsistent = false;
+//         }
+//       });
 
-  //     const responseData = {
-  //       year: parseInt(year),
-  //       fees: {},
-  //     };
+//       const responseData = {
+//         year: parseInt(year),
+//         fees: {},
+//       };
 
-  //     for (const [type, data] of Object.entries(feeSummary)) {
-  //       if (data.isConsistent) {
-  //         responseData.fees[type] = {
-  //           annualAmount: data.amount * 12,
-  //           monthlyAmount: data.amount,
-  //           description: data.description,
-  //           currency: data.currency,
-  //           status: Object.values(data.monthlyDetails).every((d) => d.status === "pending")
-  //             ? "pending"
-  //             : "mixed",
-  //         };
-  //       } else {
-  //         responseData.fees[type] = {
-  //           annualAmount: Object.values(data.monthlyDetails).reduce(
-  //             (sum, d) => sum + d.amount,
-  //             0
-  //           ),
-  //           monthlyBreakdown: data.monthlyDetails,
-  //           currency: data.currency,
-  //         };
-  //       }
-  //     }
+//       for (const [type, data] of Object.entries(feeSummary)) {
+//         if (data.isConsistent) {
+//           responseData.fees[type] = {
+//             annualAmount: data.amount * 12,
+//             monthlyAmount: data.amount,
+//             description: data.description,
+//             currency: data.currency,
+//             status: Object.values(data.monthlyDetails).every((d) => d.status === "pending")
+//               ? "pending"
+//               : "mixed",
+//           };
+//         } else {
+//           responseData.fees[type] = {
+//             annualAmount: Object.values(data.monthlyDetails).reduce(
+//               (sum, d) => sum + d.amount,
+//               0
+//             ),
+//             monthlyBreakdown: data.monthlyDetails,
+//             currency: data.currency,
+//           };
+//         }
+//       }
 
-  //     res.json(responseData);
-  //   } catch (error) {
-  //     console.error("Error fetching fee definitions:", error);
-  //     res.status(500).json({ error: error.message });
-  //   }
-  // },
+//       res.json(responseData);
+//     } catch (error) {
+//       console.error("Error fetching fee definitions:", error);
+//       res.status(500).json({ error: error.message });
+//     }
+//   },
 
 //   editFeesForYear: async (req, res) => {
 //     try {

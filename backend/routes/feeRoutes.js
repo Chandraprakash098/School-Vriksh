@@ -59,7 +59,7 @@ router.get(
 
 // router.get('/school-details', authMiddleware, feesController.getSchoolDetails);
 
-//new Routes
+
 
 
 // New Routes
