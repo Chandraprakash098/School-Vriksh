@@ -71,6 +71,7 @@
 
 const nodemailer = require('nodemailer');
 const twilio = require('twilio');
+const logger = require("../utils/logger");
 
 // Email transporter setup
 const transporter = nodemailer.createTransport({
@@ -120,23 +121,7 @@ const sendSMS = async (to, body) => {
 
 
 
-// const sendAdmissionNotification = async (studentEmail, studentMobile, studentName, password, schoolName, className, grNumber) => {
-//   const subject = `Admission Confirmed - Login Credentials from ${schoolName}`;
-//   const emailMessage = `Dear ${studentName},\n\nYour admission has been confirmed at ${schoolName}!\n\nYou have been admitted to class: ${className}.\nGR Number: ${grNumber}\n\nLogin Credentials:\nEmail: ${studentEmail}\nPassword: ${password}\n\nPlease log in to the portal to access your details.\n\nRegards,\n${schoolName} Administration`;
 
-//   try {
-//     // Send email
-//     await sendEmail(studentEmail, subject, emailMessage);
-
-//     // Send SMS (shortened due to character limits, e.g., 160 chars for standard SMS)
-//     const smsMessage = `Dear ${studentName}, your admission at ${schoolName} in ${className} is confirmed! GR: ${grNumber}, Login: ${studentEmail}, Pass: ${password}`;
-//     await sendSMS(studentMobile, smsMessage);
-
-//     return { emailSent: true, smsSent: true };
-//   } catch (error) {
-//     return { emailSent: false, smsSent: false, error: error.message };
-//   }
-// };
 
 const sendAdmissionNotification = async (
   email,
@@ -177,7 +162,39 @@ const sendAdmissionNotification = async (
 };
 
 
+const sendPaymentConfirmation = async (student, payment, receiptUrl) => {
+  try {
+    const mailOptions = {
+      from: process.env.EMAIL_USER,
+      to: student.studentDetails.parentDetails?.email || student.email,
+      subject: `Payment Confirmation - Receipt ${payment.receiptNumber}`,
+      text: `
+        Dear ${student.name},
+        
+        Your payment of ₹${payment.amount} for fees has been successfully processed.
+        
+        Details:
+        - Receipt Number: ${payment.receiptNumber}
+        - Date: ${new Date(payment.paymentDate).toLocaleDateString()}
+        - Payment Method: ${payment.paymentMethod}
+        - Download Receipt: ${receiptUrl}
+        
+        Thank you for your payment.
+        
+        Regards,
+        School Management System
+      `,
+    };
+
+    await transporter.sendMail(mailOptions);
+    logger.info(`Payment confirmation email sent to ${student.email}`);
+  } catch (error) {
+    logger.error(`Error sending payment confirmation: ${error.message}`, { error });
+  }
+};
 
 
 
-module.exports = { sendAdmissionNotification };
+
+
+module.exports = { sendAdmissionNotification,sendPaymentConfirmation };

@@ -4,6 +4,8 @@ const { Upload } = require('@aws-sdk/lib-storage');
 const multer = require('multer');
 const multerS3 = require('multer-s3');
 const path = require('path');
+const { setTimeout } = require('timers/promises');
+const logger = require("../utils/logger");
 
 const s3Client = new S3Client({
   region: process.env.AWS_REGION,
@@ -136,31 +138,50 @@ const uploadStudyMaterial = multer({
 }).single('file');
 
 
-// General-purpose buffer upload to S3
-// const uploadToS3 = async (buffer, key) => {
+
+
+// const uploadToS3 = async (buffer, key, mimetype) => {
 //   const upload = new Upload({
 //     client: s3Client,
 //     params: {
 //       Bucket: BUCKET_NAME,
 //       Key: key,
 //       Body: buffer,
-//       ContentType: 'application/pdf', // Default to PDF, adjust if needed
+//       ContentType: mimetype,
 //     },
 //   });
 //   return upload.done();
 // };
 
-const uploadToS3 = async (buffer, key, mimetype) => {
-  const upload = new Upload({
-    client: s3Client,
-    params: {
-      Bucket: BUCKET_NAME,
-      Key: key,
-      Body: buffer,
-      ContentType: mimetype,
-    },
-  });
-  return upload.done();
+const getPublicFileUrl = (key) => {
+  return `https://${BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
+};
+
+
+const uploadToS3 = async (buffer, key, mimetype, retries = 3, delay = 1000) => {
+  let lastError;
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      const upload = new Upload({
+        client: s3Client,
+        params: {
+          Bucket: BUCKET_NAME,
+          Key: key,
+          Body: buffer,
+          ContentType: mimetype,
+          ACL: 'public-read',
+        },
+      });
+      return await upload.done();
+    } catch (error) {
+      lastError = error;
+      logger.warn(`S3 upload attempt ${attempt} failed for ${key}: ${error.message}`);
+      if (attempt < retries) {
+        await setTimeout(delay * attempt); // Exponential backoff
+      }
+    }
+  }
+  throw new Error(`Failed to upload to S3 after ${retries} attempts: ${lastError.message}`);
 };
 
 
@@ -192,6 +213,6 @@ const streamS3Object = async (key, res) => {
   }
 };
 
-module.exports = { uploadDocuments, certificateUpload, uploadToS3, deleteFromS3, streamS3Object, s3: s3Client,uploadStudyMaterial};
+module.exports = { uploadDocuments, certificateUpload, uploadToS3, deleteFromS3, streamS3Object, s3: s3Client,uploadStudyMaterial,getPublicFileUrl};
 
 
