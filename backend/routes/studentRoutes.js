@@ -213,6 +213,12 @@ router.post(
 );
 
 router.get(
+  "/:studentId/syllabus",
+  authMiddleware,
+  studentController.getSyllabus
+);
+
+router.get(
   "/:studentId/exam-schedule",
   authMiddleware,
   studentController.getExamSchedule

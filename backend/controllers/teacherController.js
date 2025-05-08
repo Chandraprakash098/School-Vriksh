@@ -3,6 +3,8 @@ const { uploadToS3 } = require("../config/s3Upload");
 const path = require("path");
 const jwt = require("jsonwebtoken");
 const axios = require("axios");
+const { uploadStudyMaterial, uploadSyllabus,getPublicFileUrl } = require("../config/s3Upload");
+const logger = require("../utils/logger");
 
 const teacherController = {
 
@@ -879,22 +881,81 @@ const teacherController = {
   },
 
   // Assign homework with file upload
+  // assignHomework: async (req, res) => {
+  //   try {
+  //     const schoolId = req.school._id.toString();
+  //     const { classId } = req.params;
+  //     const { title, description, dueDate, subject } = req.body;
+  //     const files = req.files; // Expecting files from multer
+  //     const connection = req.connection;
+  //     const Homework = require("../models/Homework")(connection);
+
+  //     const attachments = [];
+  //     if (files && files.length > 0) {
+  //       for (const file of files) {
+  //         const fileKey = `homework/${schoolId}/${classId}/${Date.now()}_${
+  //           file.originalname
+  //         }`;
+  //         await uploadToS3(file.buffer, fileKey);
+  //         attachments.push({
+  //           fileName: file.originalname,
+  //           fileUrl: `https://${process.env.AWS_S3_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${fileKey}`,
+  //           fileType: file.mimetype,
+  //         });
+  //       }
+  //     }
+
+  //     const homework = new Homework({
+  //       school: schoolId,
+  //       class: classId,
+  //       subject,
+  //       title,
+  //       description,
+  //       assignedBy: req.user._id,
+  //       dueDate,
+  //       attachments,
+  //     });
+
+  //     await homework.save();
+  //     res.status(201).json(homework);
+  //   } catch (error) {
+  //     res.status(500).json({ error: error.message });
+  //   }
+  // },
+
+
   assignHomework: async (req, res) => {
     try {
       const schoolId = req.school._id.toString();
       const { classId } = req.params;
-      const { title, description, dueDate, subject } = req.body;
+      const { title, description, dueDate, subjectId } = req.body; // Changed subject to subjectId
       const files = req.files; // Expecting files from multer
+      const teacherId = req.user._id;
       const connection = req.connection;
       const Homework = require("../models/Homework")(connection);
-
+  
+      if (!subjectId) {
+        return res.status(400).json({ message: "Subject ID is required" });
+      }
+  
+      // Verify teacher is assigned to the class and subject
+      const isAssigned = await verifyTeacherSubjectAssignment(
+        teacherId,
+        classId,
+        subjectId,
+        connection
+      );
+      if (!isAssigned) {
+        return res.status(403).json({
+          message: "You are not authorized to assign homework for this class and subject",
+        });
+      }
+  
       const attachments = [];
       if (files && files.length > 0) {
         for (const file of files) {
-          const fileKey = `homework/${schoolId}/${classId}/${Date.now()}_${
-            file.originalname
-          }`;
-          await uploadToS3(file.buffer, fileKey);
+          const fileKey = `homework/${schoolId}/${classId}/${Date.now()}_${file.originalname}`;
+          await uploadToS3(file.buffer, fileKey, file.mimetype);
           attachments.push({
             fileName: file.originalname,
             fileUrl: `https://${process.env.AWS_S3_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${fileKey}`,
@@ -902,100 +963,256 @@ const teacherController = {
           });
         }
       }
-
+  
       const homework = new Homework({
         school: schoolId,
         class: classId,
-        subject,
+        subject: subjectId, // Use subjectId
         title,
         description,
-        assignedBy: req.user._id,
+        assignedBy: teacherId,
         dueDate,
         attachments,
       });
-
+  
       await homework.save();
-      res.status(201).json(homework);
+      res.status(201).json({ message: "Homework assigned successfully", homework });
     } catch (error) {
+      console.error("Error in assignHomework:", error);
       res.status(500).json({ error: error.message });
     }
   },
+
+
 
   uploadStudyMaterial: async (req, res) => {
     try {
-      console.log("Request received at uploadStudyMaterial");
-      console.log("req.file:", req.file);
-      console.log("req.body:", req.body);
-      console.log("req.params:", req.params);
-      console.log("req.dbConnection type:", typeof req.dbConnection);
-      console.log("req.dbConnection:", req.dbConnection.name);
-      console.log(
-        "req.connection:",
-        req.connection instanceof require("net").Socket
-          ? "Socket"
-          : "Unexpected"
-      );
-
-      const { classId } = req.params;
-      const { title, description, subject, type } = req.body;
-      const file = req.file;
-      const teacherId = req.user._id;
+      logger.info('Entering uploadStudyMaterial controller', {
+        classId: req.params.classId,
+        subjectId: req.params.subjectId,
+        userId: req.user?._id,
+        dbConnectionName: req.dbConnection?.name,
+        hasConnection: !!req.dbConnection,
+        hasReqConnection: !!req.connection,
+      });
+  
+      const { classId, subjectId } = req.params;
+      const { title, description, type } = req.body;
       const schoolId = req.school._id.toString();
-      const connection = req.dbConnection; // Use dbConnection for this route
-      const StudyMaterial = require("../models/StudyMaterial")(connection);
-      const { uploadToS3 } = require("../config/s3Upload");
-
-      if (!file) {
-        return res.status(400).json({ message: "No file uploaded." });
+      const teacherId = req.user._id.toString();
+      const connection = req.dbConnection;
+      const {getPublicFileUrl}= require('../config/s3Upload')
+  
+      // Validate connection
+      if (!connection || typeof connection !== 'object' || !connection.name) {
+        logger.error('Invalid database connection', { connection });
+        return res.status(500).json({ error: 'Database connection is not properly initialized' });
       }
-
-      const isAssigned = await verifyTeacherClassAssignment(
-        teacherId,
-        classId,
-        connection
-      );
-      if (!isAssigned) {
-        return res.status(403).json({
-          message: "You are not authorized to upload materials for this class",
-        });
+      logger.info('Database connection validated', { connectionName: connection.name });
+  
+      const StudyMaterial = require('../models/StudyMaterial')(connection);
+      const ClassModel = require('../models/Class')(connection);
+      const SubjectModel = require('../models/Subject')(connection);
+  
+      // Validate inputs
+      if (!mongoose.Types.ObjectId.isValid(classId) || !mongoose.Types.ObjectId.isValid(subjectId)) {
+        logger.warn('Invalid class or subject ID', { classId, subjectId });
+        return res.status(400).json({ message: 'Invalid class or subject ID' });
       }
-
-      const fileExt = path.extname(file.originalname);
-      const fileName = `file_${Date.now()}${fileExt}`;
-      const fileKey = `study-materials/${schoolId}/${classId}/${fileName}`;
-
-      await uploadToS3(file.buffer, fileKey, file.mimetype);
-      const fileUrl = `https://${process.env.AWS_S3_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${fileKey}`;
-
-      const attachments = [
-        {
-          fileName: file.originalname,
-          fileUrl: fileUrl,
-          fileType: file.mimetype,
-        },
-      ];
-
-      const material = new StudyMaterial({
+      if (!title || !type) {
+        logger.warn('Missing required fields', { title, type });
+        return res.status(400).json({ message: 'Title and type are required' });
+      }
+      if (!['notes', 'assignment', 'questionPaper', 'other'].includes(type)) {
+        logger.warn('Invalid material type', { type });
+        return res.status(400).json({ message: 'Invalid material type' });
+      }
+  
+      // Verify class and subject exist
+      const classInfo = await ClassModel.findOne({ _id: classId, school: schoolId });
+      if (!classInfo) {
+        logger.warn('Class not found', { classId, schoolId });
+        return res.status(404).json({ message: 'Class not found' });
+      }
+      const subject = await SubjectModel.findOne({ _id: subjectId, school: schoolId });
+      if (!subject) {
+        logger.warn('Subject not found', { subjectId, schoolId });
+        return res.status(404).json({ message: 'Subject not found' });
+      }
+  
+      // Verify teacher is assigned to the class and subject
+      const isTeacherAssigned = subject.teachers.some(t => t.teacher.toString() === teacherId);
+      if (!isTeacherAssigned) {
+        logger.warn('Teacher not authorized', { teacherId, classId, subjectId });
+        return res.status(403).json({ message: 'You are not authorized to upload materials for this subject' });
+      }
+  
+      // Check if file was uploaded
+      if (!req.file) {
+        logger.warn('No file uploaded in controller');
+        return res.status(400).json({ message: 'No file uploaded' });
+      }
+  
+      // Create study material document
+      const studyMaterial = new StudyMaterial({
         school: schoolId,
+        class: classId,
+        subject: subjectId,
         title,
         description,
-        class: classId,
-        subject,
         type,
-        fileUrl: fileUrl,
-        attachments,
         uploadedBy: teacherId,
+        attachments: [
+          {
+            fileName: req.file.originalname,
+            fileUrl: getPublicFileUrl(req.file.key),
+            fileType: req.file.mimetype,
+            s3Key: req.file.key,
+          },
+        ],
         isActive: true,
       });
-
-      await material.save();
-      res.status(201).json(material);
+  
+      await studyMaterial.save();
+  
+      logger.info(`Study material uploaded by teacher ${teacherId} for class ${classId}, subject ${subjectId}`);
+  
+      res.status(201).json({
+        message: 'Study material uploaded successfully',
+        studyMaterial: {
+          id: studyMaterial._id,
+          title: studyMaterial.title,
+          description: studyMaterial.description,
+          subject: subjectId,
+          type: studyMaterial.type,
+          attachments: studyMaterial.attachments,
+          createdAt: studyMaterial.createdAt,
+        },
+      });
     } catch (error) {
-      console.error("Error in uploadStudyMaterial:", error.stack);
-      res.status(500).json({ error: error.message });
+      logger.error(`Error uploading study material: ${error.message}`, { error });
+      if (!res.headersSent) {
+        res.status(500).json({ error: error.message });
+      }
     }
   },
 
+
+  uploadSyllabus: async (req, res) => {
+    try {
+      logger.info('Entering uploadSyllabus controller', {
+        classId: req.params.classId,
+        subjectId: req.params.subjectId,
+        userId: req.user?._id,
+      });
+
+      const { classId, subjectId } = req.params;
+      const { content } = req.body;
+      const schoolId = req.school._id.toString();
+      const teacherId = req.user._id.toString();
+      const connection = req.dbConnection;
+      
+
+      // Validate connection
+      if (!connection || typeof connection !== 'object') {
+        logger.error('Invalid database connection', { connection });
+        throw new Error('Database connection is not properly initialized');
+      }
+      logger.info('Database connection validated', { connectionName: connection.name });
+
+      const Syllabus = require('../models/Syllabus')(connection);
+      const ClassModel = require('../models/Class')(connection);
+      const SubjectModel = require('../models/Subject')(connection);
+
+      // Validate inputs
+      if (!mongoose.Types.ObjectId.isValid(classId) || !mongoose.Types.ObjectId.isValid(subjectId)) {
+        logger.warn('Invalid class or subject ID', { classId, subjectId });
+        return res.status(400).json({ message: 'Invalid class or subject ID' });
+      }
+      if (!content) {
+        logger.warn('Missing content field');
+        return res.status(400).json({ message: 'Syllabus content is required' });
+      }
+
+      // Verify class and subject exist
+      const classInfo = await ClassModel.findOne({ _id: classId, school: schoolId });
+      if (!classInfo) {
+        logger.warn('Class not found', { classId, schoolId });
+        return res.status(404).json({ message: 'Class not found' });
+      }
+      const subject = await SubjectModel.findOne({ _id: subjectId, school: schoolId });
+      if (!subject) {
+        logger.warn('Subject not found', { subjectId, schoolId });
+        return res.status(404).json({ message: 'Subject not found' });
+      }
+
+      // Verify teacher is assigned to the class and subject
+      // if (!classInfo.teachers.includes(teacherId) || !subject.teachers.includes(teacherId)) {
+      //   logger.warn('Teacher not authorized', { teacherId, classId, subjectId });
+      //   return res.status(403).json({ message: 'You are not authorized to upload syllabus for this class or subject' });
+      // }
+
+      // Check if file was uploaded (already checked in route, but kept for safety)
+      if (!req.file) {
+        logger.warn('No file uploaded in controller');
+        return res.status(400).json({ message: 'No file uploaded' });
+      }
+
+      // Create or update syllabus document
+      let syllabus = await Syllabus.findOne({
+        school: schoolId,
+        class: classId,
+        subject: subjectId,
+      });
+
+      const document = {
+        title: req.file.originalname,
+        url: getPublicFileUrl(req.file.key),
+        uploadedBy: teacherId,
+        s3Key: req.file.key,
+        uploadedAt: new Date(),
+      };
+
+      if (syllabus) {
+        syllabus.content = content;
+        syllabus.documents.push(document);
+        syllabus.updatedAt = new Date();
+      } else {
+        syllabus = new Syllabus({
+          school: schoolId,
+          class: classId,
+          subject: subjectId,
+          content,
+          documents: [document],
+          uploadedBy: teacherId,
+        });
+      }
+
+      await syllabus.save();
+
+      logger.info(`Syllabus uploaded by teacher ${teacherId} for class ${classId}, subject ${subjectId}`);
+      
+      // Ensure response is only sent once
+      if (!res.headersSent) {
+        res.status(201).json({
+          message: 'Syllabus uploaded successfully',
+          syllabus: {
+            id: syllabus._id,
+            subject: subjectId,
+            content: syllabus.content,
+            documents: syllabus.documents,
+            createdAt: syllabus.createdAt,
+            updatedAt: syllabus.updatedAt,
+          },
+        });
+      }
+    } catch (error) {
+      logger.error(`Error uploading syllabus: ${error.message}`, { error });
+      if (!res.headersSent) {
+        res.status(500).json({ error: error.message });
+      }
+    }
+  },
   // Get students of a class for entering marks
   getClassStudentsForSubject: async (req, res) => {
     try {
@@ -1042,68 +1259,7 @@ const teacherController = {
     }
   },
 
-  
 
-  // getExamsForTeacher: async (req, res) => {
-  //   try {
-  //     const mongoose = require("mongoose");
-  //     const teacherId = new mongoose.Types.ObjectId(req.user._id);
-  //     const schoolId = new mongoose.Types.ObjectId(req.school._id.toString());
-  //     const connection = req.connection;
-  //     const Exam = require("../models/Exam")(connection);
-  //     const Subject = require("../models/Subject")(connection);
-  //     const Class = require("../models/Class")(connection);
-  
-  //     const subjects = await Subject.find({
-  //       school: schoolId,
-  //       "teachers.teacher": teacherId,
-  //     }).select("_id name");
-  //     const subjectIds = subjects.map((subject) => new mongoose.Types.ObjectId(subject._id));
-  
-  //     const exams = await Exam.find({
-  //       school: schoolId,
-  //       subject: { $in: subjectIds },
-  //       $or: [{ status: "draft" }, { status: { $exists: false } }],
-  //     })
-  //       .populate("class", "name division students")
-  //       .populate("subject", "name")
-  //       .select(
-  //         "_id examType customExamType startDate endDate examDate totalMarks class subject status"
-  //       )
-  //       .lean();
-  
-  //     const User = require("../models/User")(connection);
-  //     const formattedExams = await Promise.all(
-  //       exams.map(async (exam) => {
-  //         const students = await User.find({ _id: { $in: exam.class.students } })
-  //           .select("name rollNumber")
-  //           .lean();
-  //         return {
-  //           examId: exam._id,
-  //           examType: exam.examType === "Other" ? exam.customExamType : exam.examType,
-  //           class: `${exam.class.name} ${exam.class.division || ""}`,
-  //           subject: exam.subject.name,
-  //           examDate: exam.examDate,
-  //           totalMarks: exam.totalMarks,
-  //           status: exam.status || "default (draft)",
-  //           students: students.map((student) => ({
-  //             studentId: student._id,
-  //             name: student.name,
-  //             rollNumber: student.rollNumber,
-  //           })),
-  //         };
-  //       })
-  //     );
-  
-  //     res.json({
-  //       message: "Exams retrieved successfully",
-  //       exams: formattedExams,
-  //     });
-  //   } catch (error) {
-  //     console.error("Error in getExamsForTeacher:", error);
-  //     res.status(500).json({ error: error.message });
-  //   }
-  // },
 
   getExamsForTeacher: async (req, res) => {
     try {
@@ -1398,6 +1554,17 @@ const teacherController = {
 };
 
 // Helper Functions
+
+const verifyTeacherSubjectAssignment = async (teacherId, classId, subjectId, connection) => {
+  const Subject = require("../models/Subject")(connection);
+  const subject = await Subject.findOne({
+    _id: subjectId,
+    class: classId,
+    school: connection.db.name, // Assuming schoolId is tied to connection
+    "teachers.teacher": teacherId,
+  });
+  return !!subject; // Returns true if the teacher is assigned, false otherwise
+};
 
 function getDistanceFromLatLonInKm(lat1, lon1, lat2, lon2) {
   const R = 6371;

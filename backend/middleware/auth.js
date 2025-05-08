@@ -59,7 +59,7 @@ const auth = async (req, res, next) => {
         ? ownerConnection
         : await connectToDatabase(school.dbName);
     // Use req.dbConnection for study-materials route, req.connection for others
-    if (req.path.includes("/study-materials")) {
+    if (req.path.includes("/study-material") || req.path.includes("/syllabus")) {
       req.dbConnection = connection;
     } else {
       req.connection = connection;

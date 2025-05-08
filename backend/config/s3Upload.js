@@ -83,10 +83,64 @@ const certificateUpload = multer({
 
 
 
+
+
+// Study material upload configuration
 const studyMaterialStorage = multerS3({
   s3: s3Client,
   bucket: BUCKET_NAME,
-  acl: 'private',
+  acl: 'public-read',
+  contentType: multerS3.AUTO_CONTENT_TYPE,
+  metadata: (req, file, cb) => {
+    logger.info('Setting S3 metadata for study material', {
+      originalName: file.originalname,
+      uploadedBy: req.user?._id?.toString() || 'unknown',
+    });
+    cb(null, {
+      originalName: file.originalname,
+      uploadedBy: req.user?._id?.toString() || 'unknown',
+    });
+  },
+  key: (req, file, cb) => {
+    const schoolId = req.school?._id.toString() || 'unknown';
+    const classId = req.params.classId || req.body.classId || 'unknown';
+    const fileExt = path.extname(file.originalname);
+    const fileName = `${file.fieldname}_${Date.now()}${fileExt}`;
+    const fileKey = `study-materials/${schoolId}/${classId}/${fileName}`;
+    logger.info(`Uploading study material to S3 with key: ${fileKey}`);
+    cb(null, fileKey);
+  },
+});
+
+const uploadStudyMaterial = multer({
+  storage: studyMaterialStorage,
+  limits: { fileSize: 15 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    logger.info('Multer fileFilter for study material running...', {
+      fieldname: file.fieldname,
+      originalname: file.originalname,
+      mimetype: file.mimetype,
+    });
+    const allowedTypes = [
+      'application/pdf',
+      'image/jpeg',
+      'image/png',
+      'image/jpg',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    ];
+    if (allowedTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error(`Invalid file type: ${file.mimetype}. Allowed: ${allowedTypes.join(', ')}`), false);
+    }
+  },
+}).single('file');
+
+// Syllabus upload configuration
+const syllabusStorage = multerS3({
+  s3: s3Client,
+  bucket: BUCKET_NAME,
+  acl: 'public-read', // Make files publicly accessible
   contentType: multerS3.AUTO_CONTENT_TYPE,
   metadata: (req, file, cb) => {
     cb(null, {
@@ -95,34 +149,28 @@ const studyMaterialStorage = multerS3({
     });
   },
   key: (req, file, cb) => {
-    const schoolId = req.school?._id?.toString() || 'unknown';
-    const classId = req.params.classId || 'unknown';
+    const schoolId = req.school?._id.toString() || 'unknown';
+    const classId = req.params.classId || req.body.classId || 'unknown';
     const fileExt = path.extname(file.originalname);
-    const fileName = `${file.fieldname}_${Date.now()}${fileExt}`;
-    const fileKey = `study-materials/${schoolId}/${classId}/${fileName}`;
-    console.log('Uploading to S3 with key:', fileKey);
+    const fileName = `syllabus_${Date.now()}${fileExt}`;
+    const fileKey = `syllabus/${schoolId}/${classId}/${fileName}`;
+    logger.info(`Uploading syllabus to S3 with key: ${fileKey}`);
     cb(null, fileKey);
   },
 });
 
-const uploadStudyMaterial = multer({
-  storage: studyMaterialStorage,
-  limits: { fileSize: 15 * 1024 * 1024 }, // 15MB
+const uploadSyllabus = multer({
+  storage: syllabusStorage,
+  limits: { fileSize: 10 * 1024 * 1024 }, // 10MB
   fileFilter: (req, file, cb) => {
-    console.log('Multer fileFilter running...');
-    console.log('File details:', {
+    logger.info('Multer fileFilter for syllabus running...');
+    logger.info('File details:', {
       fieldname: file.fieldname,
       originalname: file.originalname,
       mimetype: file.mimetype,
     });
 
-    const allowedTypes = [
-      'application/pdf',
-      'image/jpeg',
-      'image/png',
-      'image/jpg',
-      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    ];
+    const allowedTypes = ['application/pdf'];
 
     if (allowedTypes.includes(file.mimetype)) {
       cb(null, true);
@@ -140,18 +188,6 @@ const uploadStudyMaterial = multer({
 
 
 
-// const uploadToS3 = async (buffer, key, mimetype) => {
-//   const upload = new Upload({
-//     client: s3Client,
-//     params: {
-//       Bucket: BUCKET_NAME,
-//       Key: key,
-//       Body: buffer,
-//       ContentType: mimetype,
-//     },
-//   });
-//   return upload.done();
-// };
 
 const getPublicFileUrl = (key) => {
   return `https://${BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
@@ -213,6 +249,6 @@ const streamS3Object = async (key, res) => {
   }
 };
 
-module.exports = { uploadDocuments, certificateUpload, uploadToS3, deleteFromS3, streamS3Object, s3: s3Client,uploadStudyMaterial,getPublicFileUrl};
+module.exports = { uploadDocuments, certificateUpload, uploadToS3, deleteFromS3, streamS3Object, s3: s3Client,uploadStudyMaterial,getPublicFileUrl,uploadSyllabus};
 
 

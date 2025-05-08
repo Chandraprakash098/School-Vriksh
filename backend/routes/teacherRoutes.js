@@ -5,18 +5,19 @@ const auth = require("../middleware/auth");
 const roleCheck = require("../middleware/roleCheck");
 const validateAttendancePermission = require("../middleware/validateAttendancePermission");
 const multer = require("multer");
-// const {uploadStudyMaterial} = require('../config/s3Upload')
-const {
-  uploadStudyMaterial: uploadStudyMaterialMiddleware,
-} = require("../config/s3Upload"); // Rename to avoid conflict
+const restoreConnection = require('../middleware/restoreConnection');
 
-const setMongoConnection = (req, res, next) => {
-  console.log("Setting mongoConnection from req.connection");
-  req.mongoConnection = req.connection; // Copy the Mongoose connection
-  console.log("req.connection:", req.connection.name);
-  console.log("req.mongoConnection:", req.mongoConnection.name);
-  next();
-};
+const { uploadStudyMaterial, uploadSyllabus,getPublicFileUrl } = require('../config/s3Upload');
+const { body, validationResult } = require('express-validator');
+const logger = require('../utils/logger');
+
+// const setMongoConnection = (req, res, next) => {
+//   console.log("Setting mongoConnection from req.connection");
+//   req.mongoConnection = req.connection; // Copy the Mongoose connection
+//   console.log("req.connection:", req.connection.name);
+//   console.log("req.mongoConnection:", req.mongoConnection.name);
+//   next();
+// };
 
 const upload = multer({
   storage: multer.memoryStorage(), // Store file in memory as a buffer
@@ -53,6 +54,52 @@ const handleMulterUpload = (req, res, next) => {
     console.log("Multer completed, req.file:", req.file);
     next();
   });
+};
+
+// Error handling middleware for Multer
+const handleMulterError = (err, req, res, next) => {
+  if (err instanceof multer.MulterError) {
+    logger.error('Multer error', { error: err.message, code: err.code });
+    return res.status(400).json({ error: `Multer error: ${err.message}` });
+  }
+  if (err) {
+    logger.error('File upload error', { error: err.message });
+    return res.status(400).json({ error: err.message });
+  }
+  next();
+};
+
+// Validation middleware for study material
+const studyMaterialValidation = [
+  body('title').notEmpty().withMessage('Title is required'),
+  body('type')
+    .isIn(['notes', 'assignment', 'questionPaper', 'other'])
+    .withMessage('Invalid material type'),
+];
+
+// Validation middleware for syllabus
+const syllabusValidation = [
+  body('content').notEmpty().withMessage('Syllabus content is required'),
+];
+
+const handleValidationErrors = (req, res, next) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    logger.warn('Validation errors', { errors: errors.array() });
+    return res.status(400).json({ errors: errors.array() });
+  }
+  next();
+};
+
+const logRequest = (req, res, next) => {
+  logger.info('Request details', {
+    path: req.path,
+    hasConnection: !!req.connection,
+    connectionType: req.connection ? req.connection.constructor.name : null,
+    hasDbConnection: !!req.dbConnection,
+    dbConnectionName: req.dbConnection?.name,
+  });
+  next();
 };
 
 // Assigned Classes
@@ -116,10 +163,46 @@ router.get(
 
 //study-material
 
-router.post(
-  "/:classId/study-materials",
-  [auth, roleCheck(["teacher"]), upload.single("file")],
+// router.post(
+//   "/:classId/study-materials",
+//   [auth, roleCheck(["teacher"]), upload.single("file")],
+//   teacherController.uploadStudyMaterial
+// );
+
+router.post(  
+  '/:classId/:subjectId/study-material',
+  [
+    auth,
+    logRequest,
+    roleCheck(['teacher']),
+    uploadStudyMaterial,
+    handleMulterError,
+    studyMaterialValidation,
+    handleValidationErrors,
+  ],
   teacherController.uploadStudyMaterial
+);
+
+
+
+// Syllabus
+// router.post(
+//   "/:classId/syllabus",
+//   [auth, roleCheck(["teacher"]), upload.array("documents", 5)],
+//   teacherController.uploadSyllabus
+// );
+
+router.post(
+  '/:classId/:subjectId/syllabus',
+  [
+    auth,
+    logRequest,
+    roleCheck(['teacher']),
+    handleMulterError,
+    uploadSyllabus,
+    syllabusValidation,
+  ],
+  teacherController.uploadSyllabus
 );
 
 //leave-request

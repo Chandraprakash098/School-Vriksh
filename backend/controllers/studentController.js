@@ -865,67 +865,219 @@ const studentController = {
     }
   },
 
+  // getStudyMaterials: async (req, res) => {
+  //   try {
+  //     const { studentId } = req.params;
+  //     const schoolId = req.school._id.toString();
+  //     const connection = req.connection;
+  //     const User = require("../models/User")(connection);
+  //     const StudyMaterial = require("../models/StudyMaterial")(connection);
+
+  //     if (!mongoose.Types.ObjectId.isValid(studentId)) {
+  //       return res.status(400).json({ message: "Invalid student ID" });
+  //     }
+
+  //     const student = await User.findOne({ _id: studentId, school: schoolId }).select(
+  //       "studentDetails.class"
+  //     );
+  //     if (!student || !student.studentDetails || !student.studentDetails.class) {
+  //       return res.status(404).json({ message: "Student class not found" });
+  //     }
+
+  //     const materials = await StudyMaterial.find({
+  //       school: schoolId,
+  //       class: student.studentDetails.class,
+  //       isActive: true,
+  //     })
+  //       .populate("uploadedBy", "name", User)
+  //       .sort({ createdAt: -1 });
+
+  //     logger.info(`Study materials fetched for student ${studentId}`);
+  //     res.json(materials);
+  //   } catch (error) {
+  //     logger.error(`Error fetching study materials: ${error.message}`, { error });
+  //     res.status(500).json({ error: error.message });
+  //   }
+  // },
+
+
   getStudyMaterials: async (req, res) => {
     try {
       const { studentId } = req.params;
       const schoolId = req.school._id.toString();
-      const connection = req.connection;
-      const User = require("../models/User")(connection);
+      const connection = req.dbConnection;
+      const UserModel = User(connection);
       const StudyMaterial = require("../models/StudyMaterial")(connection);
+      const ClassModel = require('../models/Class')(connection)
+      const SubjectModel= require('../models/Subject')(connection)
 
       if (!mongoose.Types.ObjectId.isValid(studentId)) {
         return res.status(400).json({ message: "Invalid student ID" });
       }
 
-      const student = await User.findOne({ _id: studentId, school: schoolId }).select(
+      // Fetch student and verify class assignment
+      const student = await UserModel.findOne({ _id: studentId, school: schoolId }).select(
         "studentDetails.class"
       );
       if (!student || !student.studentDetails || !student.studentDetails.class) {
         return res.status(404).json({ message: "Student class not found" });
       }
 
+      // Verify student is enrolled in the class
+      const classInfo = await ClassModel.findOne({
+        _id: student.studentDetails.class,
+        school: schoolId,
+        students: studentId,
+      });
+      if (!classInfo) {
+        return res.status(403).json({
+          message: "You are not enrolled in this class",
+        });
+      }
+
+      // Fetch study materials for the student's class
       const materials = await StudyMaterial.find({
         school: schoolId,
         class: student.studentDetails.class,
         isActive: true,
       })
-        .populate("uploadedBy", "name", User)
+        .populate("subject", "name")
+        .populate("uploadedBy", "name")
+        .lean()
         .sort({ createdAt: -1 });
 
+      // Format response
+      const formattedMaterials = materials.map((m) => ({
+        id: m._id,
+        title: m.title,
+        description: m.description,
+        subject: m.subject ? m.subject.name : "Unknown",
+        type: m.type,
+        attachments: m.attachments.map((att) => ({
+          fileName: att.fileName,
+          fileUrl: att.fileUrl, // Public URL from S3
+          fileType: att.fileType,
+        })),
+        uploadedBy: m.uploadedBy ? m.uploadedBy.name : "Unknown",
+        createdAt: m.createdAt,
+      }));
+
       logger.info(`Study materials fetched for student ${studentId}`);
-      res.json(materials);
+      res.json({
+        message: "Study materials retrieved successfully",
+        materials: formattedMaterials,
+      });
     } catch (error) {
       logger.error(`Error fetching study materials: ${error.message}`, { error });
       res.status(500).json({ error: error.message });
     }
   },
 
+
+  // getAssignedHomework: async (req, res) => {
+  //   try {
+  //     const { studentId } = req.params;
+  //     const schoolId = req.school._id.toString();
+  //     const connection = req.connection;
+  //     const User = require("../models/User")(connection);
+  //     const Homework = require("../models/Homework")(connection);
+
+  //     if (!mongoose.Types.ObjectId.isValid(studentId)) {
+  //       return res.status(400).json({ message: "Invalid student ID" });
+  //     }
+
+  //     const student = await User.findOne({ _id: studentId, school: schoolId }).select(
+  //       "studentDetails.class"
+  //     );
+  //     if (!student || !student.studentDetails || !student.studentDetails.class) {
+  //       return res.status(404).json({ message: "Student class not found" });
+  //     }
+
+  //     const homework = await Homework.find({
+  //       school: schoolId,
+  //       class: student.studentDetails.class,
+  //     })
+  //       .populate("assignedBy", "name", User)
+  //       .sort({ dueDate: 1 });
+
+  //     const formattedHomework = homework.map((hw) => {
+  //       const studentSubmission = hw.submissions.find(
+  //         (sub) => sub.student.toString() === studentId
+  //       );
+  //       return {
+  //         id: hw._id,
+  //         title: hw.title,
+  //         description: hw.description,
+  //         subject: hw.subject,
+  //         assignedBy: hw.assignedBy ? hw.assignedBy.name : "Unknown",
+  //         assignedDate: hw.assignedDate,
+  //         dueDate: hw.dueDate,
+  //         attachments: hw.attachments,
+  //         submission: studentSubmission
+  //           ? {
+  //               status: studentSubmission.status,
+  //               submissionDate: studentSubmission.submissionDate,
+  //               files: studentSubmission.files,
+  //               grade: studentSubmission.grade,
+  //               feedback: studentSubmission.feedback,
+  //             }
+  //           : null,
+  //       };
+  //     });
+
+  //     logger.info(`Homework fetched for student ${studentId}`);
+  //     res.json(formattedHomework);
+  //   } catch (error) {
+  //     logger.error(`Error fetching homework: ${error.message}`, { error });
+  //     res.status(500).json({ error: error.message });
+  //   }
+  // },
+
+
   getAssignedHomework: async (req, res) => {
     try {
       const { studentId } = req.params;
       const schoolId = req.school._id.toString();
       const connection = req.connection;
-      const User = require("../models/User")(connection);
+      const UserModel = User(connection);
       const Homework = require("../models/Homework")(connection);
+      const ClassModel = Class(connection);
 
       if (!mongoose.Types.ObjectId.isValid(studentId)) {
         return res.status(400).json({ message: "Invalid student ID" });
       }
 
-      const student = await User.findOne({ _id: studentId, school: schoolId }).select(
+      // Fetch student and verify class assignment
+      const student = await UserModel.findOne({ _id: studentId, school: schoolId }).select(
         "studentDetails.class"
       );
       if (!student || !student.studentDetails || !student.studentDetails.class) {
         return res.status(404).json({ message: "Student class not found" });
       }
 
+      // Verify student is enrolled in the class
+      const classInfo = await ClassModel.findOne({
+        _id: student.studentDetails.class,
+        school: schoolId,
+        students: studentId,
+      });
+      if (!classInfo) {
+        return res.status(403).json({
+          message: "You are not enrolled in this class",
+        });
+      }
+
+      // Fetch homework for the student's class
       const homework = await Homework.find({
         school: schoolId,
         class: student.studentDetails.class,
       })
-        .populate("assignedBy", "name", User)
+        .populate("subject", "name")
+        .populate("assignedBy", "name")
+        .lean()
         .sort({ dueDate: 1 });
 
+      // Format response
       const formattedHomework = homework.map((hw) => {
         const studentSubmission = hw.submissions.find(
           (sub) => sub.student.toString() === studentId
@@ -934,7 +1086,7 @@ const studentController = {
           id: hw._id,
           title: hw.title,
           description: hw.description,
-          subject: hw.subject,
+          subject: hw.subject ? hw.subject.name : "Unknown",
           assignedBy: hw.assignedBy ? hw.assignedBy.name : "Unknown",
           assignedDate: hw.assignedDate,
           dueDate: hw.dueDate,
@@ -952,9 +1104,82 @@ const studentController = {
       });
 
       logger.info(`Homework fetched for student ${studentId}`);
-      res.json(formattedHomework);
+      res.json({
+        message: "Homework retrieved successfully",
+        homework: formattedHomework,
+      });
     } catch (error) {
       logger.error(`Error fetching homework: ${error.message}`, { error });
+      res.status(500).json({ error: error.message });
+    }
+  },
+
+
+  getSyllabus: async (req, res) => {
+    try {
+      const { studentId } = req.params;
+      const schoolId = req.school._id.toString();
+      const connection = req.dbConnection;
+      const UserModel = User(connection);
+      const Syllabus = require("../models/Syllabus")(connection);
+      const ClassModel = Class(connection);
+      const SubjectModel= require("../models/Subject")(connection)
+
+      if (!mongoose.Types.ObjectId.isValid(studentId)) {
+        return res.status(400).json({ message: "Invalid student ID" });
+      }
+
+      // Fetch student and verify class assignment
+      const student = await UserModel.findOne({ _id: studentId, school: schoolId }).select(
+        "studentDetails.class"
+      );
+      if (!student || !student.studentDetails || !student.studentDetails.class) {
+        return res.status(404).json({ message: "Student class not found" });
+      }
+
+      // Verify student is enrolled in the class
+      const classInfo = await ClassModel.findOne({
+        _id: student.studentDetails.class,
+        school: schoolId,
+        students: studentId,
+      });
+      if (!classInfo) {
+        return res.status(403).json({
+          message: "You are not enrolled in this class",
+        });
+      }
+
+      // Fetch syllabus for the student's class
+      const syllabi = await Syllabus.find({
+        school: schoolId,
+        class: student.studentDetails.class,
+      })
+        .populate("subject", "name")
+        .lean()
+        .sort({ updatedAt: -1 });
+
+      // Format response
+      const formattedSyllabi = syllabi.map((s) => ({
+        id: s._id,
+        subject: s.subject ? s.subject.name : "Unknown",
+        content: s.content,
+        documents: s.documents.map((doc) => ({
+          title: doc.title,
+          url: doc.url, // Public URL from S3
+          uploadedBy: doc.uploadedBy,
+          uploadedAt: doc.uploadedAt,
+        })),
+        createdAt: s.createdAt,
+        updatedAt: s.updatedAt,
+      }));
+
+      logger.info(`Syllabus fetched for student ${studentId}`);
+      res.json({
+        message: "Syllabus retrieved successfully",
+        syllabi: formattedSyllabi,
+      });
+    } catch (error) {
+      logger.error(`Error fetching syllabus: ${error.message}`, { error });
       res.status(500).json({ error: error.message });
     }
   },
