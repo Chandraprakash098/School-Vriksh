@@ -126,8 +126,9 @@ const router = express.Router();
 const feesController = require("../controllers/feeController");
 const authMiddleware = require("../middleware/auth");
 const logger = require("../utils/logger");
-const { validate, feeValidations } = require('../middleware/validate');
+const { validate, feeValidations, setSchoolContext } = require('../middleware/validate');
 const { paymentRateLimiter } = require('../middleware/rateLimit');
+const { paytmCallback } = require("../controllers/paytmCallback");
 
 // Middleware to prevent concurrent payment attempts
 const preventConcurrentPayments = async (req, res, next) => {
@@ -257,6 +258,12 @@ router.get("/leave-status", authMiddleware, feesController.getLeaveStatus);
 //   feesController.webhookHandler
 // );
 
+// router.get(
+//   '/awaiting-verification-payments',
+//   authMiddleware,
+//   feesController.getAwaitingVerificationPayments
+// );
+
 router.post(
   "/verify-payment",
   authMiddleware,
@@ -264,7 +271,8 @@ router.post(
   preventConcurrentPayments,
   feesController.verifyPayment
 );
-
+router.get('/pending/verification', authMiddleware,feesController.getPendingPaymentsFor);
+router.post('/paytm/callback',setSchoolContext, paytmCallback);
 
 router.get(
   "/audit-logs",

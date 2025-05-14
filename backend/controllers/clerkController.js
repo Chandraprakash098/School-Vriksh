@@ -1391,6 +1391,7 @@ const clerkController = {
           grNumber,
           class: classId,
           admissionType,
+          mobile,
           parentDetails: {
             name: parentName,
             email: parentEmail,

@@ -11,13 +11,7 @@ const { uploadStudyMaterial, uploadSyllabus,getPublicFileUrl } = require('../con
 const { body, validationResult } = require('express-validator');
 const logger = require('../utils/logger');
 
-// const setMongoConnection = (req, res, next) => {
-//   console.log("Setting mongoConnection from req.connection");
-//   req.mongoConnection = req.connection; // Copy the Mongoose connection
-//   console.log("req.connection:", req.connection.name);
-//   console.log("req.mongoConnection:", req.mongoConnection.name);
-//   next();
-// };
+
 
 const upload = multer({
   storage: multer.memoryStorage(), // Store file in memory as a buffer
@@ -246,6 +240,20 @@ router.post(
   "/classes/:classId/exams/:examType/compile-and-submit",
   [auth, roleCheck(["teacher"])],
   teacherController.compileAndSubmitResults
+);
+
+// Download Compiled Excel
+router.get(
+  "/classes/:classId/exams/:examType/results/excel",
+  [auth, roleCheck(["teacher"])],
+  teacherController.getCompiledExcel
+);
+
+// Submit Compiled Results to Admin
+router.post(
+  "/classes/:classId/exams/:examType/submit-to-admin",
+  [auth, roleCheck(["teacher"])],
+  teacherController.submitCompiledResultsToAdmin
 );
 
 // New Progress Workflow Routes

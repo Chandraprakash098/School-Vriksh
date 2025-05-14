@@ -1,22 +1,31 @@
 const mongoose = require("mongoose");
 const Razorpay = require("razorpay");
+const PaytmChecksum = require('paytmchecksum');
+const Stripe = require('stripe');
+const Crypto= require('crypto');
+const axios= require('axios');
 const Fee = require("../models/Fee");
 const User = require("../models/User");
 const Payment = require("../models/Payment");
-const { generateFeeSlip } = require("../utils/helpers");
+// const { generateFeeSlip } = require("../utils/helpers");
+const { generateFeeSlip } = require("../utils/generateFeeSlip");
 const { checkRTEExemption } = require("../utils/rteUtils");
 const logger = require("../utils/logger");
 const { sendPaymentConfirmation } = require("../utils/notifications");
-const Class= require('../models/Class')
-const { uploadToS3, getPublicFileUrl } = require('../config/s3Upload');
+const { getOwnerConnection } = require("../config/database");
+const { decrypt } = require("../utils/encryption");
+const Class = require("../models/Class");
+const {
+  uploadToS3,
+  getPublicFileUrl,
+  streamS3Object,
+} = require("../config/s3Upload");
 
 // Initialize Razorpay
 const razorpay = new Razorpay({
   key_id: process.env.RAZORPAY_KEY_ID,
   key_secret: process.env.RAZORPAY_KEY_SECRET,
 });
-
-
 
 const studentController = {
   getFeeTypes: async (req, res) => {
@@ -28,31 +37,42 @@ const studentController = {
       const FeeModel = Fee(connection);
       const UserModel = User(connection);
       const PaymentModel = Payment(connection);
-  
-      logger.info(`getFeeTypes called with studentId: ${studentId}, month: ${month}, year: ${year}`);
-  
+
+      logger.info(
+        `getFeeTypes called with studentId: ${studentId}, month: ${month}, year: ${year}`
+      );
+
       // Validate inputs
       if (!mongoose.Types.ObjectId.isValid(studentId)) {
-        return res.status(400).json({ message: 'Invalid student ID' });
+        return res.status(400).json({ message: "Invalid student ID" });
       }
       if (!month || !year || isNaN(parseInt(month)) || isNaN(parseInt(year))) {
-        return res.status(400).json({ message: 'Month and year must be valid numbers' });
+        return res
+          .status(400)
+          .json({ message: "Month and year must be valid numbers" });
       }
-  
+
       // Validate student
       const student = await UserModel.findById(studentId).select(
         "name studentDetails.grNumber studentDetails.class studentDetails.transportDetails studentDetails.isRTE"
       );
-      if (!student) return res.status(404).json({ message: 'Student not found' });
+      if (!student)
+        return res.status(404).json({ message: "Student not found" });
       if (!student.studentDetails.class) {
-        return res.status(400).json({ message: 'Student is not assigned to a class' });
+        return res
+          .status(400)
+          .json({ message: "Student is not assigned to a class" });
       }
-  
+
       // Check if student is RTE
       if (student.studentDetails.isRTE) {
-        return res.json({ message: 'RTE students are exempted from fees', isRTE: true, feeTypes: [] });
+        return res.json({
+          message: "RTE students are exempted from fees",
+          isRTE: true,
+          feeTypes: [],
+        });
       }
-  
+
       // Aggregate unique fee definitions for the student's class
       const feeDefinitions = await FeeModel.aggregate([
         {
@@ -61,7 +81,11 @@ const studentController = {
             month: parseInt(month),
             year: parseInt(year),
             student: null,
-            classes: { $elemMatch: { $eq: new mongoose.Types.ObjectId(student.studentDetails.class) } },
+            classes: {
+              $elemMatch: {
+                $eq: new mongoose.Types.ObjectId(student.studentDetails.class),
+              },
+            },
           },
         },
         {
@@ -89,55 +113,66 @@ const studentController = {
         },
         { $sort: { type: 1 } },
       ]);
-  
+
       // Get paid fees for the student
       const paidFees = await PaymentModel.find({
         student: studentId,
         school: schoolId,
-        'feesPaid.month': parseInt(month),
-        'feesPaid.year': parseInt(year),
-        status: 'completed',
+        "feesPaid.month": parseInt(month),
+        "feesPaid.year": parseInt(year),
+        status: "completed",
       });
-  
+
       // Create a set of paid fee types with their distance slabs for transportation
       const paidFeeTypes = new Set();
-      paidFees.forEach(payment => {
-        payment.feesPaid.forEach(fee => {
-          const key = fee.type === 'transportation' && fee.transportationSlab
-            ? `${fee.type}_${fee.transportationSlab}`
-            : fee.type;
+      paidFees.forEach((payment) => {
+        payment.feesPaid.forEach((fee) => {
+          const key =
+            fee.type === "transportation" && fee.transportationSlab
+              ? `${fee.type}_${fee.transportationSlab}`
+              : fee.type;
           paidFeeTypes.add(key);
         });
       });
-  
+
       const feeTypesWithStatus = feeDefinitions
-        .filter(fee => 
-          fee.type !== "transportation" ||
-          (student.studentDetails.transportDetails?.isApplicable &&
-            fee.transportationDetails?.distanceSlab ===
-              student.studentDetails.transportDetails.distanceSlab)
+        .filter(
+          (fee) =>
+            fee.type !== "transportation" ||
+            (student.studentDetails.transportDetails?.isApplicable &&
+              fee.transportationDetails?.distanceSlab ===
+                student.studentDetails.transportDetails.distanceSlab)
         )
-        .map(fee => {
-          const feeKey = fee.type === 'transportation' && fee.transportationDetails?.distanceSlab
-            ? `${fee.type}_${fee.transportationDetails.distanceSlab}`
-            : fee.type;
+        .map((fee) => {
+          const feeKey =
+            fee.type === "transportation" &&
+            fee.transportationDetails?.distanceSlab
+              ? `${fee.type}_${fee.transportationDetails.distanceSlab}`
+              : fee.type;
           const isPaid = paidFeeTypes.has(feeKey);
-          const payment = paidFees.find(p => 
-            p.feesPaid.some(f => 
-              f.type === fee.type && 
-              (f.type !== 'transportation' || f.transportationSlab === fee.transportationDetails?.distanceSlab)
+          const payment = paidFees.find((p) =>
+            p.feesPaid.some(
+              (f) =>
+                f.type === fee.type &&
+                (f.type !== "transportation" ||
+                  f.transportationSlab ===
+                    fee.transportationDetails?.distanceSlab)
             )
           );
           const paymentDetails = isPaid
-            ? payment?.feesPaid.find(f => 
-                f.type === fee.type && 
-                (f.type !== 'transportation' || f.transportationSlab === fee.transportationDetails?.distanceSlab)
+            ? payment?.feesPaid.find(
+                (f) =>
+                  f.type === fee.type &&
+                  (f.type !== "transportation" ||
+                    f.transportationSlab ===
+                      fee.transportationDetails?.distanceSlab)
               )?.paymentDetails || null
             : null;
-  
+
           return {
             type: fee.type,
-            label: fee.type.charAt(0).toUpperCase() + fee.type.slice(1) + ' Fee',
+            label:
+              fee.type.charAt(0).toUpperCase() + fee.type.slice(1) + " Fee",
             amount: fee.amount,
             description: fee.description,
             dueDate: fee.dueDate,
@@ -148,7 +183,7 @@ const studentController = {
             }),
           };
         });
-  
+
       res.json({
         feeTypes: feeTypesWithStatus,
         name: student.name,
@@ -158,419 +193,961 @@ const studentController = {
         year: parseInt(year),
       });
     } catch (error) {
-      logger.error('getFeeTypes Error:', error);
+      logger.error("getFeeTypes Error:", error);
       res.status(500).json({ error: error.message });
     }
   },
 
-  
-
- 
-
-  payFeesByType: async (req, res) => {
+  getPaymentMethods: async (req, res) => {
     try {
-      const { studentId } = req.params;
-      const { feeTypes, month, year, paymentMethod, amounts } = req.body;
       const schoolId = req.school._id.toString();
-      const connection = req.connection;
-      const FeeModel = Fee(connection);
-      const PaymentModel = Payment(connection);
-      const UserModel = User(connection);
-      const ClassModel= require('../models/Class')(connection)
-  
-      // Validate inputs
-      if (!mongoose.Types.ObjectId.isValid(studentId)) {
-        return res.status(400).json({ message: 'Invalid student ID' });
+      const ownerConnection = await getOwnerConnection();
+      const School = require("../models/School")(ownerConnection);
+
+      const school = await School.findById(schoolId).lean();
+      if (!school) {
+        return res.status(404).json({ message: "School not found" });
       }
-      if (!feeTypes || !Array.isArray(feeTypes) || feeTypes.length === 0) {
-        return res.status(400).json({ message: 'Fee types are required' });
-      }
-      if (!month || !year || isNaN(parseInt(month)) || isNaN(parseInt(year))) {
-        return res.status(400).json({ message: 'Month and year must be valid numbers' });
-      }
-      if (parseInt(month) < 1 || parseInt(month) > 12) {
-        return res.status(400).json({ message: 'Month must be between 1 and 12' });
-      }
-      if (!paymentMethod || paymentMethod === 'cash') {
-        return res.status(403).json({
-          message: 'Students can only pay via online methods. Contact the fee manager for cash payments.',
-        });
-      }
-  
-      // Validate student
-      const student = await UserModel.findById(studentId)
-        .select('name email studentDetails.grNumber studentDetails.class studentDetails.transportDetails studentDetails.isRTE studentDetails.parentDetails')
-        .populate('studentDetails.class', 'name division');
-      if (!student) {
-        return res.status(404).json({ message: 'Student not found' });
-      }
-      if (!student.studentDetails.class) {
-        return res.status(400).json({ message: 'Student is not assigned to a class' });
-      }
-      if (await checkRTEExemption(student, connection)) {
-        return res.status(400).json({ message: 'RTE students are exempted from fees' });
-      }
-  
-      // Aggregate fee definitions
-      const feeDefinitions = await FeeModel.aggregate([
-        {
-          $match: {
-            school: new mongoose.Types.ObjectId(schoolId),
-            month: parseInt(month),
-            year: parseInt(year),
-            student: null,
-            type: { $in: feeTypes },
-            classes: { $elemMatch: { $eq: new mongoose.Types.ObjectId(student.studentDetails.class._id) } },
-          },
-        },
-        {
-          $group: {
-            _id: {
-              type: '$type',
-              distanceSlab: '$transportationDetails.distanceSlab',
-            },
-            type: { $first: '$type' },
-            amount: { $first: '$amount' },
-            description: { $first: '$description' },
-            dueDate: { $first: '$dueDate' },
-            transportationDetails: { $first: '$transportationDetails' },
-          },
-        },
-        {
-          $project: {
-            _id: 0,
-            type: 1,
-            amount: 1,
-            description: 1,
-            dueDate: 1,
-            transportationDetails: 1,
-          },
-        },
-      ]);
-  
-      // Validate requested fee types
-      const requestedFeeTypes = new Set(feeTypes);
-      const availableFeeTypes = new Set(feeDefinitions.map(fee => fee.type));
-      const invalidFeeTypes = [...requestedFeeTypes].filter(type => !availableFeeTypes.has(type));
-      if (invalidFeeTypes.length > 0) {
-        return res.status(404).json({ message: `Invalid or undefined fee types: ${invalidFeeTypes.join(', ')}` });
-      }
-  
-      // Filter valid fee definitions
-      const validFeeDefinitions = feeDefinitions.filter(
-        fee =>
-          fee.type !== 'transportation' ||
-          (student.studentDetails.transportDetails?.isApplicable &&
-            fee.transportationDetails?.distanceSlab === student.studentDetails.transportDetails.distanceSlab)
-      );
-      if (validFeeDefinitions.length === 0) {
-        return res.status(400).json({ message: 'No valid fee types found for payment' });
-      }
-  
-      // Fetch existing student fees
-      const studentFees = await FeeModel.find({
-        student: studentId,
-        school: schoolId,
-        month: parseInt(month),
-        year: parseInt(year),
-        type: { $in: feeTypes },
-      });
-  
-      // Check existing payments
-      const existingPayments = await PaymentModel.find({
-        student: studentId,
-        school: schoolId,
-        'feesPaid.month': parseInt(month),
-        'feesPaid.year': parseInt(year),
-        'feesPaid.type': { $in: feeTypes },
-        status: 'completed',
-      });
-  
-      const paidTypes = new Set(
-        existingPayments.flatMap(p =>
-          p.feesPaid.map(f =>
-            f.type === 'transportation' && f.transportationSlab
-              ? `${f.type}_${f.transportationSlab}`
-              : f.type
-          )
-        )
-      );
-  
-      // Filter fees to pay
-      const feesToPay = validFeeDefinitions.filter(fee => {
-        const feeKey =
-          fee.type === 'transportation' && fee.transportationDetails?.distanceSlab
-            ? `${fee.type}_${fee.transportationDetails.distanceSlab}`
-            : fee.type;
-        return !paidTypes.has(feeKey);
-      });
-      if (feesToPay.length === 0) {
-        return res.status(400).json({ message: 'All selected fees are already paid' });
-      }
-  
-      // Map amounts by type
-      const amountMap = amounts
-        ? feeTypes.reduce((map, type, index) => {
-            map[type] = amounts[index];
-            return map;
-          }, {})
-        : {};
-  
-      // Validate payment amounts
-      const paymentDetails = feesToPay.map(fee => {
-        const studentFee = studentFees.find(f => f.type === fee.type);
-        const amountToPay = amountMap[fee.type] || fee.amount;
-        if (amountToPay <= 0 || amountToPay > (studentFee?.remainingAmount || fee.amount)) {
-          throw new Error(`Invalid payment amount for ${fee.type}: ${amountToPay}`);
-        }
-        return {
-          fee,
-          studentFee,
-          amountToPay,
-        };
-      });
-  
-      // Calculate total amount
-      const totalAmountInINR = paymentDetails.reduce((sum, { amountToPay }) => sum + amountToPay, 0);
-      const totalAmountInPaise = totalAmountInINR * 100;
-  
-      // Create Razorpay order
-      const options = {
-        amount: totalAmountInPaise,
-        currency: 'INR',
-        receipt: `fee_${studentId.slice(-8)}_${month}${year}_${Date.now().toString().slice(-10)}`,
-      };
-      const order = await razorpay.orders.create(options);
-      const receiptNumber = `FS-${studentId}-${Date.now()}`;
-  
-      // Update or create fee documents
-      const updatedFees = await Promise.all(
-        paymentDetails.map(async ({ fee, studentFee, amountToPay }) => {
-          const paymentDetail = {
-            transactionId: `PENDING-${order.id}`,
-            paymentDate: new Date(),
-            paymentMethod,
-            receiptNumber,
-            amount: amountToPay,
-          };
-          if (fee.type === 'transportation' && fee.transportationDetails?.distanceSlab) {
-            paymentDetail.transportationSlab = fee.transportationDetails.distanceSlab;
+
+      const paymentMethods = school.paymentConfig
+        .filter(config => config.isActive)
+        .map(config => ({
+          paymentType: config.paymentType,
+          details: {
+            bankName: config.details.bankName,
+            accountNumber: config.details.accountNumber,
+            ifscCode: config.details.ifscCode,
+            accountHolderName: config.details.accountHolderName,
+            upiId: config.details.upiId,
+            // Avoid exposing sensitive keys
+            razorpayKeyId: config.paymentType === 'razorpay' ? decrypt(config.details.razorpayKeyId) : undefined,
+            stripePublishableKey: config.paymentType === 'stripe' ? decrypt(config.details.stripePublishableKey) : undefined,
+            paytmMid: config.paymentType === 'paytm' ? decrypt(config.details.paytmMid) : undefined
           }
-  
-          if (!studentFee) {
-            const newFee = new FeeModel({
-              school: schoolId,
-              student: studentId,
-              grNumber: student.studentDetails.grNumber,
-              classes: [student.studentDetails.class._id],
-              type: fee.type,
-              amount: fee.amount,
-              paidAmount: 0,
-              remainingAmount: fee.amount,
-              dueDate: fee.dueDate,
-              month: parseInt(month),
-              year: parseInt(year),
-              description: fee.description,
-              status: 'pending',
-              isRTE: student.studentDetails.isRTE || false,
-              transportationDetails: fee.transportationDetails || null,
-              paymentDetails: [paymentDetail],
-            });
-            await newFee.save();
-            return newFee;
-          } else {
-            studentFee.paymentDetails.push(paymentDetail);
-            await studentFee.save();
-            return studentFee;
-          }
-        })
-      );
-  
-      // Create payment record
-      const payment = new PaymentModel({
-        school: schoolId,
-        student: studentId,
-        grNumber: student.studentDetails.grNumber,
-        amount: totalAmountInINR,
-        paymentMethod,
-        status: 'pending',
-        orderId: order.id,
-        receiptNumber,
-        feesPaid: updatedFees.map(fee => ({
-          feeId: fee._id,
-          type: fee.type,
-          month: parseInt(month),
-          year: parseInt(year),
-          amount: fee.paymentDetails[fee.paymentDetails.length - 1].amount,
-          ...(fee.type === 'transportation' &&
-            fee.transportationDetails?.distanceSlab && {
-              transportationSlab: fee.transportationDetails.distanceSlab,
-            }),
-        })),
-      });
-  
-      await payment.save();
-  
-      
-  
-      // Send confirmation
-      await sendPaymentConfirmation(student, payment, null);
-  
-      res.json({
-        orderId: order.id,
-        amountInPaise: totalAmountInPaise,
-        amountInINR: totalAmountInINR,
-        currency: 'INR',
-        key: process.env.RAZORPAY_KEY_ID,
-        payment,
-        message: 'Payment initiated. Proceed with Razorpay checkout.',
-      });
+        }));
+
+      res.json({ paymentMethods });
     } catch (error) {
-      logger.error(`Error initiating payment: ${error.message}`, { error });
-      res.status(error.status || 500).json({ error: error.message });
+      logger.error(`Error fetching payment methods: ${error.message}`, { error });
+      res.status(500).json({ error: error.message });
     }
   },
-  
 
-  
-
-  // getFeeReceipts: async (req, res) => {
+  // payFeesByType: async (req, res) => {
   //   try {
   //     const { studentId } = req.params;
+  //     const { feeTypes, month, year, paymentMethod, amounts } = req.body;
   //     const schoolId = req.school._id.toString();
   //     const connection = req.connection;
-  //     const PaymentModel = Payment(connection);
   //     const FeeModel = Fee(connection);
-  
-  //     // Ensure student is authorized
-  //     if (studentId !== req.user._id.toString()) {
+  //     const PaymentModel = Payment(connection);
+  //     const UserModel = User(connection);
+  //     const ClassModel = require("../models/Class")(connection);
+
+  //     // Validate inputs
+  //     if (!mongoose.Types.ObjectId.isValid(studentId)) {
+  //       return res.status(400).json({ message: "Invalid student ID" });
+  //     }
+  //     if (!feeTypes || !Array.isArray(feeTypes) || feeTypes.length === 0) {
+  //       return res.status(400).json({ message: "Fee types are required" });
+  //     }
+  //     if (!month || !year || isNaN(parseInt(month)) || isNaN(parseInt(year))) {
+  //       return res
+  //         .status(400)
+  //         .json({ message: "Month and year must be valid numbers" });
+  //     }
+  //     if (parseInt(month) < 1 || parseInt(month) > 12) {
+  //       return res
+  //         .status(400)
+  //         .json({ message: "Month must be between 1 and 12" });
+  //     }
+  //     if (!paymentMethod || paymentMethod === "cash") {
   //       return res.status(403).json({
-  //         message: 'Unauthorized: You can only view your own receipts',
+  //         message:
+  //           "Students can only pay via online methods. Contact the fee manager for cash payments.",
   //       });
   //     }
-  
-  //     // Fetch completed payments
-  //     const payments = await PaymentModel.aggregate([
+
+  //     // Validate student
+  //     const student = await UserModel.findById(studentId)
+  //       .select(
+  //         "name email studentDetails.grNumber studentDetails.class studentDetails.transportDetails studentDetails.isRTE studentDetails.parentDetails"
+  //       )
+  //       .populate("studentDetails.class", "name division");
+  //     if (!student) {
+  //       return res.status(404).json({ message: "Student not found" });
+  //     }
+  //     if (!student.studentDetails.class) {
+  //       return res
+  //         .status(400)
+  //         .json({ message: "Student is not assigned to a class" });
+  //     }
+  //     if (await checkRTEExemption(student, connection)) {
+  //       return res
+  //         .status(400)
+  //         .json({ message: "RTE students are exempted from fees" });
+  //     }
+
+  //     // Aggregate fee definitions
+  //     const feeDefinitions = await FeeModel.aggregate([
   //       {
   //         $match: {
-  //           student: new mongoose.Types.ObjectId(studentId),
   //           school: new mongoose.Types.ObjectId(schoolId),
-  //           status: 'completed',
-  //         },
-  //       },
-  //       {
-  //         $lookup: {
-  //           from: 'users',
-  //           localField: 'student',
-  //           foreignField: '_id',
-  //           as: 'student',
-  //         },
-  //       },
-  //       { $unwind: '$student' },
-  //       {
-  //         $lookup: {
-  //           from: 'fees',
-  //           let: {
-  //             feeIds: '$feesPaid.feeId',
-  //           },
-  //           pipeline: [
-  //             {
-  //               $match: {
-  //                 $expr: {
-  //                   $in: ['$_id', '$$feeIds'],
-  //                 },
-  //               },
+  //           month: parseInt(month),
+  //           year: parseInt(year),
+  //           student: null,
+  //           type: { $in: feeTypes },
+  //           classes: {
+  //             $elemMatch: {
+  //               $eq: new mongoose.Types.ObjectId(
+  //                 student.studentDetails.class._id
+  //               ),
   //             },
-  //           ],
-  //           as: 'fees',
+  //           },
   //         },
   //       },
-  //       { $sort: { paymentDate: -1 } },
-  //     ]);
-  
-  //     // Debugging: Log the payments to inspect the fees array
-  //     console.log('Payments with fees:', JSON.stringify(payments, null, 2));
-  
-  //     const receipts = await Promise.all(
-  //       payments.map(async payment => {
-  //         let receiptUrl = payment.receiptUrl;
-  //         let receiptError = null;
-  //         if (!receiptUrl) {
-  //           let attempts = 3;
-  //           while (attempts > 0) {
-  //             try {
-  //               const feeSlip = await generateFeeSlip(
-  //                 payment.student,
-  //                 payment,
-  //                 payment.fees,
-  //                 schoolId,
-  //                 `${payment.feesPaid[0].month}-${payment.feesPaid[0].year}`
-  //               );
-  //               receiptUrl = feeSlip.pdfUrl;
-  //               await PaymentModel.updateOne(
-  //                 { _id: payment._id },
-  //                 {
-  //                   $set: {
-  //                     receiptUrl,
-  //                     [`receiptUrls.${payment.feesPaid[0].month}-${payment.feesPaid[0].year}`]: receiptUrl,
-  //                   },
-  //                 },
-  //                 { session: null }
-  //               );
-  //               break;
-  //             } catch (uploadError) {
-  //               logger.warn(
-  //                 `Failed to generate fee slip for payment ${payment._id}, attempt ${4 - attempts}: ${uploadError.message}`
-  //               );
-  //               attempts--;
-  //               if (attempts === 0) {
-  //                 receiptError = 'Failed to generate receipt URL';
-  //                 receiptUrl = null;
-  //               }
-  //             }
-  //           }
-  //         }
-  
-  //         return {
-  //           paymentId: payment._id,
-  //           receiptNumber: payment.receiptNumber,
-  //           amount: payment.amount,
-  //           paymentDate: payment.paymentDate,
-  //           paymentMethod: payment.paymentMethod,
-  //           receiptUrl,
-  //           receiptError,
-  //           receiptUrls: payment.receiptUrls || {},
-  //           student: {
-  //             name: payment.student.name,
-  //             grNumber: payment.student.studentDetails.grNumber,
+  //       {
+  //         $group: {
+  //           _id: {
+  //             type: "$type",
+  //             distanceSlab: "$transportationDetails.distanceSlab",
   //           },
-  //           fees: payment.fees.map(fee => ({
+  //           type: { $first: "$type" },
+  //           amount: { $first: "$amount" },
+  //           description: { $first: "$description" },
+  //           dueDate: { $first: "$dueDate" },
+  //           transportationDetails: { $first: "$transportationDetails" },
+  //         },
+  //       },
+  //       {
+  //         $project: {
+  //           _id: 0,
+  //           type: 1,
+  //           amount: 1,
+  //           description: 1,
+  //           dueDate: 1,
+  //           transportationDetails: 1,
+  //         },
+  //       },
+  //     ]);
+
+  //     // Validate requested fee types
+  //     const requestedFeeTypes = new Set(feeTypes);
+  //     const availableFeeTypes = new Set(feeDefinitions.map((fee) => fee.type));
+  //     const invalidFeeTypes = [...requestedFeeTypes].filter(
+  //       (type) => !availableFeeTypes.has(type)
+  //     );
+  //     if (invalidFeeTypes.length > 0) {
+  //       return res
+  //         .status(404)
+  //         .json({
+  //           message: `Invalid or undefined fee types: ${invalidFeeTypes.join(
+  //             ", "
+  //           )}`,
+  //         });
+  //     }
+
+  //     // Filter valid fee definitions
+  //     const validFeeDefinitions = feeDefinitions.filter(
+  //       (fee) =>
+  //         fee.type !== "transportation" ||
+  //         (student.studentDetails.transportDetails?.isApplicable &&
+  //           fee.transportationDetails?.distanceSlab ===
+  //             student.studentDetails.transportDetails.distanceSlab)
+  //     );
+  //     if (validFeeDefinitions.length === 0) {
+  //       return res
+  //         .status(400)
+  //         .json({ message: "No valid fee types found for payment" });
+  //     }
+
+  //     // Fetch existing student fees
+  //     const studentFees = await FeeModel.find({
+  //       student: studentId,
+  //       school: schoolId,
+  //       month: parseInt(month),
+  //       year: parseInt(year),
+  //       type: { $in: feeTypes },
+  //     });
+
+  //     // Check existing payments
+  //     const existingPayments = await PaymentModel.find({
+  //       student: studentId,
+  //       school: schoolId,
+  //       "feesPaid.month": parseInt(month),
+  //       "feesPaid.year": parseInt(year),
+  //       "feesPaid.type": { $in: feeTypes },
+  //       status: "completed",
+  //     });
+
+  //     const paidTypes = new Set(
+  //       existingPayments.flatMap((p) =>
+  //         p.feesPaid.map((f) =>
+  //           f.type === "transportation" && f.transportationSlab
+  //             ? `${f.type}_${f.transportationSlab}`
+  //             : f.type
+  //         )
+  //       )
+  //     );
+
+  //     // Filter fees to pay
+  //     const feesToPay = validFeeDefinitions.filter((fee) => {
+  //       const feeKey =
+  //         fee.type === "transportation" &&
+  //         fee.transportationDetails?.distanceSlab
+  //           ? `${fee.type}_${fee.transportationDetails.distanceSlab}`
+  //           : fee.type;
+  //       return !paidTypes.has(feeKey);
+  //     });
+  //     if (feesToPay.length === 0) {
+  //       return res
+  //         .status(400)
+  //         .json({ message: "All selected fees are already paid" });
+  //     }
+
+  //     // Map amounts by type
+  //     const amountMap = amounts
+  //       ? feeTypes.reduce((map, type, index) => {
+  //           map[type] = amounts[index];
+  //           return map;
+  //         }, {})
+  //       : {};
+
+  //     // Validate payment amounts
+  //     const paymentDetails = feesToPay.map((fee) => {
+  //       const studentFee = studentFees.find((f) => f.type === fee.type);
+  //       const amountToPay = amountMap[fee.type] || fee.amount;
+  //       if (
+  //         amountToPay <= 0 ||
+  //         amountToPay > (studentFee?.remainingAmount || fee.amount)
+  //       ) {
+  //         throw new Error(
+  //           `Invalid payment amount for ${fee.type}: ${amountToPay}`
+  //         );
+  //       }
+  //       return {
+  //         fee,
+  //         studentFee,
+  //         amountToPay,
+  //       };
+  //     });
+
+  //     // Calculate total amount
+  //     const totalAmountInINR = paymentDetails.reduce(
+  //       (sum, { amountToPay }) => sum + amountToPay,
+  //       0
+  //     );
+  //     const totalAmountInPaise = totalAmountInINR * 100;
+
+  //     // Create Razorpay order
+  //     const options = {
+  //       amount: totalAmountInPaise,
+  //       currency: "INR",
+  //       receipt: `fee_${studentId.slice(-8)}_${month}${year}_${Date.now()
+  //         .toString()
+  //         .slice(-10)}`,
+  //     };
+  //     const order = await razorpay.orders.create(options);
+  //     const receiptNumber = `FS-${studentId}-${Date.now()}`;
+
+  //     // Update or create fee documents
+  //     const updatedFees = await Promise.all(
+  //       paymentDetails.map(async ({ fee, studentFee, amountToPay }) => {
+  //         const paymentDetail = {
+  //           transactionId: `PENDING-${order.id}`,
+  //           paymentDate: new Date(),
+  //           paymentMethod,
+  //           receiptNumber,
+  //           amount: amountToPay,
+  //         };
+  //         if (
+  //           fee.type === "transportation" &&
+  //           fee.transportationDetails?.distanceSlab
+  //         ) {
+  //           paymentDetail.transportationSlab =
+  //             fee.transportationDetails.distanceSlab;
+  //         }
+
+  //         if (!studentFee) {
+  //           const newFee = new FeeModel({
+  //             school: schoolId,
+  //             student: studentId,
+  //             grNumber: student.studentDetails.grNumber,
+  //             classes: [student.studentDetails.class._id],
   //             type: fee.type,
   //             amount: fee.amount,
-  //             paidAmount: fee.paidAmount,
-  //             remainingAmount: fee.remainingAmount,
-  //             month: fee.month,
-  //             year: fee.year,
+  //             paidAmount: 0,
+  //             remainingAmount: fee.amount,
   //             dueDate: fee.dueDate,
-  //             status: fee.status,
-  //             ...(fee.transportationDetails?.distanceSlab && {
-  //               transportationSlab: fee.transportationDetails.distanceSlab,
-  //             }),
-  //           })),
-  //         };
+  //             month: parseInt(month),
+  //             year: parseInt(year),
+  //             description: fee.description,
+  //             status: "pending",
+  //             isRTE: student.studentDetails.isRTE || false,
+  //             transportationDetails: fee.transportationDetails || null,
+  //             paymentDetails: [paymentDetail],
+  //           });
+  //           await newFee.save();
+  //           return newFee;
+  //         } else {
+  //           studentFee.paymentDetails.push(paymentDetail);
+  //           await studentFee.save();
+  //           return studentFee;
+  //         }
   //       })
   //     );
-  
-     
-  
-  //     logger.info(`Fee receipts fetched for student ${studentId}`);
-  //     res.json(receipts);
+
+  //     // Create payment record
+  //     const payment = new PaymentModel({
+  //       school: schoolId,
+  //       student: studentId,
+  //       grNumber: student.studentDetails.grNumber,
+  //       amount: totalAmountInINR,
+  //       paymentMethod,
+  //       status: "pending",
+  //       orderId: order.id,
+  //       receiptNumber,
+  //       feesPaid: updatedFees.map((fee) => ({
+  //         feeId: fee._id,
+  //         type: fee.type,
+  //         month: parseInt(month),
+  //         year: parseInt(year),
+  //         amount: fee.paymentDetails[fee.paymentDetails.length - 1].amount,
+  //         ...(fee.type === "transportation" &&
+  //           fee.transportationDetails?.distanceSlab && {
+  //             transportationSlab: fee.transportationDetails.distanceSlab,
+  //           }),
+  //       })),
+  //     });
+
+  //     await payment.save();
+
+  //     // Send confirmation
+  //     await sendPaymentConfirmation(student, payment, null);
+
+  //     res.json({
+  //       orderId: order.id,
+  //       amountInPaise: totalAmountInPaise,
+  //       amountInINR: totalAmountInINR,
+  //       currency: "INR",
+  //       key: process.env.RAZORPAY_KEY_ID,
+  //       payment,
+  //       message: "Payment initiated. Proceed with Razorpay checkout.",
+  //     });
   //   } catch (error) {
-  //     logger.error(`Error fetching fee receipts: ${error.message}`, { error });
-  //     res.status(500).json({ error: error.message });
+  //     logger.error(`Error initiating payment: ${error.message}`, { error });
+  //     res.status(error.status || 500).json({ error: error.message });
   //   }
   // },
 
+payFeesByType : async (req, res) => {
+  try {
+    const { studentId } = req.params;
+    const { feeTypes, month, year, amounts, selectedPaymentType } = req.body;
+    const schoolId = req.school._id.toString();
+    const connection = req.connection;
+    const FeeModel = Fee(connection);
+    const PaymentModel = Payment(connection);
+    const UserModel = User(connection);
+    const ClassModel = require('../models/Class')(connection);
+
+    logger.info('Starting payFeesByType', { studentId, selectedPaymentType, feeTypes });
+
+    // Validate inputs
+    if (!mongoose.Types.ObjectId.isValid(studentId)) {
+      return res.status(400).json({ message: 'Invalid student ID' });
+    }
+    if (!feeTypes || !Array.isArray(feeTypes) || feeTypes.length === 0) {
+      return res.status(400).json({ message: 'Fee types are required' });
+    }
+    if (!month || !year || isNaN(parseInt(month)) || isNaN(parseInt(year))) {
+      return res.status(400).json({ message: 'Month and year must be valid numbers' });
+    }
+    if (parseInt(month) < 1 || parseInt(month) > 12) {
+      return res.status(400).json({ message: 'Month must be between 1 and 12' });
+    }
+    if (!selectedPaymentType) {
+      return res.status(400).json({ message: 'Selected payment type is required' });
+    }
+
+    // Validate student
+    const student = await UserModel.findById(studentId)
+      .select(
+        'name email studentDetails.grNumber studentDetails.class studentDetails.transportDetails studentDetails.isRTE studentDetails.parentDetails'
+      )
+      .populate('studentDetails.class', 'name division');
+    if (!student) {
+      return res.status(404).json({ message: 'Student not found' });
+    }
+    if (!student.studentDetails.class) {
+      return res.status(400).json({ message: 'Student is not assigned to a class' });
+    }
+    if (await checkRTEExemption(student, connection)) {
+      return res.status(400).json({ message: 'RTE students are exempted from fees' });
+    }
+
+    // Fetch school payment configuration
+    const ownerConnection = await getOwnerConnection();
+    const School = require('../models/School')(ownerConnection);
+    const school = await School.findById(schoolId)
+    .select('+paymentConfig.details.razorpayKeySecret +paymentConfig.details.paytmMerchantKey +paymentConfig.details.stripeSecretKey')
+    .lean();
+    if (!school) {
+      return res.status(404).json({ message: 'School not found' });
+    }
+
+    // Add detailed logging for payment configuration
+    logger.info('School payment config', { 
+      paymentConfig: school.paymentConfig.map(pc => ({
+        paymentType: pc.paymentType,
+        isActive: pc.isActive,
+        hasDetails: pc.details ? true : false,
+        detailsKeys: pc.details ? Object.keys(pc.details) : []
+      }))
+    });
+
+    const paymentConfig = school.paymentConfig.find(
+      (config) => config.paymentType === selectedPaymentType && config.isActive
+    );
+    
+    if (!paymentConfig) {
+      return res.status(400).json({
+        message: `Payment type ${selectedPaymentType} is not configured or active`,
+      });
+    }
+
+    // Log the found payment config structure (without sensitive data)
+    logger.info('Selected payment config', { 
+      paymentType: paymentConfig.paymentType,
+      isActive: paymentConfig.isActive,
+      hasDetails: paymentConfig.details ? true : false,
+      detailsKeys: paymentConfig.details ? Object.keys(paymentConfig.details) : []
+    });
+
+    // Aggregate fee definitions
+    const feeDefinitions = await FeeModel.aggregate([
+      {
+        $match: {
+          school: new mongoose.Types.ObjectId(schoolId),
+          month: parseInt(month),
+          year: parseInt(year),
+          student: null,
+          type: { $in: feeTypes },
+          classes: {
+            $elemMatch: {
+              $eq: new mongoose.Types.ObjectId(student.studentDetails.class._id),
+            },
+          },
+        },
+      },
+      {
+        $group: {
+          _id: {
+            type: '$type',
+            distanceSlab: '$transportationDetails.distanceSlab',
+          },
+          type: { $first: '$type' },
+          amount: { $first: '$amount' },
+          description: { $first: '$description' },
+          dueDate: { $first: '$dueDate' },
+          transportationDetails: { $first: '$transportationDetails' },
+        },
+      },
+      {
+        $project: {
+          _id: 0,
+          type: 1,
+          amount: 1,
+          description: 1,
+          dueDate: 1,
+          transportationDetails: 1,
+        },
+      },
+    ]);
+
+    // Validate requested fee types
+    const requestedFeeTypes = new Set(feeTypes);
+    const availableFeeTypes = new Set(feeDefinitions.map((fee) => fee.type));
+    const invalidFeeTypes = [...requestedFeeTypes].filter(
+      (type) => !availableFeeTypes.has(type)
+    );
+    if (invalidFeeTypes.length > 0) {
+      return res.status(404).json({
+        message: `Invalid or undefined fee types: ${invalidFeeTypes.join(', ')}`,
+      });
+    }
+
+    // Filter valid fee definitions
+    const validFeeDefinitions = feeDefinitions.filter(
+      (fee) =>
+        fee.type !== 'transportation' ||
+        (student.studentDetails.transportDetails?.isApplicable &&
+          fee.transportationDetails?.distanceSlab ===
+            student.studentDetails.transportDetails.distanceSlab)
+    );
+    if (validFeeDefinitions.length === 0) {
+      return res.status(400).json({ message: 'No valid fee types found for payment' });
+    }
+
+    // Fetch existing student fees
+    const studentFees = await FeeModel.find({
+      student: studentId,
+      school: schoolId,
+      month: parseInt(month),
+      year: parseInt(year),
+      type: { $in: feeTypes },
+    });
+
+    // Check existing payments
+    const existingPayments = await PaymentModel.find({
+      student: studentId,
+      school: schoolId,
+      'feesPaid.month': parseInt(month),
+      'feesPaid.year': parseInt(year),
+      'feesPaid.type': { $in: feeTypes },
+      status: 'completed',
+    });
+
+    const paidTypes = new Set(
+      existingPayments.flatMap((p) =>
+        p.feesPaid.map((f) =>
+          f.type === 'transportation' && f.transportationSlab
+            ? `${f.type}_${f.transportationSlab}`
+            : f.type
+        )
+      )
+    );
+
+    // Filter fees to pay
+    const feesToPay = validFeeDefinitions.filter((fee) => {
+      const feeKey =
+        fee.type === 'transportation' && fee.transportationDetails?.distanceSlab
+          ? `${fee.type}_${fee.transportationDetails.distanceSlab}`
+          : fee.type;
+      return !paidTypes.has(feeKey);
+    });
+    if (feesToPay.length === 0) {
+      return res.status(400).json({ message: 'All selected fees are already paid' });
+    }
+
+    // Map amounts by type
+    const amountMap = amounts
+      ? feeTypes.reduce((map, type, index) => {
+          map[type] = amounts[index];
+          return map;
+        }, {})
+      : {};
+
+    // Validate payment amounts
+    const paymentDetails = feesToPay.map((fee) => {
+      const studentFee = studentFees.find((f) => f.type === fee.type);
+      const amountToPay = amountMap[fee.type] || fee.amount;
+      if (
+        amountToPay <= 0 ||
+        amountToPay > (studentFee?.remainingAmount || fee.amount)
+      ) {
+        throw new Error(`Invalid payment amount for ${fee.type}: ${amountToPay}`);
+      }
+      return {
+        fee,
+        studentFee,
+        amountToPay,
+      };
+    });
+
+    // Calculate total amount
+    const totalAmountInINR = paymentDetails.reduce(
+      (sum, { amountToPay }) => sum + amountToPay,
+      0
+    );
+    const totalAmountInPaise = totalAmountInINR * 100;
+
+    // Initialize payment based on selected payment type
+    let order, paymentResponse;
+    const receiptNumber = `FS-${studentId}-${Date.now()}`;
+
+    logger.info('Initializing payment', { selectedPaymentType, totalAmountInINR });
+
+    // Safely attempt to decrypt credentials
+    const safeDecrypt = (encryptedText) => {
+      try {
+        if (!encryptedText || typeof encryptedText !== 'string') {
+          logger.error('Invalid encrypted text', { encryptedText: typeof encryptedText });
+          throw new Error('Invalid encrypted credentials');
+        }
+        return decrypt(encryptedText);
+      } catch (error) {
+        logger.error('Decryption error', { error: error.message });
+        throw new Error('Failed to decrypt payment credentials');
+      }
+    };
+
+   
+     if (selectedPaymentType === 'razorpay') {
+  try {
+    // Log configuration details WITHOUT exposing sensitive data
+    logger.info('Razorpay config details check', {
+      hasDetails: paymentConfig.details ? true : false,
+      hasKeyId: paymentConfig.details?.razorpayKeyId ? true : false,
+      hasKeySecret: paymentConfig.details?.razorpayKeySecret ? true : false,
+      keyIdType: typeof paymentConfig.details?.razorpayKeyId,
+      keySecretType: typeof paymentConfig.details?.razorpayKeySecret
+    });
+
+    // Validate that credentials exist and are strings before decryption
+    if (!paymentConfig.details || 
+        !paymentConfig.details.razorpayKeyId || 
+        !paymentConfig.details.razorpayKeySecret) {
+      throw new Error('Razorpay credentials are missing');
+    }
+    
+    const keyId = safeDecrypt(paymentConfig.details.razorpayKeyId);
+    const keySecret = safeDecrypt(paymentConfig.details.razorpayKeySecret);
+
+    logger.info('Razorpay credentials decrypted successfully');
+
+    const razorpay = new Razorpay({
+      key_id: keyId,
+      key_secret: keySecret,
+    });
+
+    const options = {
+      amount: totalAmountInPaise,
+      currency: 'INR',
+      receipt: `fee_${studentId.slice(-8)}_${month}${year}_${Date.now().toString().slice(-10)}`,
+    };
+    
+    logger.info('Attempting to create Razorpay order', { options: { ...options, amount: options.amount } });
+
+    order = await razorpay.orders.create(options);
+    
+    logger.info('Razorpay order created successfully', { orderId: order.id });
+    
+    paymentResponse = {
+      orderId: order.id,
+      amountInPaise: totalAmountInPaise,
+      amountInINR: totalAmountInINR,
+      currency: 'INR',
+      key: keyId,
+      message: 'Payment initiated. Proceed with Razorpay checkout.',
+    };
+  } catch (error) {
+    logger.error('Razorpay initialization error', { error: error.message, stack: error.stack });
+    return res.status(500).json({ 
+      error: 'Failed to initialize Razorpay payment', 
+      details: error.message 
+    });
+  }
+}
+     else if (selectedPaymentType === 'stripe') {
+      try {
+        // Log configuration details WITHOUT exposing sensitive data
+        logger.info('Stripe config details check', {
+          hasDetails: paymentConfig.details ? true : false,
+          hasSecretKey: paymentConfig.details?.stripeSecretKey ? true : false,
+          hasPublishableKey: paymentConfig.details?.stripePublishableKey ? true : false,
+          secretKeyType: typeof paymentConfig.details?.stripeSecretKey,
+          publishableKeyType: typeof paymentConfig.details?.stripePublishableKey
+        });
+
+        if (!paymentConfig.details || 
+            !paymentConfig.details.stripeSecretKey || 
+            !paymentConfig.details.stripePublishableKey) {
+          throw new Error('Stripe credentials are missing');
+        }
+
+        const stripeSecretKey = safeDecrypt(paymentConfig.details.stripeSecretKey);
+        const stripePublishableKey = safeDecrypt(paymentConfig.details.stripePublishableKey);
+
+        logger.info('Stripe credentials decrypted successfully');
+
+        const stripe = new Stripe(stripeSecretKey);
+        const paymentIntent = await stripe.paymentIntents.create({
+          amount: totalAmountInPaise,
+          currency: 'inr',
+          payment_method_types: ['card'],
+          metadata: {
+            studentId,
+            month,
+            year,
+            receipt: receiptNumber,
+          },
+        });
+        paymentResponse = {
+          clientSecret: paymentIntent.client_secret,
+          amountInINR: totalAmountInINR,
+          currency: 'INR',
+          key: stripePublishableKey,
+          message: 'Payment initiated. Proceed with Stripe checkout.',
+        };
+      } catch (error) {
+        logger.error('Stripe initialization error', { error: error.message, stack: error.stack });
+        return res.status(500).json({ 
+          error: 'Failed to initialize Stripe payment', 
+          details: error.message 
+        });
+      }
+    } else if (selectedPaymentType === 'bank_account') {
+      paymentResponse = {
+        bankDetails: {
+          bankName: paymentConfig.details.bankName,
+          accountNumber: paymentConfig.details.accountNumber,
+          ifscCode: paymentConfig.details.ifscCode,
+          accountHolderName: paymentConfig.details.accountHolderName,
+        },
+        amountInINR: totalAmountInINR,
+        receiptNumber,
+        message: 'Please transfer the amount to the provided bank account and upload proof of payment.',
+      };
+    } else if (selectedPaymentType === 'upi') {
+      paymentResponse = {
+        upiId: paymentConfig.details.upiId,
+        amountInINR: totalAmountInINR,
+        receiptNumber,
+        message: 'Please send the amount to the provided UPI ID and upload proof of payment.',
+      };
+   
+    }
+   // Complete PayTM implementation with exact specifications
+else if (selectedPaymentType === 'paytm') {
+  try {
+    // Log configuration details WITHOUT exposing sensitive data
+    logger.info('Paytm config details check', {
+      hasDetails: paymentConfig.details ? true : false,
+      hasMid: paymentConfig.details?.paytmMid ? true : false,
+      hasMerchantKey: paymentConfig.details?.paytmMerchantKey ? true : false
+    });
+
+    if (!paymentConfig.details || 
+        !paymentConfig.details.paytmMid || 
+        !paymentConfig.details.paytmMerchantKey) {
+      throw new Error('Paytm MID or Merchant Key is missing in payment configuration');
+    }
+
+    const mid = safeDecrypt(paymentConfig.details.paytmMid);
+    const merchantKey = safeDecrypt(paymentConfig.details.paytmMerchantKey);
+
+    logger.info('Paytm credentials decrypted successfully');
+
+    // ====== IMPORTANT: Ensure orderId is 100% unique and properly formatted ======
+    // Adding timestamp to ensure uniqueness - PayTM has strict requirements for order IDs
+    const timestamp = Date.now();
+    const sanitizedOrderId = `ORDER_${studentId.substring(0, 8)}_${timestamp}`;
+    
+    // Generate a unique transaction ID (required by PayTM)
+    const txnId = `TXN_${timestamp}`;
+
+    // ====== Properly format the request based on PayTM's exact specifications ======
+    const requestParams = {
+      MID: mid,
+      ORDER_ID: sanitizedOrderId,
+      CHANNEL_ID: 'WEB', // Standard channel for web-based transactions
+      INDUSTRY_TYPE_ID: 'Retail', // Use Retail for educational institutions
+      WEBSITE: 'DEFAULT',
+      TXN_AMOUNT: totalAmountInINR.toFixed(2),
+      CUST_ID: studentId,
+      CALLBACK_URL: `${process.env.SERVER_URL}/api/payment/paytm/callback`,
+      EMAIL: student.email || 'noemail@example.com', // PayTM often requires email
+      MOBILE_NO: student.studentDetails?.parentDetails?.phoneNumber || '0000000000' // PayTM often requires mobile
+    };
+    
+    logger.info('Paytm request params prepared', {
+      orderId: requestParams.ORDER_ID,
+      amount: requestParams.TXN_AMOUNT,
+      hasEmail: !!requestParams.EMAIL,
+      hasMobile: !!requestParams.MOBILE_NO
+    });
+
+    // ====== Use PayTM's official integration SDK approach ======
+    // Create a simple checksum without relying on the problematic library
+    const crypto = require('crypto');
+    
+    // 1. Sort keys in alphabetical order (required by PayTM)
+    const sortedKeys = Object.keys(requestParams).sort();
+    const sortedParams = {};
+    sortedKeys.forEach(key => {
+      sortedParams[key] = requestParams[key];
+    });
+    
+    // 2. Create parameter string in format key=value|key2=value2|...
+    const paramString = Object.keys(sortedParams)
+      .map(key => `${key}=${sortedParams[key]}`)
+      .join('&');
+    
+    logger.info('Generated param string for signature', { 
+      paramStringLength: paramString.length
+    });
+    
+    // 3. Generate checksum using SHA256 with merchant key
+    const checksum = crypto
+      .createHmac('sha256', merchantKey)
+      .update(paramString)
+      .digest('hex');
+      
+    logger.info('Generated checksum', {
+      checksumLength: checksum.length
+    });
+    
+    // 4. Add checksum to the params
+    requestParams.CHECKSUMHASH = checksum;
+
+    // ====== Add the PayTM transaction to our database ======
+    // This is important for tracking the transaction before redirect
+    const newFee = await FeeModel.findOneAndUpdate(
+      {
+        school: schoolId,
+        student: studentId,
+        month: parseInt(month),
+        year: parseInt(year),
+        type: feeTypes[0]  // Associate with the first fee type
+      },
+      {
+        $push: {
+          paymentDetails: {
+            transactionId: txnId,
+            paymentDate: new Date(),
+            paymentMethod: 'paytm',
+            receiptNumber: sanitizedOrderId,
+            amount: totalAmountInINR,
+            status: 'pending'
+          }
+        }
+      },
+      { new: true }
+    );
+
+    logger.info('Fee record updated with pending Paytm transaction', {
+      feeId: newFee?._id || 'Not found',
+      transactionId: txnId
+    });
+
+    // ====== Prepare the PayTM redirect form data ======
+    // For PayTM, we need to return data for a form POST
+    paymentResponse = {
+      formData: requestParams, // All params including checksum
+      merchantId: mid,
+      orderId: sanitizedOrderId,
+      txnId: txnId,
+      amountInINR: totalAmountInINR,
+      receiptNumber: sanitizedOrderId,
+      message: 'Paytm payment initiated. Form data prepared for redirect.',
+      // PayTM staging vs production URL
+      gatewayUrl: process.env.PAYTM_ENV === 'production'
+        ? 'https://securegw.paytm.in/theia/processTransaction'
+        : 'https://securegw-stage.paytm.in/theia/processTransaction',
+      environment: process.env.PAYTM_ENV || 'staging'
+    };
+    
+    logger.info('Paytm payment response prepared successfully');
+    
+  } catch (error) {
+    logger.error('Paytm API error', { 
+      error: error.message, 
+      stack: error.stack
+    });
+    return res.status(500).json({ 
+      error: 'Failed to initialize Paytm payment', 
+      details: error.message 
+    });
+  }
+}
+    else {
+      return res.status(400).json({ message: `Unsupported payment type: ${selectedPaymentType}` });
+    }
+
+    logger.info('Payment response prepared', { 
+      paymentMethod: selectedPaymentType,
+      hasResponse: paymentResponse ? true : false,
+      responseKeys: paymentResponse ? Object.keys(paymentResponse) : [] 
+    });
+
+    // Update or create fee documents
+    const updatedFees = await Promise.all(
+      paymentDetails.map(async ({ fee, studentFee, amountToPay }) => {
+        const paymentDetail = {
+          transactionId:
+            selectedPaymentType === 'razorpay'
+              ? `PENDING-${order?.id}`
+              : `PENDING-${receiptNumber}`,
+          paymentDate: new Date(),
+          paymentMethod: selectedPaymentType,
+          receiptNumber,
+          amount: amountToPay,
+        };
+        if (fee.type === 'transportation' && fee.transportationDetails?.distanceSlab) {
+          paymentDetail.transportationSlab = fee.transportationDetails.distanceSlab;
+        }
+
+        if (!studentFee) {
+          const newFee = new FeeModel({
+            school: schoolId,
+            student: studentId,
+            grNumber: student.studentDetails.grNumber,
+            classes: [student.studentDetails.class._id],
+            type: fee.type,
+            amount: fee.amount,
+            paidAmount: 0,
+            remainingAmount: fee.amount,
+            dueDate: fee.dueDate,
+            month: parseInt(month),
+            year: parseInt(year),
+            description: fee.description,
+            status: 'pending',
+            isRTE: student.studentDetails.isRTE || false,
+            transportationDetails: fee.transportationDetails || null,
+            paymentDetails: [paymentDetail],
+          });
+          await newFee.save();
+          return newFee;
+        } else {
+          studentFee.paymentDetails.push(paymentDetail);
+          await studentFee.save();
+          return studentFee;
+        }
+      })
+    );
+
+    // Create payment record
+    const payment = new PaymentModel({
+      school: schoolId,
+      student: studentId,
+      grNumber: student.studentDetails.grNumber,
+      amount: totalAmountInINR,
+      paymentMethod: selectedPaymentType,
+      status: 'pending',
+      orderId: order?.id || paymentResponse.clientSecret || receiptNumber,
+      receiptNumber,
+      feesPaid: updatedFees.map((fee) => ({
+        feeId: fee._id,
+        type: fee.type,
+        month: parseInt(month),
+        year: parseInt(year),
+        amount: fee.paymentDetails[fee.paymentDetails.length - 1].amount,
+        ...(fee.type === 'transportation' &&
+          fee.transportationDetails?.distanceSlab && {
+            transportationSlab: fee.transportationDetails.distanceSlab,
+          }),
+      })),
+    });
+
+    await payment.save();
+
+    logger.info('Payment record saved', { paymentId: payment._id });
+
+    // Send confirmation
+    await sendPaymentConfirmation(student, payment, null);
+
+    logger.info('Payment confirmation sent');
+
+    res.json({
+      payment,
+      ...paymentResponse,
+    });
+  } catch (error) {
+    logger.error(`Error initiating payment: ${error.message}`, { error: error.stack });
+    res.status(error.status || 500).json({ error: error.message });
+  }
+},
 
   getFeeReceipts: async (req, res) => {
     try {
@@ -580,61 +1157,61 @@ const studentController = {
       const PaymentModel = Payment(connection);
       const FeeModel = Fee(connection);
       const { getPublicFileUrl } = require("../config/s3Upload");
-  
+
       // Ensure student is authorized
       if (studentId !== req.user._id.toString()) {
         return res.status(403).json({
-          message: 'Unauthorized: You can only view your own receipts',
+          message: "Unauthorized: You can only view your own receipts",
         });
       }
-  
+
       // Fetch completed payments
       const payments = await PaymentModel.aggregate([
         {
           $match: {
             student: new mongoose.Types.ObjectId(studentId),
             school: new mongoose.Types.ObjectId(schoolId),
-            status: 'completed',
+            status: "completed",
           },
         },
         {
           $lookup: {
-            from: 'users',
-            localField: 'student',
-            foreignField: '_id',
-            as: 'student',
+            from: "users",
+            localField: "student",
+            foreignField: "_id",
+            as: "student",
           },
         },
-        { $unwind: '$student' },
+        { $unwind: "$student" },
         {
           $lookup: {
-            from: 'fees',
+            from: "fees",
             let: {
-              feeIds: '$feesPaid.feeId',
+              feeIds: "$feesPaid.feeId",
             },
             pipeline: [
               {
                 $match: {
                   $expr: {
-                    $in: ['$_id', '$$feeIds'],
+                    $in: ["$_id", "$$feeIds"],
                   },
                 },
               },
             ],
-            as: 'fees',
+            as: "fees",
           },
         },
         { $sort: { paymentDate: -1 } },
       ]);
-  
+
       // Debugging: Log the payments to inspect the fees array
-      console.log('Payments with fees:', JSON.stringify(payments, null, 2));
-  
+      console.log("Payments with fees:", JSON.stringify(payments, null, 2));
+
       const receipts = await Promise.all(
-        payments.map(async payment => {
+        payments.map(async (payment) => {
           let receiptUrl = payment.receiptUrl;
           let receiptError = null;
-          
+
           if (!receiptUrl) {
             let attempts = 3;
             while (attempts > 0) {
@@ -646,16 +1223,17 @@ const studentController = {
                   schoolId,
                   `${payment.feesPaid[0].month}-${payment.feesPaid[0].year}`
                 );
-                
+
                 // This will now be a permanent URL from our getPublicFileUrl function
                 receiptUrl = feeSlip.pdfUrl;
-                
+
                 await PaymentModel.updateOne(
                   { _id: payment._id },
                   {
                     $set: {
                       receiptUrl,
-                      [`receiptUrls.${payment.feesPaid[0].month}-${payment.feesPaid[0].year}`]: receiptUrl,
+                      [`receiptUrls.${payment.feesPaid[0].month}-${payment.feesPaid[0].year}`]:
+                        receiptUrl,
                     },
                   },
                   { session: null }
@@ -663,17 +1241,19 @@ const studentController = {
                 break;
               } catch (uploadError) {
                 logger.warn(
-                  `Failed to generate fee slip for payment ${payment._id}, attempt ${4 - attempts}: ${uploadError.message}`
+                  `Failed to generate fee slip for payment ${
+                    payment._id
+                  }, attempt ${4 - attempts}: ${uploadError.message}`
                 );
                 attempts--;
                 if (attempts === 0) {
-                  receiptError = 'Failed to generate receipt URL';
+                  receiptError = "Failed to generate receipt URL";
                   receiptUrl = null;
                 }
               }
             }
           }
-  
+
           return {
             paymentId: payment._id,
             receiptNumber: payment.receiptNumber,
@@ -687,7 +1267,7 @@ const studentController = {
               name: payment.student.name,
               grNumber: payment.student.studentDetails.grNumber,
             },
-            fees: payment.fees.map(fee => ({
+            fees: payment.fees.map((fee) => ({
               type: fee.type,
               amount: fee.amount,
               paidAmount: fee.paidAmount,
@@ -703,7 +1283,7 @@ const studentController = {
           };
         })
       );
-  
+
       logger.info(`Fee receipts fetched for student ${studentId}`);
       res.json(receipts);
     } catch (error) {
@@ -712,8 +1292,6 @@ const studentController = {
     }
   },
 
-  
-
   getStudentFeeStatus: async (req, res) => {
     try {
       const { studentId } = req.params;
@@ -721,28 +1299,30 @@ const studentController = {
       const connection = req.connection;
       const UserModel = User(connection);
       const FeeModel = Fee(connection);
-      const ClassModel= require('../models/Class')(connection)
-  
+      const ClassModel = require("../models/Class")(connection);
+
       // Ensure student is authorized
       if (studentId !== req.user._id.toString()) {
         return res.status(403).json({
-          message: 'Unauthorized: You can only view your own fee status',
+          message: "Unauthorized: You can only view your own fee status",
         });
       }
-  
+
       // Validate student
       const student = await UserModel.findById(studentId)
         .select(
-          '_id name studentDetails.isRTE studentDetails.transportDetails studentDetails.class studentDetails.grNumber'
+          "_id name studentDetails.isRTE studentDetails.transportDetails studentDetails.class studentDetails.grNumber"
         )
-        .populate('studentDetails.class', 'name division');
+        .populate("studentDetails.class", "name division");
       if (!student) {
-        return res.status(404).json({ message: 'Student not found' });
+        return res.status(404).json({ message: "Student not found" });
       }
       if (!student.studentDetails.class) {
-        return res.status(400).json({ message: 'Student is not assigned to a class' });
+        return res
+          .status(400)
+          .json({ message: "Student is not assigned to a class" });
       }
-  
+
       if (await checkRTEExemption(student, connection)) {
         return res.json({
           studentId: student._id,
@@ -760,25 +1340,26 @@ const studentController = {
           totalPending: 0,
         });
       }
-  
+
       // Fetch fees with transportation slab matching
       const fees = await FeeModel.find({
         student: studentId,
         school: schoolId,
-        status: { $in: ['pending', 'partially_paid', 'paid'] },
+        status: { $in: ["pending", "partially_paid", "paid"] },
         $or: [
-          { type: { $ne: 'transportation' } },
+          { type: { $ne: "transportation" } },
           {
-            type: 'transportation',
-            'transportationDetails.isApplicable': true,
-            'transportationDetails.distanceSlab': student.studentDetails.transportDetails?.distanceSlab,
+            type: "transportation",
+            "transportationDetails.isApplicable": true,
+            "transportationDetails.distanceSlab":
+              student.studentDetails.transportDetails?.distanceSlab,
           },
         ],
       })
-        .populate('classes', 'name division')
+        .populate("classes", "name division")
         .sort({ year: 1, month: 1 });
-  
-      const feeSummary = fees.map(fee => ({
+
+      const feeSummary = fees.map((fee) => ({
         id: fee._id,
         type: fee.type,
         month: fee.month,
@@ -793,11 +1374,12 @@ const studentController = {
           transportationSlab: fee.transportationDetails.distanceSlab,
         }),
       }));
-  
-      const totalPending = fees.reduce((sum, fee) => sum + fee.remainingAmount, 0);
-  
-      
-  
+
+      const totalPending = fees.reduce(
+        (sum, fee) => sum + fee.remainingAmount,
+        0
+      );
+
       logger.info(`Fee status fetched for student ${studentId}`);
       res.json({
         studentId: student._id,
@@ -815,7 +1397,9 @@ const studentController = {
         totalPending,
       });
     } catch (error) {
-      logger.error(`Error fetching student fee status: ${error.message}`, { error });
+      logger.error(`Error fetching student fee status: ${error.message}`, {
+        error,
+      });
       res.status(500).json({ error: error.message });
     }
   },
@@ -833,7 +1417,9 @@ const studentController = {
         return res.status(400).json({ message: "Invalid student ID" });
       }
       if (!month || !year || isNaN(parseInt(month)) || isNaN(parseInt(year))) {
-        return res.status(400).json({ message: "Month and year must be valid numbers" });
+        return res
+          .status(400)
+          .json({ message: "Month and year must be valid numbers" });
       }
 
       const startDate = new Date(year, month - 1, 1);
@@ -846,10 +1432,14 @@ const studentController = {
       }).sort({ date: 1 });
 
       const totalDays = attendance.length;
-      const presentDays = attendance.filter((a) => a.status === "present").length;
+      const presentDays = attendance.filter(
+        (a) => a.status === "present"
+      ).length;
       const percentage = totalDays > 0 ? (presentDays / totalDays) * 100 : 0;
 
-      logger.info(`Attendance fetched for student ${studentId} for ${month}/${year}`);
+      logger.info(
+        `Attendance fetched for student ${studentId} for ${month}/${year}`
+      );
       res.json({
         attendance,
         statistics: {
@@ -865,42 +1455,7 @@ const studentController = {
     }
   },
 
-  // getStudyMaterials: async (req, res) => {
-  //   try {
-  //     const { studentId } = req.params;
-  //     const schoolId = req.school._id.toString();
-  //     const connection = req.connection;
-  //     const User = require("../models/User")(connection);
-  //     const StudyMaterial = require("../models/StudyMaterial")(connection);
-
-  //     if (!mongoose.Types.ObjectId.isValid(studentId)) {
-  //       return res.status(400).json({ message: "Invalid student ID" });
-  //     }
-
-  //     const student = await User.findOne({ _id: studentId, school: schoolId }).select(
-  //       "studentDetails.class"
-  //     );
-  //     if (!student || !student.studentDetails || !student.studentDetails.class) {
-  //       return res.status(404).json({ message: "Student class not found" });
-  //     }
-
-  //     const materials = await StudyMaterial.find({
-  //       school: schoolId,
-  //       class: student.studentDetails.class,
-  //       isActive: true,
-  //     })
-  //       .populate("uploadedBy", "name", User)
-  //       .sort({ createdAt: -1 });
-
-  //     logger.info(`Study materials fetched for student ${studentId}`);
-  //     res.json(materials);
-  //   } catch (error) {
-  //     logger.error(`Error fetching study materials: ${error.message}`, { error });
-  //     res.status(500).json({ error: error.message });
-  //   }
-  // },
-
-
+  
   getStudyMaterials: async (req, res) => {
     try {
       const { studentId } = req.params;
@@ -908,18 +1463,23 @@ const studentController = {
       const connection = req.dbConnection;
       const UserModel = User(connection);
       const StudyMaterial = require("../models/StudyMaterial")(connection);
-      const ClassModel = require('../models/Class')(connection)
-      const SubjectModel= require('../models/Subject')(connection)
+      const ClassModel = require("../models/Class")(connection);
+      const SubjectModel = require("../models/Subject")(connection);
 
       if (!mongoose.Types.ObjectId.isValid(studentId)) {
         return res.status(400).json({ message: "Invalid student ID" });
       }
 
       // Fetch student and verify class assignment
-      const student = await UserModel.findOne({ _id: studentId, school: schoolId }).select(
-        "studentDetails.class"
-      );
-      if (!student || !student.studentDetails || !student.studentDetails.class) {
+      const student = await UserModel.findOne({
+        _id: studentId,
+        school: schoolId,
+      }).select("studentDetails.class");
+      if (
+        !student ||
+        !student.studentDetails ||
+        !student.studentDetails.class
+      ) {
         return res.status(404).json({ message: "Student class not found" });
       }
 
@@ -968,71 +1528,14 @@ const studentController = {
         materials: formattedMaterials,
       });
     } catch (error) {
-      logger.error(`Error fetching study materials: ${error.message}`, { error });
+      logger.error(`Error fetching study materials: ${error.message}`, {
+        error,
+      });
       res.status(500).json({ error: error.message });
     }
   },
 
-
-  // getAssignedHomework: async (req, res) => {
-  //   try {
-  //     const { studentId } = req.params;
-  //     const schoolId = req.school._id.toString();
-  //     const connection = req.connection;
-  //     const User = require("../models/User")(connection);
-  //     const Homework = require("../models/Homework")(connection);
-
-  //     if (!mongoose.Types.ObjectId.isValid(studentId)) {
-  //       return res.status(400).json({ message: "Invalid student ID" });
-  //     }
-
-  //     const student = await User.findOne({ _id: studentId, school: schoolId }).select(
-  //       "studentDetails.class"
-  //     );
-  //     if (!student || !student.studentDetails || !student.studentDetails.class) {
-  //       return res.status(404).json({ message: "Student class not found" });
-  //     }
-
-  //     const homework = await Homework.find({
-  //       school: schoolId,
-  //       class: student.studentDetails.class,
-  //     })
-  //       .populate("assignedBy", "name", User)
-  //       .sort({ dueDate: 1 });
-
-  //     const formattedHomework = homework.map((hw) => {
-  //       const studentSubmission = hw.submissions.find(
-  //         (sub) => sub.student.toString() === studentId
-  //       );
-  //       return {
-  //         id: hw._id,
-  //         title: hw.title,
-  //         description: hw.description,
-  //         subject: hw.subject,
-  //         assignedBy: hw.assignedBy ? hw.assignedBy.name : "Unknown",
-  //         assignedDate: hw.assignedDate,
-  //         dueDate: hw.dueDate,
-  //         attachments: hw.attachments,
-  //         submission: studentSubmission
-  //           ? {
-  //               status: studentSubmission.status,
-  //               submissionDate: studentSubmission.submissionDate,
-  //               files: studentSubmission.files,
-  //               grade: studentSubmission.grade,
-  //               feedback: studentSubmission.feedback,
-  //             }
-  //           : null,
-  //       };
-  //     });
-
-  //     logger.info(`Homework fetched for student ${studentId}`);
-  //     res.json(formattedHomework);
-  //   } catch (error) {
-  //     logger.error(`Error fetching homework: ${error.message}`, { error });
-  //     res.status(500).json({ error: error.message });
-  //   }
-  // },
-
+  
 
   getAssignedHomework: async (req, res) => {
     try {
@@ -1048,10 +1551,15 @@ const studentController = {
       }
 
       // Fetch student and verify class assignment
-      const student = await UserModel.findOne({ _id: studentId, school: schoolId }).select(
-        "studentDetails.class"
-      );
-      if (!student || !student.studentDetails || !student.studentDetails.class) {
+      const student = await UserModel.findOne({
+        _id: studentId,
+        school: schoolId,
+      }).select("studentDetails.class");
+      if (
+        !student ||
+        !student.studentDetails ||
+        !student.studentDetails.class
+      ) {
         return res.status(404).json({ message: "Student class not found" });
       }
 
@@ -1114,7 +1622,6 @@ const studentController = {
     }
   },
 
-
   getSyllabus: async (req, res) => {
     try {
       const { studentId } = req.params;
@@ -1123,17 +1630,22 @@ const studentController = {
       const UserModel = User(connection);
       const Syllabus = require("../models/Syllabus")(connection);
       const ClassModel = Class(connection);
-      const SubjectModel= require("../models/Subject")(connection)
+      const SubjectModel = require("../models/Subject")(connection);
 
       if (!mongoose.Types.ObjectId.isValid(studentId)) {
         return res.status(400).json({ message: "Invalid student ID" });
       }
 
       // Fetch student and verify class assignment
-      const student = await UserModel.findOne({ _id: studentId, school: schoolId }).select(
-        "studentDetails.class"
-      );
-      if (!student || !student.studentDetails || !student.studentDetails.class) {
+      const student = await UserModel.findOne({
+        _id: studentId,
+        school: schoolId,
+      }).select("studentDetails.class");
+      if (
+        !student ||
+        !student.studentDetails ||
+        !student.studentDetails.class
+      ) {
         return res.status(404).json({ message: "Student class not found" });
       }
 
@@ -1198,14 +1710,21 @@ const studentController = {
         return res.status(400).json({ message: "Invalid homework ID" });
       }
 
-      const homework = await Homework.findOne({ _id: homeworkId, school: schoolId });
+      const homework = await Homework.findOne({
+        _id: homeworkId,
+        school: schoolId,
+      });
       if (!homework) {
         return res.status(404).json({ message: "Homework not found" });
       }
 
       const student = await User.findById(studentId);
-      if (student.studentDetails.class.toString() !== homework.class.toString()) {
-        return res.status(403).json({ message: "This homework is not assigned to your class" });
+      if (
+        student.studentDetails.class.toString() !== homework.class.toString()
+      ) {
+        return res
+          .status(403)
+          .json({ message: "This homework is not assigned to your class" });
       }
 
       const existingSubmission = homework.submissions.find(
@@ -1255,9 +1774,10 @@ const studentController = {
         return res.status(400).json({ message: "Invalid student ID" });
       }
 
-      const student = await User.findOne({ _id: studentId, school: schoolId }).select(
-        "studentDetails.class"
-      );
+      const student = await User.findOne({
+        _id: studentId,
+        school: schoolId,
+      }).select("studentDetails.class");
       if (!student || !student.studentDetails.class) {
         return res.status(404).json({ message: "Student class not found" });
       }
@@ -1310,6 +1830,7 @@ const studentController = {
       const User = require("../models/User")(connection);
       const Exam = require("../models/Exam")(connection);
       const Subject = require("../models/Subject")(connection);
+      const Result = require("../models/Results")(connection);
 
       if (!mongoose.Types.ObjectId.isValid(studentId)) {
         return res.status(400).json({ message: "Invalid student ID" });
@@ -1320,75 +1841,290 @@ const studentController = {
           return res.status(400).json({ message: "Invalid exam ID" });
         }
 
-        const exam = await Exam.findOne({ _id: examId, school: schoolId })
-          .select("name class subject totalMarks results")
-          .populate("subject", "name", Subject);
+        const result = await Result.findOne({
+          student: studentId,
+          exam: examId,
+          school: schoolId,
+          status: "published",
+        })
+          .populate("exam", "examType customExamType totalMarks")
+          .populate("subject", "name");
 
-        if (!exam) {
-          return res.status(404).json({ message: "Exam not found" });
+        if (!result) {
+          return res
+            .status(404)
+            .json({ message: "Result not found or not published" });
         }
 
-        const studentResult = exam.results.find(
-          (r) => r.student.toString() === studentId
+        const percentage = (result.marksObtained / result.totalMarks) * 100;
+        const grade = studentController.calculateGrade(percentage);
+
+        logger.info(
+          `Exam result fetched for student ${studentId}, exam ${examId}`
         );
-        if (!studentResult) {
-          return res.status(404).json({ message: "Results not found for this student" });
-        }
-
-        const percentage = (studentResult.marks / exam.totalMarks) * 100;
-        const grade = calculateGrade(percentage);
-
-        logger.info(`Exam result fetched for student ${studentId}, exam ${examId}`);
         res.json({
-          exam: exam.name,
-          subject: exam.subject.name,
-          marks: studentResult.marks,
-          totalMarks: exam.totalMarks,
+          examId: result.exam._id,
+          exam:
+            result.exam.examType === "Other"
+              ? result.exam.customExamType
+              : result.exam.examType,
+          subject: result.subject.name,
+          marks: result.marksObtained,
+          totalMarks: result.totalMarks,
           percentage: percentage.toFixed(2),
           grade,
-          remarks: studentResult.remarks,
+          remarks: result.remarks,
+          marksheet: result.marksheet
+            ? {
+                url: result.marksheet.url,
+                key: result.marksheet.key,
+              }
+            : null,
         });
       } else {
-        const student = await User.findOne({ _id: studentId, school: schoolId }).select(
-          "studentDetails.class"
-        );
+        const student = await User.findOne({
+          _id: studentId,
+          school: schoolId,
+        }).select("studentDetails.class");
         if (!student || !student.studentDetails.class) {
           return res.status(404).json({ message: "Student class not found" });
         }
 
-        const allExams = await Exam.find({
+        const results = await Result.find({
+          student: studentId,
           school: schoolId,
           class: student.studentDetails.class,
+          status: "published",
         })
-          .select("name subject totalMarks results date")
-          .populate("subject", "name", Subject)
-          .sort({ date: -1 });
+          .populate("exam", "examType customExamType totalMarks date")
+          .populate("subject", "name")
+          .sort({ "exam.date": -1 });
 
-        const results = allExams
-          .map((exam) => {
-            const result = exam.results.find((r) => r.student.toString() === studentId);
-            if (!result) return null;
-            const percentage = (result.marks / exam.totalMarks) * 100;
-            const grade = calculateGrade(percentage);
-            return {
-              examId: exam._id,
-              exam: exam.name,
-              subject: exam.subject.name,
-              date: exam.date,
-              marks: result.marks,
-              totalMarks: exam.totalMarks,
-              percentage: percentage.toFixed(2),
-              grade,
-              remarks: result.remarks,
-            };
-          })
-          .filter(Boolean);
+        const formattedResults = results.map((result) => {
+          const percentage = (result.marksObtained / result.totalMarks) * 100;
+          const grade = studentController.calculateGrade(percentage);
+          return {
+            examId: result.exam._id,
+            exam:
+              result.exam.examType === "Other"
+                ? result.exam.customExamType
+                : result.exam.examType,
+            subject: result.subject.name,
+            date: result.exam.date,
+            marks: result.marksObtained,
+            totalMarks: result.totalMarks,
+            percentage: percentage.toFixed(2),
+            grade,
+            remarks: result.remarks,
+            marksheet: result.marksheet
+              ? {
+                  url: result.marksheet.url,
+                  key: result.marksheet.key,
+                }
+              : null,
+          };
+        });
 
         logger.info(`All exam results fetched for student ${studentId}`);
-        res.json(results);
+        res.json(formattedResults);
       }
     } catch (error) {
       logger.error(`Error fetching results: ${error.message}`, { error });
+      res.status(500).json({ error: error.message });
+    }
+  },
+
+  getMarksheets: async (req, res) => {
+    try {
+      const { studentId } = req.params;
+      const schoolId = req.school._id.toString();
+      const connection = req.connection;
+      const Result = require("../models/Results")(connection);
+      const Exam = require("../models/Exam")(connection);
+      const Class = require("../models/Class")(connection);
+      const Subject = require("../models/Subject")(connection);
+
+      if (!mongoose.Types.ObjectId.isValid(studentId)) {
+        return res.status(400).json({ message: "Invalid student ID" });
+      }
+
+      if (studentId !== req.user._id.toString()) {
+        return res.status(403).json({
+          message: "Unauthorized: You can only view your own marksheets",
+        });
+      }
+
+      const results = await Result.aggregate([
+        {
+          $match: {
+            student: new mongoose.Types.ObjectId(studentId),
+            school: new mongoose.Types.ObjectId(schoolId),
+            status: "published",
+            marksheet: { $ne: null },
+          },
+        },
+        {
+          $lookup: {
+            from: "exams",
+            localField: "exam",
+            foreignField: "_id",
+            as: "examInfo",
+          },
+        },
+        {
+          $unwind: "$examInfo",
+        },
+        {
+          $lookup: {
+            from: "classes",
+            localField: "class",
+            foreignField: "_id",
+            as: "classInfo",
+          },
+        },
+        {
+          $unwind: "$classInfo",
+        },
+        {
+          $lookup: {
+            from: "subjects",
+            localField: "subject",
+            foreignField: "_id",
+            as: "subjectInfo",
+          },
+        },
+        {
+          $unwind: "$subjectInfo",
+        },
+        {
+          $group: {
+            _id: "$examEvent",
+            exam: {
+              $first: {
+                id: "$examInfo._id",
+                name: {
+                  $cond: [
+                    { $eq: ["$examInfo.examType", "Other"] },
+                    "$examInfo.customExamType",
+                    "$examInfo.examType",
+                  ],
+                },
+                date: "$examInfo.date",
+              },
+            },
+            class: {
+              $first: {
+                id: "$classInfo._id",
+                name: "$classInfo.name",
+                division: "$classInfo.division",
+              },
+            },
+            marksheet: { $first: "$marksheet" },
+            publishedAt: { $first: "$publishedAt" },
+            subjects: {
+              $addToSet: {
+                resultId: "$_id",
+                id: "$subjectInfo._id",
+                name: "$subjectInfo.name",
+                marksObtained: "$marksObtained",
+                totalMarks: "$totalMarks",
+                percentage: {
+                  $round: [
+                    {
+                      $multiply: [
+                        { $divide: ["$marksObtained", "$totalMarks"] },
+                        100,
+                      ],
+                    },
+                    2,
+                  ],
+                },
+              },
+            },
+          },
+        },
+        {
+          $sort: { "exam.date": -1 },
+        },
+        {
+          $project: {
+            _id: 0,
+            exam: 1,
+            class: 1,
+            marksheet: 1,
+            publishedAt: 1,
+            subjects: 1,
+          },
+        },
+      ]);
+
+      logger.info(`Marksheets fetched for student ${studentId}`);
+      res.json({
+        status: "success",
+        count: results.length,
+        marksheets: results,
+      });
+    } catch (error) {
+      logger.error(`Error fetching marksheets: ${error.message}`, { error });
+      res.status(500).json({ error: error.message });
+    }
+  },
+
+  downloadMarksheet: async (req, res) => {
+    try {
+      const { studentId, examEventId, documentKey } = req.params;
+      const schoolId = req.school._id.toString();
+      const connection = req.connection;
+      const Result = require("../models/Results")(connection);
+
+      if (
+        !mongoose.Types.ObjectId.isValid(studentId) ||
+        !mongoose.Types.ObjectId.isValid(examEventId)
+      ) {
+        return res
+          .status(400)
+          .json({ message: "Invalid student or exam event ID" });
+      }
+
+      if (studentId !== req.user._id.toString()) {
+        return res.status(403).json({
+          message: "Unauthorized: You can only download your own marksheets",
+        });
+      }
+
+      const result = await Result.findOne({
+        examEvent: new mongoose.Types.ObjectId(examEventId),
+        school: new mongoose.Types.ObjectId(schoolId),
+        student: new mongoose.Types.ObjectId(studentId),
+        status: "published",
+        marksheet: { $ne: null },
+      });
+
+      if (!result) {
+        return res.status(404).json({
+          message: "Marksheet not found or not published",
+        });
+      }
+
+      if (
+        !result.marksheet.key ||
+        !result.marksheet.key.endsWith(documentKey)
+      ) {
+        return res.status(404).json({ message: "Document not found" });
+      }
+
+      res.setHeader("Content-Type", "application/pdf");
+      res.setHeader(
+        "Content-Disposition",
+        `attachment; filename=marksheet_${examEventId}.pdf`
+      );
+
+      await streamS3Object(result.marksheet.key, res);
+      logger.info(
+        `Marksheet for exam event ${examEventId} downloaded by student ${studentId}`
+      );
+    } catch (error) {
+      logger.error(`Error downloading marksheet: ${error.message}`, { error });
       res.status(500).json({ error: error.message });
     }
   },
@@ -1424,9 +2160,13 @@ const studentController = {
         return res.status(404).json({ message: "Report card not found" });
       }
 
-      const overallPerformance = calculateOverallPerformance(reportCard.subjects);
+      const overallPerformance = calculateOverallPerformance(
+        reportCard.subjects
+      );
 
-      logger.info(`Report card fetched for student ${studentId}, term ${term}, year ${year}`);
+      logger.info(
+        `Report card fetched for student ${studentId}, term ${term}, year ${year}`
+      );
       res.json({ ...reportCard.toObject(), overallPerformance });
     } catch (error) {
       logger.error(`Error fetching report card: ${error.message}`, { error });
@@ -1459,7 +2199,9 @@ const studentController = {
           status: { $in: ["pending", "partially_paid"] },
         });
         if (hasPendingFees) {
-          return res.status(400).json({ message: "Clear all pending fees first" });
+          return res
+            .status(400)
+            .json({ message: "Clear all pending fees first" });
         }
       }
 
@@ -1545,8 +2287,13 @@ const studentController = {
       const Certificate = require("../models/Certificate")(connection);
       const { streamS3Object } = require("../config/s3Upload");
 
-      if (!mongoose.Types.ObjectId.isValid(studentId) || !mongoose.Types.ObjectId.isValid(certificateId)) {
-        return res.status(400).json({ message: "Invalid student or certificate ID" });
+      if (
+        !mongoose.Types.ObjectId.isValid(studentId) ||
+        !mongoose.Types.ObjectId.isValid(certificateId)
+      ) {
+        return res
+          .status(400)
+          .json({ message: "Invalid student or certificate ID" });
       }
 
       if (studentId !== req.user._id.toString()) {
@@ -1572,7 +2319,8 @@ const studentController = {
         certificate.signedDocumentKey &&
         certificate.signedDocumentKey.endsWith(documentKey)
           ? certificate.signedDocumentKey
-          : certificate.documentKey && certificate.documentKey.endsWith(documentKey)
+          : certificate.documentKey &&
+            certificate.documentKey.endsWith(documentKey)
           ? certificate.documentKey
           : null;
 
@@ -1581,9 +2329,13 @@ const studentController = {
       }
 
       await streamS3Object(key, res);
-      logger.info(`Certificate ${certificateId} downloaded by student ${studentId}`);
+      logger.info(
+        `Certificate ${certificateId} downloaded by student ${studentId}`
+      );
     } catch (error) {
-      logger.error(`Error downloading certificate: ${error.message}`, { error });
+      logger.error(`Error downloading certificate: ${error.message}`, {
+        error,
+      });
       res.status(500).json({ error: error.message });
     }
   },
@@ -1630,7 +2382,9 @@ const studentController = {
         totalFine: booksWithFine.reduce((sum, book) => sum + book.fine, 0),
       });
     } catch (error) {
-      logger.error(`Error fetching library services: ${error.message}`, { error });
+      logger.error(`Error fetching library services: ${error.message}`, {
+        error,
+      });
       res.status(500).json({ error: error.message });
     }
   },
@@ -1653,7 +2407,9 @@ const studentController = {
       }).populate("route driver vehicle");
 
       if (!transport) {
-        return res.status(404).json({ message: "Transportation details not found" });
+        return res
+          .status(404)
+          .json({ message: "Transportation details not found" });
       }
 
       const student = await User.findOne({ _id: studentId, school: schoolId });
@@ -1668,7 +2424,9 @@ const studentController = {
         studentDrop: routeStop ? routeStop.dropTime : null,
       });
     } catch (error) {
-      logger.error(`Error fetching transportation details: ${error.message}`, { error });
+      logger.error(`Error fetching transportation details: ${error.message}`, {
+        error,
+      });
       res.status(500).json({ error: error.message });
     }
   },
@@ -1686,7 +2444,9 @@ const studentController = {
         return res.status(400).json({ message: "Invalid student ID" });
       }
       if (!month || !year || isNaN(parseInt(month)) || isNaN(parseInt(year))) {
-        return res.status(400).json({ message: "Month and year must be valid numbers" });
+        return res
+          .status(400)
+          .json({ message: "Month and year must be valid numbers" });
       }
 
       const progress = await ProgressReport.findOne({
@@ -1704,10 +2464,14 @@ const studentController = {
         });
       }
 
-      logger.info(`Monthly progress fetched for student ${studentId} for ${month}/${year}`);
+      logger.info(
+        `Monthly progress fetched for student ${studentId} for ${month}/${year}`
+      );
       res.json(progress);
     } catch (error) {
-      logger.error(`Error fetching monthly progress: ${error.message}`, { error });
+      logger.error(`Error fetching monthly progress: ${error.message}`, {
+        error,
+      });
       res.status(500).json({ error: error.message });
     }
   },
@@ -1724,9 +2488,10 @@ const studentController = {
         return res.status(400).json({ message: "Invalid student ID" });
       }
 
-      const student = await User.findOne({ _id: studentId, school: schoolId }).select(
-        "studentDetails.class"
-      );
+      const student = await User.findOne({
+        _id: studentId,
+        school: schoolId,
+      }).select("studentDetails.class");
       if (!student || !student.studentDetails.class) {
         return res.status(404).json({ message: "Student class not found" });
       }
@@ -1743,33 +2508,29 @@ const studentController = {
       logger.info(`Event notifications fetched for student ${studentId}`);
       res.json(events);
     } catch (error) {
-      logger.error(`Error fetching event notifications: ${error.message}`, { error });
+      logger.error(`Error fetching event notifications: ${error.message}`, {
+        error,
+      });
       res.status(500).json({ error: error.message });
     }
   },
 
   calculateGrade: (percentage) => {
-    if (percentage >= 90) return 'A+';
-    if (percentage >= 80) return 'A';
-    if (percentage >= 70) return 'B+';
-    if (percentage >= 60) return 'B';
-    if (percentage >= 50) return 'C+';
-    if (percentage >= 40) return 'C';
-    return 'F';
+    if (percentage >= 90) return "A+";
+    if (percentage >= 80) return "A";
+    if (percentage >= 70) return "B+";
+    if (percentage >= 60) return "B";
+    if (percentage >= 50) return "C+";
+    if (percentage >= 40) return "C";
+    return "F";
   },
 
   calculateOverallPerformance: (subjects) => {
-    return { average: 85, grade: 'A' }; // Placeholder; implement actual logic
+    return { average: 85, grade: "A" }; // Placeholder; implement actual logic
   },
 };
 
 module.exports = studentController;
-
-
-
-
-
-
 
 // const mongoose = require('mongoose');
 
@@ -2184,10 +2945,10 @@ module.exports = studentController;
 //       // Check if student has pending fees for leaving/transfer certificates
 //       if (['leaving', 'transfer'].includes(type)) {
 //         const Fee = require('../models/Fee')(connection);
-//         const hasPendingFees = await Fee.findOne({ 
-//           student: studentId, 
-//           status: 'pending', 
-//           school: schoolId 
+//         const hasPendingFees = await Fee.findOne({
+//           student: studentId,
+//           status: 'pending',
+//           school: schoolId
 //         });
 //         if (hasPendingFees) {
 //           return res.status(400).json({ message: 'Clear all pending fees first' });
@@ -2270,8 +3031,6 @@ module.exports = studentController;
 //       res.status(500).json({ error: error.message });
 //     }
 //   },
-
-
 
 // // getStudentCertificates: async (req, res) => {
 // //   try {
@@ -2490,10 +3249,6 @@ module.exports = studentController;
 // };
 
 // module.exports = studentController;
-
-
-
-
 
 // const mongoose = require('mongoose');
 // const Razorpay = require('razorpay');
@@ -2968,10 +3723,10 @@ module.exports = studentController;
 //       // Check if student has pending fees for leaving/transfer certificates
 //       if (['leaving', 'transfer'].includes(type)) {
 //         const FeeModel = Fee(connection);
-//         const hasPendingFees = await FeeModel.findOne({ 
-//           student: studentId, 
-//           status: 'pending', 
-//           school: schoolId 
+//         const hasPendingFees = await FeeModel.findOne({
+//           student: studentId,
+//           status: 'pending',
+//           school: schoolId
 //         });
 //         if (hasPendingFees) {
 //           return res.status(400).json({ message: 'Clear all pending fees first' });
@@ -3201,10 +3956,6 @@ module.exports = studentController;
 
 // module.exports = studentController;
 
-
-
-
-
 // const mongoose = require('mongoose');
 // const Razorpay = require('razorpay');
 // const crypto = require('crypto');
@@ -3283,19 +4034,19 @@ module.exports = studentController;
 //       const connection = req.connection;
 //       const User = require('../models/User')(connection);
 //       const Homework = require('../models/Homework')(connection);
-  
+
 //       const student = await User.findOne({ _id: studentId, school: schoolId }).select('studentDetails.class');
 //       if (!student || !student.studentDetails || !student.studentDetails.class) {
 //         return res.status(404).json({ message: 'Student class not found' });
 //       }
-  
+
 //       const homework = await Homework.find({
 //         school: schoolId,
 //         class: student.studentDetails.class,
 //       })
 //         .populate('assignedBy', 'name', User)
 //         .sort({ dueDate: 1 });
-  
+
 //       const formattedHomework = homework.map(hw => {
 //         const studentSubmission = hw.submissions.find(sub => sub.student.toString() === studentId);
 //         return {
@@ -3316,7 +4067,7 @@ module.exports = studentController;
 //           } : null,
 //         };
 //       });
-  
+
 //       res.json(formattedHomework);
 //     } catch (error) {
 //       res.status(500).json({ error: error.message });
@@ -3521,7 +4272,6 @@ module.exports = studentController;
 //     }
 //   },
 
-
 //   // getFeeTypes: async (req, res) => {
 //   //   try {
 //   //     const { studentId } = req.params;
@@ -3535,7 +4285,7 @@ module.exports = studentController;
 //   //     const student = await UserModel.findById(studentId);
 //   //     if (!student) return res.status(404).json({ message: 'Student not found' });
 
-//   //     if (student.studentDetails.isRTE) 
+//   //     if (student.studentDetails.isRTE)
 //   //       return res.json({ message: 'RTE students are exempted from fees', isRTE: true, feeTypes: [] });
 
 //   //     const feeDefinitions = await FeeModel.find({
@@ -3585,7 +4335,7 @@ module.exports = studentController;
 //       const FeeModel = Fee(connection);
 //       const UserModel = User(connection);
 //       const PaymentModel = Payment(connection);
-  
+
 //       // Validate inputs
 //       if (!mongoose.Types.ObjectId.isValid(studentId)) {
 //         return res.status(400).json({ message: 'Invalid student ID' });
@@ -3593,16 +4343,16 @@ module.exports = studentController;
 //       if (!month || !year || isNaN(parseInt(month)) || isNaN(parseInt(year))) {
 //         return res.status(400).json({ message: 'Month and year must be valid numbers' });
 //       }
-  
+
 //       // Validate student
 //       const student = await UserModel.findById(studentId);
 //       if (!student) return res.status(404).json({ message: 'Student not found' });
-  
+
 //       // Check if student is RTE
 //       if (student.studentDetails.isRTE) {
 //         return res.json({ message: 'RTE students are exempted from fees', isRTE: true, feeTypes: [] });
 //       }
-  
+
 //       // Aggregate unique fee definitions (general, not student-specific)
 //       const feeDefinitions = await FeeModel.aggregate([
 //         {
@@ -3624,7 +4374,7 @@ module.exports = studentController;
 //         },
 //         { $sort: { type: 1 } },
 //       ]);
-  
+
 //       // Get paid fees for the student
 //       const paidFees = await PaymentModel.find({
 //         student: studentId,
@@ -3633,10 +4383,10 @@ module.exports = studentController;
 //         'feesPaid.year': parseInt(year),
 //         status: 'completed',
 //       });
-  
+
 //       // Create a set of paid fee types
 //       const paidFeeTypes = new Set(paidFees.flatMap(p => p.feesPaid.map(f => f.type)));
-  
+
 //       // Map fee types with payment status
 //       const feeTypesWithStatus = feeDefinitions.map(fee => {
 //         const isPaid = paidFeeTypes.has(fee.type);
@@ -3644,7 +4394,7 @@ module.exports = studentController;
 //         const paymentDetails = isPaid
 //           ? payment?.feesPaid.find(f => f.type === fee.type)?.paymentDetails || null
 //           : null;
-  
+
 //         return {
 //           type: fee.type,
 //           label: fee.type.charAt(0).toUpperCase() + fee.type.slice(1) + ' Fee',
@@ -3655,7 +4405,7 @@ module.exports = studentController;
 //           paymentDetails,
 //         };
 //       });
-  
+
 //       res.json({
 //         feeTypes: feeTypesWithStatus,
 //         studentName: student.name,
@@ -3683,10 +4433,10 @@ module.exports = studentController;
 //   //     const student = await UserModel.findById(studentId);
 //   //     if (!student) return res.status(404).json({ message: 'Student not found' });
 
-//   //     if (student.studentDetails.isRTE) 
+//   //     if (student.studentDetails.isRTE)
 //   //       return res.status(400).json({ message: 'RTE students are exempted from fees' });
 
-//   //     if (paymentMethod === 'cash') 
+//   //     if (paymentMethod === 'cash')
 //   //       return res.status(403).json({ message: 'Students cannot pay via cash. Contact the fee manager.' });
 
 //   //     const feeDefinitions = await FeeModel.find({
@@ -3696,7 +4446,7 @@ module.exports = studentController;
 //   //       type: { $in: feeTypes }
 //   //     });
 
-//   //     if (feeDefinitions.length !== feeTypes.length) 
+//   //     if (feeDefinitions.length !== feeTypes.length)
 //   //       return res.status(404).json({ message: 'Some fee types not defined for this month' });
 
 //   //     const existingPayments = await PaymentModel.find({
@@ -3711,7 +4461,7 @@ module.exports = studentController;
 //   //     const paidTypes = new Set(existingPayments.flatMap(p => p.feesPaid.map(f => f.type)));
 //   //     const feesToPay = feeDefinitions.filter(fee => !paidTypes.has(fee.type));
 
-//   //     if (feesToPay.length === 0) 
+//   //     if (feesToPay.length === 0)
 //   //       return res.status(400).json({ message: 'All selected fees are already paid' });
 
 //   //     const totalAmount = feesToPay.reduce((sum, fee) => sum + fee.amount, 0);
@@ -3750,7 +4500,6 @@ module.exports = studentController;
 //   //     res.status(500).json({ error: error.message });
 //   //   }
 //   // },
-
 
 //   payFeesByType: async (req, res) => {
 //     try {
@@ -3916,8 +4665,6 @@ module.exports = studentController;
 //     }
 //   },
 
-
-
 //   verifyPayment: async (req, res) => {
 //     try {
 //       const { razorpay_payment_id, razorpay_order_id, razorpay_signature } = req.body;
@@ -3926,28 +4673,28 @@ module.exports = studentController;
 //       const PaymentModel = Payment(connection);
 //       const FeeModel = Fee(connection);
 //       const UserModel = User(connection);
-  
+
 //       // Signature validation (uncommented for security)
 //       // const generatedSignature = crypto
 //       //   .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
 //       //   .update(`${razorpay_order_id}|${razorpay_payment_id}`)
 //       //   .digest('hex');
-//       // if (generatedSignature !== razorpay_signature) 
+//       // if (generatedSignature !== razorpay_signature)
 //       //   return res.status(400).json({ message: 'Invalid payment signature' });
-  
+
 //       const payment = await PaymentModel.findOne({ orderId: razorpay_order_id });
 //       if (!payment) return res.status(404).json({ message: 'Payment not found' });
-  
+
 //       const student = await UserModel.findById(payment.student);
 //       if (!student) return res.status(404).json({ message: 'Student not found' });
-  
+
 //       // Update payment status
 //       payment.status = 'completed';
 //       payment.transactionId = razorpay_payment_id;
 //       payment.paymentDate = new Date();
 //       payment.receiptNumber = `REC${Date.now()}`;
 //       await payment.save();
-  
+
 //       // Update fee documents
 //       for (const feePaid of payment.feesPaid) {
 //         let fee = await FeeModel.findOne({
@@ -3957,7 +4704,7 @@ module.exports = studentController;
 //           month: feePaid.month,
 //           year: feePaid.year,
 //         });
-  
+
 //         if (!fee) {
 //           const feeDefinition = await FeeModel.findOne({
 //             school: schoolId,
@@ -3966,7 +4713,7 @@ module.exports = studentController;
 //             month: feePaid.month,
 //             year: feePaid.year,
 //           });
-  
+
 //           fee = new FeeModel({
 //             school: schoolId,
 //             student: payment.student,
@@ -3982,7 +4729,7 @@ module.exports = studentController;
 //         } else {
 //           fee.status = 'paid';
 //         }
-  
+
 //         fee.paymentDetails = {
 //           transactionId: razorpay_payment_id,
 //           paymentDate: payment.paymentDate,
@@ -3991,14 +4738,14 @@ module.exports = studentController;
 //         };
 //         await fee.save();
 //       }
-  
+
 //       // Generate fee slip
 //       const feeSlip = generateFeeSlip(student, payment, payment.feesPaid, schoolId);
 //       payment.receiptUrl = feeSlip.pdfUrl;
 //       await payment.save();
-  
-//       res.json({ 
-//         message: 'Payment verified successfully', 
+
+//       res.json({
+//         message: 'Payment verified successfully',
 //         payment,
 //         feeSlip, // Return the fee slip
 //         receiptUrl: feeSlip.pdfUrl
@@ -4038,7 +4785,7 @@ module.exports = studentController;
 //       // }));
 
 //       const receipts = await Promise.all(payments.map(async payment => {
-//         const fees = await FeeModel.find({ 
+//         const fees = await FeeModel.find({
 //           student: studentId,
 //           school: schoolId,
 //           month: { $in: payment.feesPaid.map(f => f.month) },
@@ -4154,32 +4901,32 @@ module.exports = studentController;
 //       const connection = req.connection;
 //       const Certificate = require('../models/Certificate')(connection);
 //       const { streamS3Object } = require('../config/s3Upload');
-  
+
 //       if (studentId !== req.user._id.toString()) {
 //         return res.status(403).json({ message: 'Unauthorized: You can only download your own certificates' });
 //       }
-  
+
 //       const certificate = await Certificate.findOne({
 //         _id: certificateId,
 //         school: schoolId,
 //         student: studentId,
 //         isSentToStudent: true,
 //       });
-  
+
 //       if (!certificate) {
 //         return res.status(404).json({ message: 'Certificate not found or not available for download' });
 //       }
-  
+
 //       const key = certificate.signedDocumentKey && certificate.signedDocumentKey.endsWith(documentKey)
 //         ? certificate.signedDocumentKey
 //         : certificate.documentKey && certificate.documentKey.endsWith(documentKey)
 //         ? certificate.documentKey
 //         : null;
-  
+
 //       if (!key) {
 //         return res.status(404).json({ message: 'Document not found' });
 //       }
-  
+
 //       await streamS3Object(key, res);
 //     } catch (error) {
 //       console.error('Error streaming certificate:', error);

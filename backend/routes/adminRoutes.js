@@ -7,6 +7,56 @@ const { upload } = require("../config/cloudinary");
 const { announcementUpload } = require("../config/cloudinary");
 const cloudinary = require("../config/cloudinary").cloudinary;
 const path = require("path");
+// const { uploadExcelResults } = require("../config/s3Upload");
+const multer= require('multer');
+
+
+
+const storage = multer.memoryStorage();
+const uploadExcelResults = (req, res, next) => {
+  const upload = multer({
+    storage: multer.memoryStorage(), // Keep using memory storage to maintain buffer access
+    limits: { fileSize: 10 * 1024 * 1024 },
+    fileFilter: (req, file, cb) => {
+      const allowedTypes = [
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'application/vnd.ms-excel',
+      ];
+      if (allowedTypes.includes(file.mimetype)) {
+        console.log(`File type accepted: ${file.mimetype}`);
+        cb(null, true);
+      } else {
+        console.error(`Invalid file type: ${file.mimetype}`);
+        cb(
+          new Error(
+            `Invalid file type: ${file.mimetype}. Allowed: ${allowedTypes.join(', ')}`
+          ),
+          false
+        );
+      }
+    },
+  }).single("file");
+
+  console.log("Applying uploadExcelResults middleware");
+  upload(req, res, (err) => {
+    if (err instanceof multer.MulterError) {
+      console.error(`Multer error: ${err.message}`);
+      return res.status(400).json({ success: false, error: `Multer error: ${err.message}` });
+    } else if (err) {
+      console.error(`File upload error: ${err.message}`);
+      return res.status(400).json({ success: false, error: err.message });
+    }
+    console.log(`req.file after upload:`, req.file ? {
+      originalname: req.file.originalname,
+      mimetype: req.file.mimetype,
+      size: req.file.size,
+      buffer: !!req.file.buffer
+    } : null);
+    next();
+  });
+};
+
+
 
 // User Management
 router.post("/users", auth, roleCheck(["admin"]), adminController.createUser);
@@ -92,12 +142,12 @@ router.get(
 
 // Exam Management
 router.post("/exams", auth, roleCheck(["admin"]), adminController.createExam);
-router.post(
-  "/exams/:examId/seating",
-  auth,
-  roleCheck(["admin"]),
-  adminController.generateSeatingArrangement
-);
+// router.post(
+//   "/exams/:examId/seating",
+//   auth,
+//   roleCheck(["admin"]),
+//   adminController.generateSeatingArrangement
+// );
 
 // Announcement Management
 router.post(
@@ -229,10 +279,39 @@ router.get(
   [auth, roleCheck(["admin"])],
   adminController.reviewClassResults
 );
-router.post(
-  "/exams/:examId/classes/:classId/publish",
+// router.post(
+//   "/exams/:examId/classes/:classId/publish",
+//   [auth, roleCheck(["admin"])],
+//   adminController.publishResults
+// );
+
+
+// New routes for Excel results and marksheets
+router.get(
+  // "/exams/:examId/classes/:classId/excel-results",
+  "/exam-events/:examEventId/classes/:classId/results",
   [auth, roleCheck(["admin"])],
-  adminController.publishResults
+  adminController.getSubmittedExcelResults
+);
+
+router.post(
+  // "/exams/:examId/classes/:classId/upload-excel",
+  "/exam-events/:examEventId/classes/:classId/results",
+  [auth, roleCheck(["admin"]), uploadExcelResults],
+  adminController.uploadExcelResultsOfStudent
+);
+
+router.get(
+  // "/exams/:examId/classes/:classId/marksheets",
+  "/exam-events/:examEventId/classes/:classId/marksheets",
+  [auth, roleCheck(["admin"])],
+  adminController.getAllMarksheets
+);
+router.post(
+  // "/exams/:examId/classes/:classId/students/:studentId/publish",
+  "/exam-events/:examEventId/classes/:classId/students/:studentId/publish",
+  [auth, roleCheck(["admin"])],
+  adminController.publishIndividualMarksheet
 );
 router.get(
   "/exams/:examId/classes/:classId/report-cards",

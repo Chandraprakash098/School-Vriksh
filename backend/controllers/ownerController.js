@@ -5,11 +5,242 @@ const {
 const bcrypt = require("bcryptjs");
 const mongoose = require("mongoose");
 const { encrypt, decrypt } = require("../utils/encryption");
+const {uploadToS3,getPublicFileUrl} = require('../config/s3Upload');
 
 const ownerController = {
+  // registerSchool: async (req, res) => {
+  //   try {
+  //     const {
+  //       name,
+  //       address,
+  //       contact,
+  //       email,
+  //       adminDetails,
+  //       subscriptionDetails,
+  //       rteQuota,
+  //       customFormFields,
+  //       // razorpayKeyId,    // New field
+  //       // razorpayKeySecret  // New field
+  //     } = req.body;
+
+  //     const ownerConnection = await getOwnerConnection();
+  //     // const School = ownerConnection.model('School', require('../models/School').schema);
+  //     // const School = require('../models/School').model(ownerConnection);
+  //     const School = require("../models/School")(ownerConnection);
+
+  //     // Generate unique dbName for the school
+
+  //     // Generate dbName from school name (sanitized)
+  //     const sanitizedName = name
+  //       .toLowerCase()
+  //       .replace(/\s+/g, "_") // Replace spaces with underscores
+  //       .replace(/[^a-z0-9_]/g, "") // Remove special characters
+  //       .substring(0, 16); // Limit length
+
+  //     // Add a timestamp to make it unique in case of schools with the same name
+  //     const timestamp = Date.now().toString().slice(-6);
+  //     const dbName = `school_${sanitizedName}_${timestamp}`;
+  //     // const dbName = `school_db_${new mongoose.Types.ObjectId()}`;
+
+  //     // if (!razorpayKeyId || !razorpayKeySecret) {
+  //     //   return res.status(400).json({ error: 'Razorpay credentials are required' });
+  //     // }
+
+  //     // const encryptedKeyId = encrypt(razorpayKeyId);
+  //     // const encryptedKeySecret = encrypt(razorpayKeySecret);
+
+  //     // Create new school in owner_db
+  //     const school = new School({
+  //       name,
+  //       address,
+  //       contact,
+  //       email,
+  //       dbName, // Assign unique database name
+  //       subscriptionStatus: "active",
+  //       subscriptionDetails: {
+  //         plan: subscriptionDetails.plan,
+  //         startDate: new Date(),
+  //         endDate: subscriptionDetails.endDate,
+  //         paymentStatus: subscriptionDetails.paymentStatus,
+  //         amount: subscriptionDetails.amount,
+  //       },
+  //       rteQuota,
+  //       customFormFields,
+
+  //       // paymentConfig: {
+  //       //   razorpayKeyId: encryptedKeyId,
+  //       //   razorpayKeySecret: encryptedKeySecret,
+  //       //   isPaymentConfigured: true
+  //       // },
+  //     });
+  //     await school.save();
+
+  //     // Connect to the new school's database
+  //     const schoolConnection = await getSchoolConnection(school._id);
+  //     const User = require("../models/User")(schoolConnection);
+
+  //     // Create admin account in the school's database
+  //     const admin = new User({
+  //       school: school._id,
+  //       name: adminDetails.name,
+  //       email: adminDetails.email,
+  //       password: await bcrypt.hash(adminDetails.password, 10),
+  //       role: "admin",
+  //       status: "active",
+  //       profile: {
+  //         phone: adminDetails.phone,
+  //         address: adminDetails.address,
+  //       },
+  //     });
+  //     await admin.save();
+
+  //     res.status(201).json({
+  //       message: "School registered successfully",
+  //       school: {
+  //         ...school.toObject(),
+  //         paymentConfig: {
+  //           ...school.paymentConfig,
+  //           razorpayKeySecret: undefined, // Don't expose secret
+  //         },
+  //       },
+  //       admin: { ...admin.toObject(), password: undefined },
+  //     });
+  //   } catch (error) {
+  //     res.status(500).json({ error: error.message });
+  //   }
+  // },
+
+  // registerSchool: async (req, res) => {
+  //   try {
+  //     const {
+  //       name,
+  //       address,
+  //       contact,
+  //       email,
+  //       adminDetails,
+  //       subscriptionDetails,
+  //       rteQuota,
+  //       customFormFields,
+  //       paymentConfigs // Array of payment configurations
+  //     } = req.body;
+
+
+  //     let logo = null;
+  //     if (req.file) {
+  //       const allowedTypes = ['image/png', 'image/jpeg', 'image/jpg'];
+  //       const maxSize = 5 * 1024 * 1024; // 5MB
+  //       if (!allowedTypes.includes(req.file.mimetype)) {
+  //         return res.status(400).json({ error: 'Logo must be a PNG or JPEG image' });
+  //       }
+  //       if (req.file.size > maxSize) {
+  //         return res.status(400).json({ error: 'Logo size must not exceed 5MB' });
+  //       }
+
+  //       // Upload logo to S3
+  //       const logoKey = `school_logos/${Date.now()}_${req.file.originalname}`;
+  //       await uploadToS3(req.file.buffer, logoKey, req.file.mimetype);
+  //       logo = {
+  //         key: logoKey,
+  //         url: getPublicFileUrl(logoKey)
+  //       };
+  //     }
+
+  //     const ownerConnection = await getOwnerConnection();
+  //     const School = require("../models/School")(ownerConnection);
+
+  //     // Generate unique dbName
+  //     const sanitizedName = name
+  //       .toLowerCase()
+  //       .replace(/\s+/g, "_")
+  //       .replace(/[^a-z0-9_]/g, "")
+  //       .substring(0, 16);
+  //     const timestamp = Date.now().toString().slice(-6);
+  //     const dbName = `school_${sanitizedName}_${timestamp}`;
+
+  //     // Validate and encrypt payment configurations
+  //     const encryptedPaymentConfigs = paymentConfigs?.map(config => {
+  //       const details = { ...config.details };
+  //       if (config.paymentType === 'razorpay') {
+  //         details.razorpayKeyId = encrypt(details.razorpayKeyId);
+  //         details.razorpayKeySecret = encrypt(details.razorpayKeySecret);
+  //       } else if (config.paymentType === 'stripe') {
+  //         details.stripePublishableKey = encrypt(details.stripePublishableKey);
+  //         details.stripeSecretKey = encrypt(details.stripeSecretKey);
+  //       } else if (config.paymentType === 'paytm') {
+  //         details.paytmMid = encrypt(details.paytmMid);
+  //         details.paytmMerchantKey = encrypt(details.paytmMerchantKey);
+  //       }
+  //       return {
+  //         paymentType: config.paymentType,
+  //         isActive: config.isActive ?? true,
+  //         details
+  //       };
+  //     }) || [];
+
+  //     const school = new School({
+  //       name,
+  //       address,
+  //       contact,
+  //       email,
+  //       dbName,
+  //       subscriptionStatus: "active",
+  //       subscriptionDetails: {
+  //         plan: subscriptionDetails.plan,
+  //         startDate: new Date(),
+  //         endDate: subscriptionDetails.endDate,
+  //         paymentStatus: subscriptionDetails.paymentStatus,
+  //         amount: subscriptionDetails.amount,
+  //       },
+  //       rteQuota,
+  //       customFormFields,
+  //        paymentConfig: encryptedPaymentConfigs,
+  //        logo
+  //     });
+  //     await school.save();
+
+  //     const schoolConnection = await getSchoolConnection(school._id);
+  //     const User = require("../models/User")(schoolConnection);
+
+  //     const admin = new User({
+  //       school: school._id,
+  //       name: adminDetails.name,
+  //       email: adminDetails.email,
+  //       password: await bcrypt.hash(adminDetails.password, 10),
+  //       role: "admin",
+  //       status: "active",
+  //       profile: {
+  //         phone: adminDetails.phone,
+  //         address: adminDetails.address,
+  //       },
+  //     });
+  //     await admin.save();
+
+  //     res.status(201).json({
+  //       message: "School registered successfully",
+  //       school: {
+  //         ...school.toObject(),
+  //         paymentConfig: school.paymentConfig.map(config => ({
+  //           ...config,
+  //           details: {
+  //             ...config.details,
+  //             razorpayKeySecret: undefined,
+  //             stripeSecretKey: undefined,
+  //             paytmMerchantKey: undefined
+  //           }
+  //         })),
+  //         logo
+  //       },
+  //       admin: { ...admin.toObject(), password: undefined },
+  //     });
+  //   } catch (error) {
+  //     res.status(500).json({ error: error.message });
+  //   }
+  // },
+
   registerSchool: async (req, res) => {
     try {
-      const {
+      // Parse JSON string fields
+      let {
         name,
         address,
         contact,
@@ -18,43 +249,94 @@ const ownerController = {
         subscriptionDetails,
         rteQuota,
         customFormFields,
-        // razorpayKeyId,    // New field
-        // razorpayKeySecret  // New field
+        paymentConfigs
       } = req.body;
 
+      // Parse JSON fields if they are strings
+      try {
+        if (typeof adminDetails === 'string') {
+          adminDetails = JSON.parse(adminDetails);
+        }
+        if (typeof subscriptionDetails === 'string') {
+          subscriptionDetails = JSON.parse(subscriptionDetails);
+        }
+        if (typeof rteQuota === 'string') {
+          rteQuota = JSON.parse(rteQuota);
+        }
+        if (typeof customFormFields === 'string') {
+          customFormFields = JSON.parse(customFormFields);
+        }
+        if (typeof paymentConfigs === 'string') {
+          paymentConfigs = JSON.parse(paymentConfigs);
+        }
+      } catch (jsonError) {
+        return res.status(400).json({ error: `Invalid JSON format in one of the fields: ${jsonError.message}` });
+      }
+
+      // Validate required fields
+      if (!name || !address || !contact || !email || !adminDetails || !subscriptionDetails) {
+        return res.status(400).json({ error: 'Missing required fields' });
+      }
+
+      // Validate logo file
+      let logo = null;
+      if (req.file) {
+        const allowedTypes = ['image/png', 'image/jpeg', 'image/jpg'];
+        const maxSize = 5 * 1024 * 1024; // 5MB
+        if (!allowedTypes.includes(req.file.mimetype)) {
+          return res.status(400).json({ error: 'Logo must be a PNG or JPEG image' });
+        }
+        if (req.file.size > maxSize) {
+          return res.status(400).json({ error: 'Logo size must not exceed 5MB' });
+        }
+
+        // Upload logo to S3
+        const logoKey = `school_logos/${Date.now()}_${req.file.originalname}`;
+        await uploadToS3(req.file.buffer, logoKey, req.file.mimetype);
+        logo = {
+          key: logoKey,
+          url: getPublicFileUrl(logoKey)
+        };
+      }
+
       const ownerConnection = await getOwnerConnection();
-      // const School = ownerConnection.model('School', require('../models/School').schema);
-      // const School = require('../models/School').model(ownerConnection);
       const School = require("../models/School")(ownerConnection);
 
-      // Generate unique dbName for the school
-
-      // Generate dbName from school name (sanitized)
+      // Generate unique dbName
       const sanitizedName = name
         .toLowerCase()
-        .replace(/\s+/g, "_") // Replace spaces with underscores
-        .replace(/[^a-z0-9_]/g, "") // Remove special characters
-        .substring(0, 16); // Limit length
-
-      // Add a timestamp to make it unique in case of schools with the same name
+        .replace(/\s+/g, "_")
+        .replace(/[^a-z0-9_]/g, "")
+        .substring(0, 16);
       const timestamp = Date.now().toString().slice(-6);
       const dbName = `school_${sanitizedName}_${timestamp}`;
-      // const dbName = `school_db_${new mongoose.Types.ObjectId()}`;
 
-      // if (!razorpayKeyId || !razorpayKeySecret) {
-      //   return res.status(400).json({ error: 'Razorpay credentials are required' });
-      // }
+      // Validate and encrypt payment configurations
+      const encryptedPaymentConfigs = paymentConfigs?.map(config => {
+        const details = { ...config.details };
+        if (config.paymentType === 'razorpay') {
+          details.razorpayKeyId = encrypt(details.razorpayKeyId);
+          details.razorpayKeySecret = encrypt(details.razorpayKeySecret);
+        } else if (config.paymentType === 'stripe') {
+          details.stripePublishableKey = encrypt(details.stripePublishableKey);
+          details.stripeSecretKey = encrypt(details.stripeSecretKey);
+        } else if (config.paymentType === 'paytm') {
+          details.paytmMid = encrypt(details.paytmMid);
+          details.paytmMerchantKey = encrypt(details.paytmMerchantKey);
+        }
+        return {
+          paymentType: config.paymentType,
+          isActive: config.isActive ?? true,
+          details
+        };
+      }) || [];
 
-      // const encryptedKeyId = encrypt(razorpayKeyId);
-      // const encryptedKeySecret = encrypt(razorpayKeySecret);
-
-      // Create new school in owner_db
       const school = new School({
         name,
         address,
         contact,
         email,
-        dbName, // Assign unique database name
+        dbName,
         subscriptionStatus: "active",
         subscriptionDetails: {
           plan: subscriptionDetails.plan,
@@ -65,20 +347,14 @@ const ownerController = {
         },
         rteQuota,
         customFormFields,
-
-        // paymentConfig: {
-        //   razorpayKeyId: encryptedKeyId,
-        //   razorpayKeySecret: encryptedKeySecret,
-        //   isPaymentConfigured: true
-        // },
+        paymentConfig: encryptedPaymentConfigs,
+        logo // Add logo to the school document
       });
       await school.save();
 
-      // Connect to the new school's database
       const schoolConnection = await getSchoolConnection(school._id);
       const User = require("../models/User")(schoolConnection);
 
-      // Create admin account in the school's database
       const admin = new User({
         school: school._id,
         name: adminDetails.name,
@@ -97,10 +373,16 @@ const ownerController = {
         message: "School registered successfully",
         school: {
           ...school.toObject(),
-          paymentConfig: {
-            ...school.paymentConfig,
-            razorpayKeySecret: undefined, // Don't expose secret
-          },
+          paymentConfig: school.paymentConfig.map(config => ({
+            ...config,
+            details: {
+              ...config.details,
+              razorpayKeySecret: undefined,
+              stripeSecretKey: undefined,
+              paytmMerchantKey: undefined
+            }
+          })),
+          logo // Include logo in response
         },
         admin: { ...admin.toObject(), password: undefined },
       });
@@ -153,37 +435,89 @@ const ownerController = {
     }
   },
 
+  // updatePaymentConfig: async (req, res) => {
+  //   try {
+  //     const { schoolId } = req.params;
+  //     const { razorpayKeyId, razorpayKeySecret } = req.body;
+
+  //     const ownerConnection = await getOwnerConnection();
+  //     const School = require("../models/School").model(ownerConnection);
+
+  //     const school = await School.findById(schoolId);
+  //     if (!school) {
+  //       return res.status(404).json({ message: "School not found" });
+  //     }
+
+  //     // Encrypt new credentials
+  //     const encryptedKeyId = encrypt(razorpayKeyId);
+  //     const encryptedKeySecret = encrypt(razorpayKeySecret);
+
+  //     school.paymentConfig = {
+  //       razorpayKeyId: encryptedKeyId,
+  //       razorpayKeySecret: encryptedKeySecret,
+  //       isPaymentConfigured: true,
+  //     };
+
+  //     await school.save();
+
+  //     res.json({
+  //       message: "Payment configuration updated successfully",
+  //       paymentConfig: {
+  //         razorpayKeyId: razorpayKeyId, // Return plain keyId for confirmation
+  //         isPaymentConfigured: true,
+  //       },
+  //     });
+  //   } catch (error) {
+  //     res.status(500).json({ error: error.message });
+  //   }
+  // },
+
   updatePaymentConfig: async (req, res) => {
     try {
       const { schoolId } = req.params;
-      const { razorpayKeyId, razorpayKeySecret } = req.body;
+      const { paymentConfigs } = req.body;
 
       const ownerConnection = await getOwnerConnection();
-      const School = require("../models/School").model(ownerConnection);
+      const School = require("../models/School")(ownerConnection);
 
       const school = await School.findById(schoolId);
       if (!school) {
         return res.status(404).json({ message: "School not found" });
       }
 
-      // Encrypt new credentials
-      const encryptedKeyId = encrypt(razorpayKeyId);
-      const encryptedKeySecret = encrypt(razorpayKeySecret);
+      const encryptedPaymentConfigs = paymentConfigs.map(config => {
+        const details = { ...config.details };
+        if (config.paymentType === 'razorpay') {
+          details.razorpayKeyId = encrypt(details.razorpayKeyId);
+          details.razorpayKeySecret = encrypt(details.razorpayKeySecret);
+        } else if (config.paymentType === 'stripe') {
+          details.stripePublishableKey = encrypt(details.stripePublishableKey);
+          details.stripeSecretKey = encrypt(details.stripeSecretKey);
+        } else if (config.paymentType === 'paytm') {
+          details.paytmMid = encrypt(details.paytmMid);
+          details.paytmMerchantKey = encrypt(details.paytmMerchantKey);
+        }
+        return {
+          paymentType: config.paymentType,
+          isActive: config.isActive ?? true,
+          details
+        };
+      });
 
-      school.paymentConfig = {
-        razorpayKeyId: encryptedKeyId,
-        razorpayKeySecret: encryptedKeySecret,
-        isPaymentConfigured: true,
-      };
-
+      school.paymentConfig = encryptedPaymentConfigs;
       await school.save();
 
       res.json({
         message: "Payment configuration updated successfully",
-        paymentConfig: {
-          razorpayKeyId: razorpayKeyId, // Return plain keyId for confirmation
-          isPaymentConfigured: true,
-        },
+        paymentConfig: school.paymentConfig.map(config => ({
+          ...config,
+          details: {
+            ...config.details,
+            razorpayKeySecret: undefined,
+            stripeSecretKey: undefined,
+            paytmMerchantKey: undefined
+          }
+        }))
       });
     } catch (error) {
       res.status(500).json({ error: error.message });

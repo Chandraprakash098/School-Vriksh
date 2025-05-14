@@ -20,6 +20,11 @@ const subjectSchema = new mongoose.Schema(
         assignedAt: Date,
       },
     ],
+    weight: {
+      type: String,
+      enum: ["heavy", "light"],
+      default: "light",
+    }, 
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" }, // Optional: track creator as per SRS 3.2.2
   },
   { timestamps: true }

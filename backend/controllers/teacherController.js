@@ -3,8 +3,12 @@ const { uploadToS3 } = require("../config/s3Upload");
 const path = require("path");
 const jwt = require("jsonwebtoken");
 const axios = require("axios");
-const { uploadStudyMaterial, uploadSyllabus,getPublicFileUrl } = require("../config/s3Upload");
+const ExcelJS = require('exceljs');
+const { uploadStudyMaterial, uploadSyllabus,uploadExcelResults,getPublicFileUrl } = require("../config/s3Upload");
 const logger = require("../utils/logger");
+const getModel= require('../models/index')
+const {getOwnerConnection}= require('../config/database')
+
 
 const teacherController = {
 
@@ -1261,18 +1265,148 @@ const teacherController = {
 
 
 
+  // getExamsForTeacher: async (req, res) => {
+  //   try {
+  //     const teacherId = req.user._id;
+  //     const schoolId = req.school._id.toString();
+  //     const { classId } = req.query; // Optional filter by class
+  //     const connection = req.connection;
+  //     const Exam = require("../models/Exam")(connection);
+  //     const Subject = require("../models/Subject")(connection);
+  //     const Class = require("../models/Class")(connection);
+  //     const User = require("../models/User")(connection);
+
+  //     // Find subjects taught by the teacher
+  //     const subjectQuery = {
+  //       school: schoolId,
+  //       "teachers.teacher": teacherId,
+  //     };
+  //     if (classId) subjectQuery.class = classId;
+
+  //     const subjects = await Subject.find(subjectQuery).select("_id name class");
+  //     const subjectIds = subjects.map((s) => s._id);
+
+  //     // Find exams for those subjects
+  //     const examQuery = {
+  //       school: schoolId,
+  //       subject: { $in: subjectIds },
+  //       status: { $in: ["draft", "pending"] }, // Exams available for mark entry
+  //     };
+  //     if (classId) examQuery.class = classId;
+
+  //     const exams = await Exam.find(examQuery)
+  //       .populate("class", "name division students")
+  //       .populate("subject", "name")
+  //       .lean();
+
+  //     const formattedExams = await Promise.all(
+  //       exams.map(async (exam) => {
+  //         const students = await User.find({ _id: { $in: exam.class.students } })
+  //           .select("name rollNumber")
+  //           .lean();
+  //         return {
+  //           examId: exam._id,
+  //           examType: exam.examType === "Other" ? exam.customExamType : exam.examType,
+  //           classId: exam.class._id,
+  //           class: `${exam.class.name}${exam.class.division ? " " + exam.class.division : ""}`,
+  //           subject: exam.subject.name,
+  //           examDate: exam.examDate,
+  //           totalMarks: exam.totalMarks,
+  //           status: exam.status || "draft",
+  //           students: students.map((s) => ({
+  //             studentId: s._id,
+  //             name: s.name,
+  //             rollNumber: s.rollNumber,
+  //           })),
+  //         };
+  //       })
+  //     );
+
+  //     res.json({ message: "Exams retrieved successfully", exams: formattedExams });
+  //   } catch (error) {
+  //     console.error("Error in getExamsForTeacher:", error);
+  //     res.status(500).json({ error: error.message });
+  //   }
+  // },
+
+  // getExamsForTeacher: async (req, res) => {
+  //   try {
+  //     const teacherId = req.user._id;
+  //     const schoolId = req.school._id.toString();
+  //     const { classId } = req.query; // Optional filter by class
+  //     const connection = req.connection;
+  //     const Exam = require("../models/Exam")(connection);
+  //     const Subject = require("../models/Subject")(connection);
+  //     const Class = require("../models/Class")(connection);
+  //     const User = require("../models/User")(connection);
+
+  //     // Find subjects taught by the teacher
+  //     const subjectQuery = {
+  //       school: schoolId,
+  //       "teachers.teacher": teacherId,
+  //     };
+  //     if (classId) subjectQuery.class = classId;
+
+  //     const subjects = await Subject.find(subjectQuery).select("_id name class");
+  //     const subjectIds = subjects.map((s) => s._id);
+
+  //     // Find exams for those subjects
+  //     const examQuery = {
+  //       school: schoolId,
+  //       subject: { $in: subjectIds },
+  //       status: { $in: ["draft", "pending"] }, // Exams available for mark entry
+  //     };
+  //     if (classId) examQuery.class = classId;
+
+  //     const exams = await Exam.find(examQuery)
+  //       .populate("class", "name division students")
+  //       .populate("subject", "name")
+  //       .lean();
+
+  //     const formattedExams = await Promise.all(
+  //       exams.map(async (exam) => {
+  //         const students = await User.find({ _id: { $in: exam.class.students } })
+  //           .select("name rollNumber")
+  //           .lean();
+  //         return {
+  //           examId: exam._id,
+  //           examType: exam.examType === "Other" ? exam.customExamType : exam.examType,
+  //           classId: exam.class._id,
+  //           class: `${exam.class.name}${exam.class.division ? " " + exam.class.division : ""}`,
+  //           subject: exam.subject.name,
+  //           subjectId: exam.subject._id,
+  //           examDate: exam.examDate,
+  //           totalMarks: exam.totalMarks,
+  //           status: exam.status || "draft",
+  //           students: students.map((s) => ({
+  //             studentId: s._id,
+  //             name: s.name,
+  //             rollNumber: s.rollNumber,
+  //           })),
+  //         };
+  //       })
+  //     );
+
+  //     res.json({ message: "Exams retrieved successfully", exams: formattedExams });
+  //   } catch (error) {
+  //     console.error("Error in getExamsForTeacher:", error);
+  //     res.status(500).json({ error: error.message });
+  //   }
+  // },
+
+
   getExamsForTeacher: async (req, res) => {
     try {
       const teacherId = req.user._id;
       const schoolId = req.school._id.toString();
-      const { classId } = req.query; // Optional filter by class
+      const { classId, examEventId } = req.query;
       const connection = req.connection;
-      const Exam = require("../models/Exam")(connection);
-      const Subject = require("../models/Subject")(connection);
-      const Class = require("../models/Class")(connection);
-      const User = require("../models/User")(connection);
+      const Exam = getModel("Exam", connection);
+      const ExamEvent = getModel("ExamEvent", connection);
+      const Subject = getModel("Subject", connection);
+      const Class = getModel("Class", connection);
+      const User = getModel("User", connection);
 
-      // Find subjects taught by the teacher
       const subjectQuery = {
         school: schoolId,
         "teachers.teacher": teacherId,
@@ -1282,17 +1416,18 @@ const teacherController = {
       const subjects = await Subject.find(subjectQuery).select("_id name class");
       const subjectIds = subjects.map((s) => s._id);
 
-      // Find exams for those subjects
       const examQuery = {
         school: schoolId,
         subject: { $in: subjectIds },
-        status: { $in: ["draft", "pending"] }, // Exams available for mark entry
+        status: { $in: ["draft", "pending"] },
       };
       if (classId) examQuery.class = classId;
+      if (examEventId) examQuery.examEvent = examEventId;
 
       const exams = await Exam.find(examQuery)
         .populate("class", "name division students")
         .populate("subject", "name")
+        .populate("examEvent", "name examType")
         .lean();
 
       const formattedExams = await Promise.all(
@@ -1302,10 +1437,16 @@ const teacherController = {
             .lean();
           return {
             examId: exam._id,
+            examEvent: {
+              id: exam.examEvent._id,
+              name: exam.examEvent.name,
+              type: exam.examEvent.examType === "Other" ? exam.examEvent.customExamType : exam.examEvent.examType,
+            },
             examType: exam.examType === "Other" ? exam.customExamType : exam.examType,
             classId: exam.class._id,
             class: `${exam.class.name}${exam.class.division ? " " + exam.class.division : ""}`,
             subject: exam.subject.name,
+            subjectId: exam.subject._id,
             examDate: exam.examDate,
             totalMarks: exam.totalMarks,
             status: exam.status || "draft",
@@ -1325,35 +1466,141 @@ const teacherController = {
     }
   },
 
- 
+  
+  // enterSubjectMarks: async (req, res) => {
+  //   try {
+  //     const { examId } = req.params;
+  //     const { subjectId, studentsMarks } = req.body;
+  //     const teacherId = req.user._id;
+  //     const schoolId = req.school._id.toString();
+  //     const connection = req.connection;
+  //     const Exam = require("../models/Exam")(connection);
+  //     const Subject = require("../models/Subject")(connection);
+  //     const User = require("../models/User")(connection);
+  //     const Result = require("../models/Results")(connection);
+  //     const Class = require('../models/Class')(connection)
 
-  // Enter marks for a specific exam (subject teacher)
+  //     if (!mongoose.Types.ObjectId.isValid(examId)) {
+  //       return res.status(400).json({ message: "Invalid exam ID" });
+  //     }
+  //     if (!mongoose.Types.ObjectId.isValid(subjectId)) {
+  //       return res.status(400).json({ message: "Invalid subject ID" });
+  //     }
+
+  //     const exam = await Exam.findOne({ _id: examId, school: schoolId })
+  //       .populate("class", "students")
+  //       .lean();
+  //     if (!exam) {
+  //       return res.status(404).json({ message: "Exam not found" });
+  //     }
+
+  //     const subject = await Subject.findOne({
+  //       _id: subjectId,
+  //       class: exam.class._id,
+  //       school: schoolId,
+  //       "teachers.teacher": teacherId,
+  //     });
+  //     if (!subject) {
+  //       return res.status(403).json({
+  //         message: "Subject not found or you are not authorized to enter marks for this subject",
+  //       });
+  //     }
+
+  //     const validStudentIds = exam.class.students.map((s) => s.toString());
+  //     for (const entry of studentsMarks) {
+  //       if (!validStudentIds.includes(entry.studentId)) {
+  //         return res.status(400).json({ message: `Invalid student ID: ${entry.studentId}` });
+  //       }
+  //       if (entry.marks > exam.totalMarks || entry.marks < 0) {
+  //         return res.status(400).json({
+  //           message: `Marks for student ${entry.studentId} must be between 0 and ${exam.totalMarks}`,
+  //         });
+  //       }
+  //     }
+
+  //     const results = [];
+  //     for (const entry of studentsMarks) {
+  //       const result = await Result.findOneAndUpdate(
+  //         {
+  //           school: schoolId,
+  //           exam: examId,
+  //           subject: subjectId,
+  //           student: entry.studentId,
+  //           class: exam.class._id,
+  //         },
+  //         {
+  //           marksObtained: entry.marks,
+  //           totalMarks: exam.totalMarks,
+  //           remarks: entry.remarks || "",
+  //           status: "pending",
+  //           marksEnteredBy: teacherId,
+  //           marksEnteredAt: new Date(),
+  //         },
+  //         { upsert: true, new: true }
+  //       );
+  //       results.push(result);
+  //     }
+
+  //     await Exam.updateOne(
+  //       { _id: examId, school: schoolId },
+  //       { status: "pending", marksEnteredBy: teacherId }
+  //     );
+
+  //     res.json({
+  //       message: "Marks entered successfully",
+  //       examId,
+  //       subjectId,
+  //       results: results.map((r) => ({
+  //         studentId: r.student,
+  //         marksObtained: r.marksObtained,
+  //         remarks: r.remarks,
+  //       })),
+  //     });
+  //   } catch (error) {
+  //     logger.error(`Error entering subject marks: ${error.message}`, { error });
+  //     res.status(500).json({ error: error.message });
+  //   }
+  // },
+
   enterSubjectMarks: async (req, res) => {
     try {
       const { examId } = req.params;
-      const { studentsMarks } = req.body; // [{ studentId, marks, remarks }]
+      const { examEventId, subjectId, studentsMarks } = req.body;
       const teacherId = req.user._id;
       const schoolId = req.school._id.toString();
       const connection = req.connection;
-      const Exam = require("../models/Exam")(connection);
-      const Subject = require("../models/Subject")(connection);
-      const User = require("../models/User")(connection);
+      const Exam = getModel("Exam", connection);
+      const ExamEvent = getModel("ExamEvent", connection);
+      const Subject = getModel("Subject", connection);
+      const User = getModel("User", connection);
+      const Result = getModel("Result", connection);
 
-      const exam = await Exam.findOne({ _id: examId, school: schoolId })
-        .populate("subject")
-        .populate("class", "students");
-      if (!exam) return res.status(404).json({ message: "Exam not found" });
-
-      // Verify teacher is assigned to the subject
-      const subject = exam.subject;
-      const isAuthorized = subject.teachers.some(
-        (t) => t.teacher.toString() === teacherId.toString()
-      );
-      if (!isAuthorized) {
-        return res.status(403).json({ message: "Not authorized to enter marks for this exam" });
+      if (!mongoose.Types.ObjectId.isValid(examId) || !mongoose.Types.ObjectId.isValid(examEventId)) {
+        return res.status(400).json({ message: "Invalid exam or exam event ID" });
+      }
+      if (!mongoose.Types.ObjectId.isValid(subjectId)) {
+        return res.status(400).json({ message: "Invalid subject ID" });
       }
 
-      // Validate students and marks
+      const exam = await Exam.findOne({ _id: examId, school: schoolId, examEvent: examEventId })
+        .populate("class", "students")
+        .lean();
+      if (!exam) {
+        return res.status(404).json({ message: "Exam not found" });
+      }
+
+      const subject = await Subject.findOne({
+        _id: subjectId,
+        class: exam.class._id,
+        school: schoolId,
+        "teachers.teacher": teacherId,
+      });
+      if (!subject) {
+        return res.status(403).json({
+          message: "Subject not found or you are not authorized to enter marks for this subject",
+        });
+      }
+
       const validStudentIds = exam.class.students.map((s) => s.toString());
       for (const entry of studentsMarks) {
         if (!validStudentIds.includes(entry.studentId)) {
@@ -1366,64 +1613,351 @@ const teacherController = {
         }
       }
 
-      // Update exam with marks
-      exam.results = studentsMarks.map((entry) => ({
-        student: entry.studentId,
-        marksObtained: entry.marks,
-        remarks: entry.remarks || "",
-      }));
-      exam.marksEnteredBy = teacherId;
-      exam.marksEnteredAt = new Date();
-      exam.status = "pending"; // Changed from "draft" to "pending" for clarity
+      const results = [];
+      for (const entry of studentsMarks) {
+        const result = await Result.findOneAndUpdate(
+          {
+            school: schoolId,
+            exam: examId,
+            examEvent: examEventId,
+            subject: subjectId,
+            student: entry.studentId,
+            class: exam.class._id,
+          },
+          {
+            marksObtained: entry.marks,
+            totalMarks: exam.totalMarks,
+            remarks: entry.remarks || "",
+            status: "pending",
+            marksEnteredBy: teacherId,
+            marksEnteredAt: new Date(),
+          },
+          { upsert: true, new: true }
+        );
+        results.push(result);
+      }
 
-      await exam.save();
-      res.json({ message: "Marks entered successfully", exam });
+      await Exam.updateOne(
+        { _id: examId, school: schoolId },
+        { status: "pending", marksEnteredBy: teacherId }
+      );
+
+      res.json({
+        message: "Marks entered successfully",
+        examId,
+        examEventId,
+        subjectId,
+        results: results.map((r) => ({
+          studentId: r.student,
+          marksObtained: r.marksObtained,
+          remarks: r.remarks,
+        })),
+      });
     } catch (error) {
+      logger.error(`Error entering subject marks: ${error.message}`, { error });
       res.status(500).json({ error: error.message });
     }
   },
 
+  
+
+  // submitMarksToClassTeacher: async (req, res) => {
+  //   try {
+  //     const { examId } = req.params;
+  //     const teacherId = req.user._id;
+  //     const schoolId = req.school._id.toString();
+  //     const connection = req.connection;
+  //     const Exam = require("../models/Exam")(connection);
+  //     const Class = require("../models/Class")(connection);
+  //     const Result = require("../models/Results")(connection);
+  //     const Subject = require("../models/Subject")(connection);
+
+  //     // Validate examId
+  //     if (!mongoose.Types.ObjectId.isValid(examId)) {
+  //       return res.status(400).json({ message: "Invalid exam ID" });
+  //     }
+
+  //     // Find the exam and populate class and subject
+  //     const exam = await Exam.findOne({ _id: examId, school: schoolId })
+  //       .populate("class", "classTeacher")
+  //       .populate("subject");
+  //     if (!exam) {
+  //       return res.status(404).json({ message: "Exam not found" });
+  //     }
+
+  //     // Verify the teacher is authorized (either marksEnteredBy or subject teacher)
+  //     const isSubjectTeacher = await Subject.findOne({
+  //       _id: exam.subject._id,
+  //       school: schoolId,
+  //       "teachers.teacher": teacherId,
+  //     });
+  //     const isMarksEnteredBy = exam.marksEnteredBy && exam.marksEnteredBy.toString() === teacherId.toString();
+
+  //     if (!isSubjectTeacher && !isMarksEnteredBy) {
+  //       return res.status(403).json({ message: "Not authorized to submit these marks" });
+  //     }
+
+  //     // Check if marks exist in Result model
+  //     const results = await Result.find({
+  //       school: schoolId,
+  //       exam: examId,
+  //       subject: exam.subject._id,
+  //       status: "pending",
+  //     });
+  //     if (results.length === 0) {
+  //       return res.status(400).json({ message: "No pending marks found for this exam and subject" });
+  //     }
+
+  //     // Check exam status
+  //     if (exam.status !== "pending") {
+  //       return res.status(400).json({ message: "Marks already submitted or in invalid state" });
+  //     }
+
+  //     // Verify class teacher exists
+  //     if (!exam.class.classTeacher) {
+  //       return res.status(400).json({ message: "No class teacher assigned to this class" });
+  //     }
+
+  //     // Update exam status
+  //     exam.status = "submittedToClassTeacher";
+  //     exam.submittedToClassTeacherAt = new Date();
+  //     await exam.save();
+
+  //     // Update Result documents to reflect submission
+  //     await Result.updateMany(
+  //       {
+  //         school: schoolId,
+  //         exam: examId,
+  //         subject: exam.subject._id,
+  //         status: "pending",
+  //       },
+  //       {
+  //         status: "submittedToClassTeacher",
+  //         submittedToClassTeacherAt: new Date(),
+  //       }
+  //     );
+
+  //     res.json({
+  //       message: "Marks submitted to class teacher successfully",
+  //       exam: {
+  //         examId: exam._id,
+  //         examType: exam.examType,
+  //         subject: exam.subject.name,
+  //         status: exam.status,
+  //       },
+  //     });
+  //   } catch (error) {
+  //     logger.error(`Error submitting marks to class teacher: ${error.message}`, { error });
+  //     res.status(500).json({ error: error.message });
+  //   }
+  // },
+  
+  // submitMarksToClassTeacher: async (req, res) => {
+  //   try {
+  //     const { examId } = req.params;
+  //     const { subjectId } = req.body; // Specify which subject's marks to submit
+  //     const teacherId = req.user._id;
+  //     const schoolId = req.school._id.toString();
+  //     const connection = req.connection;
+  //     const Exam = require("../models/Exam")(connection);
+  //     const Class = require("../models/Class")(connection);
+  //     const Result = require("../models/Results")(connection);
+  //     const Subject = require("../models/Subject")(connection);
+
+  //     // Validate inputs
+  //     if (!mongoose.Types.ObjectId.isValid(examId)) {
+  //       return res.status(400).json({ message: "Invalid exam ID" });
+  //     }
+  //     if (!mongoose.Types.ObjectId.isValid(subjectId)) {
+  //       return res.status(400).json({ message: "Invalid subject ID" });
+  //     }
+
+  //     // Find the exam and populate class
+  //     const exam = await Exam.findOne({ _id: examId, school: schoolId })
+  //       .populate("class", "classTeacher");
+  //     if (!exam) {
+  //       return res.status(404).json({ message: "Exam not found" });
+  //     }
+
+  //     // Verify the subject belongs to the exam's class and teacher is authorized
+  //     const subject = await Subject.findOne({
+  //       _id: subjectId,
+  //       class: exam.class._id,
+  //       school: schoolId,
+  //       "teachers.teacher": teacherId,
+  //     });
+  //     if (!subject) {
+  //       return res.status(403).json({
+  //         message: "Subject not found or you are not authorized to submit marks for this subject",
+  //       });
+  //     }
+
+  //     // Check if pending marks exist in Result model for the specified subject
+  //     const results = await Result.find({
+  //       school: schoolId,
+  //       exam: examId,
+  //       subject: subjectId,
+  //       status: "pending",
+  //     });
+  //     if (results.length === 0) {
+  //       return res.status(400).json({ message: "No pending marks found for this exam and subject" });
+  //     }
+
+  //     // Verify class teacher exists
+  //     if (!exam.class.classTeacher) {
+  //       return res.status(400).json({ message: "No class teacher assigned to this class" });
+  //     }
+
+  //     // Update Result documents to submittedToClassTeacher
+  //     await Result.updateMany(
+  //       {
+  //         school: schoolId,
+  //         exam: examId,
+  //         subject: subjectId,
+  //         status: "pending",
+  //       },
+  //       {
+  //         status: "submittedToClassTeacher",
+  //         submittedToClassTeacherAt: new Date(),
+  //       }
+  //     );
+
+  //     // Update exam status to pending if not already (optional, since exam may cover multiple subjects)
+  //     await Exam.updateOne(
+  //       { _id: examId, school: schoolId },
+  //       { status: "pending" }
+  //     );
+
+  //     res.json({
+  //       message: "Marks submitted to class teacher successfully",
+  //       examId,
+  //       subjectId,
+  //       subjectName: subject.name,
+  //       status: "submittedToClassTeacher",
+  //     });
+  //   } catch (error) {
+  //     logger.error(`Error submitting marks to class teacher: ${error.message}`, { error });
+  //     res.status(500).json({ error: error.message });
+  //   }
+  // },
 
 
   submitMarksToClassTeacher: async (req, res) => {
     try {
       const { examId } = req.params;
+      const { subjectId } = req.body;
       const teacherId = req.user._id;
       const schoolId = req.school._id.toString();
       const connection = req.connection;
       const Exam = require("../models/Exam")(connection);
       const Class = require("../models/Class")(connection);
+      const Result = require("../models/Results")(connection);
+      const Subject = require("../models/Subject")(connection);
+
+      if (!mongoose.Types.ObjectId.isValid(examId)) {
+        return res.status(400).json({ message: "Invalid exam ID" });
+      }
+      if (!mongoose.Types.ObjectId.isValid(subjectId)) {
+        return res.status(400).json({ message: "Invalid subject ID" });
+      }
 
       const exam = await Exam.findOne({ _id: examId, school: schoolId })
         .populate("class", "classTeacher");
-
-      // const exam = await Exam.findOne({ _id: examId, school: schoolId })
-      //   .populate("class", "classTeacher")
-      //   .populate("subject", "name"); // Add this to populate the subject
-
-      if (!exam) return res.status(404).json({ message: "Exam not found" });
-
-      if (exam.marksEnteredBy.toString() !== teacherId.toString()) {
-        return res.status(403).json({ message: "Not authorized to submit these marks" });
+      if (!exam) {
+        return res.status(404).json({ message: "Exam not found" });
       }
-      if (exam.status !== "pending") {
-        return res.status(400).json({ message: "Marks already submitted or in invalid state" });
+
+      const subject = await Subject.findOne({
+        _id: subjectId,
+        class: exam.class._id,
+        school: schoolId,
+        "teachers.teacher": teacherId,
+      });
+      if (!subject) {
+        return res.status(403).json({
+          message: "Subject not found or you are not authorized to submit marks for this subject",
+        });
+      }
+
+      const results = await Result.find({
+        school: schoolId,
+        exam: examId,
+        subject: subjectId,
+        status: "pending",
+      });
+      if (results.length === 0) {
+        return res.status(400).json({ message: "No pending marks found for this exam and subject" });
       }
 
       if (!exam.class.classTeacher) {
         return res.status(400).json({ message: "No class teacher assigned to this class" });
       }
 
-      exam.status = "submittedToClassTeacher";
-      exam.submittedToClassTeacherAt = new Date();
-      await exam.save();
+      await Result.updateMany(
+        {
+          school: schoolId,
+          exam: examId,
+          subject: subjectId,
+          status: "pending",
+        },
+        {
+          status: "submittedToClassTeacher",
+          submittedToClassTeacherAt: new Date(),
+        }
+      );
 
-      res.json({ message: "Marks submitted to class teacher successfully", exam });
+      await Exam.updateOne(
+        { _id: examId, school: schoolId },
+        { status: "pending" }
+      );
+
+      res.json({
+        message: "Marks submitted to class teacher successfully",
+        examId,
+        subjectId,
+        subjectName: subject.name,
+        status: "submittedToClassTeacher",
+      });
     } catch (error) {
+      logger.error(`Error submitting marks to class teacher: ${error.message}`, { error });
       res.status(500).json({ error: error.message });
     }
   },
-  
+
+
+
+  // reviewSubjectMarks: async (req, res) => {
+  //   try {
+  //     const { classId, examId } = req.params;
+  //     const teacherId = req.user._id;
+  //     const schoolId = req.school._id.toString();
+  //     const connection = req.connection;
+  //     // const Exam = require("../models/Exam")(connection);
+  //     const Class = require("../models/Class")(connection);
+
+  //     const classInfo = await Class.findOne({ _id: classId, school: schoolId });
+  //     if (!classInfo || classInfo.classTeacher.toString() !== teacherId.toString()) {
+  //       return res.status(403).json({ message: "Not authorized as class teacher" });
+  //     }
+
+  //     const query = {
+  //       school: schoolId,
+  //       class: classId,
+  //       status: "submittedToClassTeacher",
+  //     };
+  //     // if (examId) query._id = examId;
+  //     // if (examId && examId !== "all") query._id = examId;
+
+  //     // const exams = await Exam.find(query)
+  //     //   .populate("subject", "name")
+  //     //   .populate("results.student", "name")
+  //     //   .lean();
+
+  //     // res.json(exams);
+  //   } catch (error) {
+  //     res.status(500).json({ error: error.message });
+  //   }
+  // },
 
   reviewSubjectMarks: async (req, res) => {
     try {
@@ -1431,29 +1965,77 @@ const teacherController = {
       const teacherId = req.user._id;
       const schoolId = req.school._id.toString();
       const connection = req.connection;
-      const Exam = require("../models/Exam")(connection);
       const Class = require("../models/Class")(connection);
+      const Result = require("../models/Results")(connection);
+      const Exam = require("../models/Exam")(connection);
+      const Subject = require("../models/Subject")(connection);
+      const User = require("../models/User")(connection);
 
+      // Validate class teacher
       const classInfo = await Class.findOne({ _id: classId, school: schoolId });
       if (!classInfo || classInfo.classTeacher.toString() !== teacherId.toString()) {
         return res.status(403).json({ message: "Not authorized as class teacher" });
       }
 
+      // Build query for Result documents
       const query = {
         school: schoolId,
         class: classId,
         status: "submittedToClassTeacher",
       };
-      // if (examId) query._id = examId;
-      if (examId && examId !== "all") query._id = examId;
+      if (examId && examId !== "all") query.exam = examId;
 
-      const exams = await Exam.find(query)
+      // Aggregate results by exam and subject
+      const results = await Result.find(query)
+        .populate("exam", "examType totalMarks")
         .populate("subject", "name")
-        .populate("results.student", "name")
+        .populate("student", "name rollNumber")
         .lean();
 
-      res.json(exams);
+      // Group results by exam and subject
+      const examsMap = {};
+      results.forEach((result) => {
+        const examId = result.exam._id.toString();
+        const subjectId = result.subject._id.toString();
+
+        if (!examsMap[examId]) {
+          examsMap[examId] = {
+            examId: examId,
+            examType: result.exam.examType,
+            totalMarks: result.exam.totalMarks,
+            classId: result.class.toString(),
+            subjects: {},
+          };
+        }
+
+        if (!examsMap[examId].subjects[subjectId]) {
+          examsMap[examId].subjects[subjectId] = {
+            subjectId: subjectId,
+            subjectName: result.subject.name,
+            results: [],
+          };
+        }
+
+        examsMap[examId].subjects[subjectId].results.push({
+          studentId: result.student._id,
+          studentName: result.student.name,
+          rollNumber: result.student.rollNumber,
+          marksObtained: result.marksObtained,
+          totalMarks: result.totalMarks,
+          remarks: result.remarks,
+          status: result.status,
+        });
+      });
+
+      // Convert examsMap to array
+      const formattedExams = Object.values(examsMap).map((exam) => ({
+        ...exam,
+        subjects: Object.values(exam.subjects),
+      }));
+
+      res.json(formattedExams);
     } catch (error) {
+      logger.error(`Error reviewing subject marks: ${error.message}`, { error });
       res.status(500).json({ error: error.message });
     }
   },
@@ -1461,16 +2043,1314 @@ const teacherController = {
   
   
 
+
+  // compileAndSubmitResults: async (req, res) => {
+  //   try {
+  //     const { classId, examType } = req.params;
+  //     const teacherId = req.user._id;
+  //     const schoolId = req.school._id.toString();
+  //     const connection = req.connection;
+  //     const Exam = require("../models/Exam")(connection);
+  //     const Class = require("../models/Class")(connection);
+  //     const Subject = require("../models/Subject")(connection);
+  //     const User = require("../models/User")(connection);
+  //     const Result = require("../models/Results")(connection);
+
+  //     // Verify class teacher role
+  //     const classInfo = await Class.findOne({ _id: classId, school: schoolId });
+  //     if (!classInfo || classInfo.classTeacher.toString() !== teacherId.toString()) {
+  //       return res.status(403).json({ message: "Not authorized as class teacher" });
+  //     }
+
+  //     // Get all subjects for the class
+  //     const subjects = await Subject.find({ class: classId }).lean();
+
+  //     // Get all results for the class and exam type with status submittedToClassTeacher
+  //     const results = await Result.find({
+  //       school: schoolId,
+  //       class: classId,
+  //       status: "submittedToClassTeacher",
+  //     })
+  //       .populate({
+  //         path: "exam",
+  //         match: { examType: { $regex: `^${examType}$`, $options: "i" } }, // Case-insensitive match
+  //         select: "examType totalMarks subject",
+  //       })
+  //       .populate("subject", "name")
+  //       .populate("student", "name rollNumber")
+  //       .lean();
+
+  //     // Log results with invalid exam references
+  //     const invalidResults = results.filter((result) => !result.exam);
+  //     if (invalidResults.length > 0) {
+  //       logger.warn(`Found ${invalidResults.length} results with invalid or missing exam references`, {
+  //         classId,
+  //         examType,
+  //         invalidExamIds: invalidResults.map((r) => r.exam?.toString() || "null"),
+  //       });
+  //     }
+
+  //     // Filter out results where exam is null (wrong examType or missing exam)
+  //     const validResults = results.filter((result) => result.exam);
+
+  //     // Check if all subjects have submitted marks
+  //     const submittedSubjectIds = [...new Set(validResults.map((r) => r.subject._id.toString()))];
+  //     const allSubjectIds = subjects.map((s) => s._id.toString());
+  //     const missingSubjectIds = allSubjectIds.filter((id) => !submittedSubjectIds.includes(id));
+  //     const missingSubjects = subjects
+  //       .filter((s) => missingSubjectIds.includes(s._id.toString()))
+  //       .map((s) => s.name);
+
+  //     if (submittedSubjectIds.length !== subjects.length) {
+  //       logger.warn(`Missing marks for subjects: ${missingSubjects.join(", ")}`, {
+  //         classId,
+  //         examType,
+  //         missingSubjectIds,
+  //       });
+  //       return res.status(400).json({
+  //         message: `Not all subjects have submitted marks. Expected: ${subjects.length}, Found: ${submittedSubjectIds.length}. Missing subjects: ${missingSubjects.join(", ")}`,
+  //       });
+  //     }
+
+  //     // Get students
+  //     const students = await User.find({ _id: { $in: classInfo.students } })
+  //       .select("name rollNumber")
+  //       .lean();
+
+  //     // Compile results, handling multiple exams per subject
+  //     const compiledResults = students.map((student) => {
+  //       const studentResult = {
+  //         studentId: student._id,
+  //         name: student.name,
+  //         rollNumber: student.rollNumber,
+  //         subjects: {},
+  //         totalMarks: 0,
+  //         percentage: 0,
+  //       };
+
+  //       subjects.forEach((subject) => {
+  //         // Find the first result for this student and subject
+  //         const result = validResults.find(
+  //           (r) =>
+  //             r.student._id.toString() === student._id.toString() &&
+  //             r.subject._id.toString() === subject._id.toString()
+  //         );
+  //         studentResult.subjects[subject.name] = result ? result.marksObtained : 0;
+  //         studentResult.totalMarks += result ? result.marksObtained : 0;
+  //       });
+
+  //       const maxTotalMarks = subjects.length * 100; // Assuming 100 marks per subject
+  //       studentResult.percentage = (studentResult.totalMarks / maxTotalMarks) * 100;
+
+  //       return studentResult;
+  //     });
+
+  //     // Generate Excel file
+  //     const workbook = new ExcelJS.Workbook();
+  //     const worksheet = workbook.addWorksheet("Exam Results");
+
+  //     // Define columns
+  //     const columns = [
+  //       { header: "Roll Number", key: "rollNumber", width: 15 },
+  //       { header: "Student Name", key: "name", width: 30 },
+  //       ...subjects.map((subject) => ({
+  //         header: subject.name,
+  //         key: subject.name,
+  //         width: 15,
+  //       })),
+  //       { header: "Total Marks", key: "totalMarks", width: 15 },
+  //       { header: "Percentage", key: "percentage", width: 15 },
+  //     ];
+  //     worksheet.columns = columns;
+
+  //     // Add data
+  //     compiledResults.forEach((result) => {
+  //       const row = {
+  //         rollNumber: result.rollNumber,
+  //         name: result.name,
+  //         totalMarks: result.totalMarks,
+  //         percentage: result.percentage.toFixed(2),
+  //       };
+  //       subjects.forEach((subject) => {
+  //         row[subject.name] = result.subjects[subject.name] || 0;
+  //       });
+  //       worksheet.addRow(row);
+  //     });
+
+  //     // Style the header
+  //     worksheet.getRow(1).eachCell((cell) => {
+  //       cell.font = { bold: true };
+  //       cell.fill = {
+  //         type: "pattern",
+  //         pattern: "solid",
+  //         fgColor: { argb: "FFCCCCCC" },
+  //       };
+  //       cell.alignment = { vertical: "middle", horizontal: "center" };
+  //     });
+
+  //     // Save Excel file to buffer
+  //     const buffer = await workbook.xlsx.writeBuffer();
+
+  //     // Upload to S3
+  //     const fileKey = `results/${schoolId}/${classId}/${examType}_${Date.now()}.xlsx`;
+  //     await uploadToS3(buffer, fileKey, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+
+  //     // Update results with Excel file reference
+  //     const session = await connection.startSession();
+  //     session.startTransaction();
+
+  //     try {
+  //       await Result.updateMany(
+  //         {
+  //           school: schoolId,
+  //           class: classId,
+  //           status: "submittedToClassTeacher",
+  //           exam: { $in: validResults.map((r) => r.exam._id) },
+  //         },
+  //         {
+  //           $set: {
+  //             status: "compiled",
+  //             excelFile: {
+  //               key: fileKey,
+  //               url: getPublicFileUrl(fileKey),
+  //               originalName: `${examType}_Results.xlsx`,
+  //             },
+  //             compiledBy: teacherId,
+  //             compiledAt: new Date(),
+  //           },
+  //         },
+  //         { session }
+  //       );
+
+  //       await session.commitTransaction();
+
+  //       res.json({
+  //         message: "Results compiled successfully. Please review the Excel file before submitting to admin.",
+  //         class: `${classInfo.name}${classInfo.division ? " " + classInfo.division : ""}`,
+  //         examType,
+  //         excelFileUrl: getPublicFileUrl(fileKey),
+  //         results: compiledResults,
+  //       });
+  //     } catch (error) {
+  //       await session.abortTransaction();
+  //       throw error;
+  //     } finally {
+  //       session.endSession();
+  //     }
+  //   } catch (error) {
+  //     logger.error(`Error in compileAndSubmitResults: ${error.message}`, { error });
+  //     res.status(500).json({ error: error.message });
+  //   }
+  // },
+
+
+  // compileAndSubmitResults: async (req, res) => {
+  //   try {
+  //     const { classId, examType } = req.params;
+  //     const teacherId = req.user._id;
+  //     const schoolId = req.school._id.toString();
+  //     const connection = req.connection;
+  //     const Exam = getModel("Exam", connection);
+  //     const Class = getModel("Class", connection);
+  //     const Subject = getModel("Subject", connection);
+  //     const User = getModel("User", connection);
+  //     const Result = getModel("Result", connection);
+  //     const ExamEvent = getModel("ExamEvent", connection);
+  
+  //     // Verify class teacher role
+  //     const classInfo = await Class.findOne({ _id: classId, school: schoolId });
+  //     if (!classInfo || classInfo.classTeacher.toString() !== teacherId.toString()) {
+  //       return res.status(403).json({ message: "Not authorized as class teacher" });
+  //     }
+  
+  //     // Get all subjects for the class
+  //     const subjects = await Subject.find({ class: classId }).lean();
+  
+  //     // Get all results for the class and exam type with status submittedToClassTeacher
+  //     const results = await Result.find({
+  //       school: schoolId,
+  //       class: classId,
+  //       status: "submittedToClassTeacher",
+  //     })
+  //       .populate({
+  //         path: "exam",
+  //         match: { examType: { $regex: `^${examType}$`, $options: "i" } },
+  //         select: "examType totalMarks subject examEvent",
+  //       })
+  //       .populate("subject", "name")
+  //       .populate("student", "name rollNumber studentDetails.grNumber")
+  //       .populate("examEvent", "name")
+  //       .lean();
+  
+  //     // Filter out results where exam is null (wrong examType or missing exam)
+  //     const validResults = results.filter((result) => result.exam);
+  
+  //     // Get any exam event ID to fetch additional info if needed
+  //     const examEventId = validResults.length > 0 ? validResults[0].examEvent?._id : null;
+  //     let examEventInfo = null;
+  //     if (examEventId) {
+  //       examEventInfo = await ExamEvent.findById(examEventId).lean();
+  //     }
+  
+  //     // Check if all subjects have submitted marks
+  //     const submittedSubjectIds = [...new Set(validResults.map((r) => r.subject._id.toString()))];
+  //     const allSubjectIds = subjects.map((s) => s._id.toString());
+  //     const missingSubjectIds = allSubjectIds.filter((id) => !submittedSubjectIds.includes(id));
+  //     const missingSubjects = subjects
+  //       .filter((s) => missingSubjectIds.includes(s._id.toString()))
+  //       .map((s) => s.name);
+  
+  //     // if (submittedSubjectIds.length !== subjects.length) {
+  //     //   return res.status(400).json({
+  //     //     message: `Not all subjects have submitted marks. Expected: ${subjects.length}, Found: ${submittedSubjectIds.length}. Missing subjects: ${missingSubjects.join(", ")}`,
+  //     //   });
+  //     // }
+  
+  //     // Get students with all necessary details for marksheet generation
+  //     const students = await User.find({ _id: { $in: classInfo.students } })
+  //       .select("name rollNumber studentDetails.grNumber studentDetails.dob studentDetails.gender studentDetails.admissionType")
+  //       .lean();
+  
+  //     // Compile results, handling multiple exams per subject
+  //     const compiledResults = students.map((student) => {
+  //       const studentResult = {
+  //         studentId: student._id,
+  //         name: student.name,
+  //         rollNumber: student.rollNumber,
+  //         grNumber: student.studentDetails?.grNumber || "",
+  //         dob: student.studentDetails?.dob || "",
+  //         gender: student.studentDetails?.gender || "",
+  //         admissionType: student.studentDetails?.admissionType || "Regular",
+  //         subjects: {},
+  //         totalMarks: 0,
+  //         totalMaxMarks: 0,
+  //         percentage: 0,
+  //       };
+  
+  //       subjects.forEach((subject) => {
+  //         // Find the first result for this student and subject
+  //         const result = validResults.find(
+  //           (r) =>
+  //             r.student._id.toString() === student._id.toString() &&
+  //             r.subject._id.toString() === subject._id.toString()
+  //         );
+          
+  //         if (result) {
+  //           studentResult.subjects[subject.name] = {
+  //             obtained: result.marksObtained,
+  //             total: result.totalMarks,
+  //             remarks: result.remarks || ""
+  //           };
+  //           studentResult.totalMarks += result.marksObtained;
+  //           studentResult.totalMaxMarks += result.totalMarks;
+  //         } else {
+  //           studentResult.subjects[subject.name] = {
+  //             obtained: 0,
+  //             total: 100, // Default total marks
+  //             remarks: "Absent"
+  //           };
+  //           studentResult.totalMaxMarks += 100; // Default total marks
+  //         }
+  //       });
+  
+  //       studentResult.percentage = studentResult.totalMaxMarks > 0 
+  //         ? (studentResult.totalMarks / studentResult.totalMaxMarks) * 100 
+  //         : 0;
+  
+  //       // Calculate grade based on percentage (you can adjust the grading scale)
+  //       studentResult.grade = calculateGrade(studentResult.percentage);
+  
+  //       return studentResult;
+  //     });
+  
+  //     // Generate Excel file
+  //     const workbook = new ExcelJS.Workbook();
+  //     const worksheet = workbook.addWorksheet("Exam Results");
+  
+  //     // Add header with exam details
+  //     worksheet.mergeCells('A1:F1');
+  //     worksheet.getCell('A1').value = 'EXAM RESULTS';
+  //     worksheet.getCell('A1').font = { bold: true, size: 14 };
+  //     worksheet.getCell('A1').alignment = { horizontal: 'center' };
+  
+  //     // Add exam metadata
+  //     worksheet.mergeCells('A2:C2');
+  //     worksheet.getCell('A2').value = `Class: ${classInfo.name}${classInfo.division ? " " + classInfo.division : ""}`;
+  //     worksheet.getCell('A2').font = { bold: true };
+  
+  //     worksheet.mergeCells('D2:F2');
+  //     worksheet.getCell('D2').value = `Exam Type: ${examType}`;
+  //     worksheet.getCell('D2').font = { bold: true };
+  
+  //     if (examEventInfo) {
+  //       worksheet.mergeCells('A3:C3');
+  //       worksheet.getCell('A3').value = `Exam Event: ${examEventInfo.name || ""}`;
+  //       worksheet.getCell('A3').font = { bold: true };
+  //     }
+  
+  //     // Add empty row
+  //     worksheet.addRow([]);
+  
+  //     // Define columns
+  //     const columns = [
+  //       { header: "GR Number", key: "grNumber", width: 15 },
+  //       { header: "Roll Number", key: "rollNumber", width: 15 },
+  //       { header: "Student Name", key: "name", width: 30 },
+  //       { header: "DOB", key: "dob", width: 15 },
+  //       { header: "Gender", key: "gender", width: 10 },
+  //       { header: "Admission Type", key: "admissionType", width: 15 },
+  //     ];
+  
+  //     // Add subject columns
+  //     subjects.forEach((subject) => {
+  //       columns.push({ 
+  //         header: `${subject.name} (Marks)`, 
+  //         key: `${subject.name}_marks`, 
+  //         width: 15 
+  //       });
+  //       columns.push({ 
+  //         header: `${subject.name} (Total)`, 
+  //         key: `${subject.name}_total`, 
+  //         width: 15 
+  //       });
+  //       columns.push({ 
+  //         header: `${subject.name} (Remarks)`, 
+  //         key: `${subject.name}_remarks`, 
+  //         width: 20 
+  //       });
+  //     });
+  
+  //     // Add summary columns
+  //     columns.push(
+  //       { header: "Total Marks", key: "totalMarks", width: 15 },
+  //       { header: "Max Marks", key: "totalMaxMarks", width: 15 },
+  //       { header: "Percentage", key: "percentage", width: 15 },
+  //       { header: "Grade", key: "grade", width: 10 }
+  //     );
+  
+  //     worksheet.columns = columns;
+  
+  //     // Add data rows
+  //     compiledResults.forEach((result) => {
+  //       const row = {
+  //         grNumber: result.grNumber,
+  //         rollNumber: result.rollNumber,
+  //         name: result.name,
+  //         dob: result.dob instanceof Date ? result.dob.toISOString().split('T')[0] : result.dob,
+  //         gender: result.gender,
+  //         admissionType: result.admissionType,
+  //         totalMarks: result.totalMarks,
+  //         totalMaxMarks: result.totalMaxMarks,
+  //         percentage: result.percentage.toFixed(2),
+  //         grade: result.grade
+  //       };
+  
+  //       // Add subject data
+  //       subjects.forEach((subject) => {
+  //         const subjectData = result.subjects[subject.name] || { obtained: 0, total: 0, remarks: "" };
+  //         row[`${subject.name}_marks`] = subjectData.obtained;
+  //         row[`${subject.name}_total`] = subjectData.total;
+  //         row[`${subject.name}_remarks`] = subjectData.remarks;
+  //       });
+  
+  //       worksheet.addRow(row);
+  //     });
+  
+  //     // Style the header rows
+  //     const headerRowIndex = 5; // Adjusted for the metadata rows
+  //     worksheet.getRow(headerRowIndex).eachCell((cell) => {
+  //       cell.font = { bold: true };
+  //       cell.fill = {
+  //         type: "pattern",
+  //         pattern: "solid",
+  //         fgColor: { argb: "FFCCCCCC" },
+  //       };
+  //       cell.alignment = { vertical: "middle", horizontal: "center" };
+  //       cell.border = {
+  //         top: { style: 'thin' },
+  //         left: { style: 'thin' },
+  //         bottom: { style: 'thin' },
+  //         right: { style: 'thin' }
+  //       };
+  //     });
+  
+  //     // Style data cells
+  //     for (let i = headerRowIndex + 1; i <= headerRowIndex + compiledResults.length; i++) {
+  //       worksheet.getRow(i).eachCell((cell) => {
+  //         cell.border = {
+  //           top: { style: 'thin' },
+  //           left: { style: 'thin' },
+  //           bottom: { style: 'thin' },
+  //           right: { style: 'thin' }
+  //         };
+  //         cell.alignment = { vertical: "middle", horizontal: "center" };
+  //       });
+  //     }
+  
+  //     // Save Excel file to buffer
+  //     const buffer = await workbook.xlsx.writeBuffer();
+  
+  //     // Upload to S3
+  //     const fileKey = `results/${schoolId}/${classId}/${examType}_${Date.now()}.xlsx`;
+  //     await uploadToS3(buffer, fileKey, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+  
+  //     // Update results with Excel file reference
+  //     const session = await connection.startSession();
+  //     session.startTransaction();
+  
+  //     try {
+  //       await Result.updateMany(
+  //         {
+  //           school: schoolId,
+  //           class: classId,
+  //           status: "submittedToClassTeacher",
+  //           exam: { $in: validResults.map((r) => r.exam._id) },
+  //         },
+  //         {
+  //           $set: {
+  //             status: "compiled",
+  //             excelFile: {
+  //               key: fileKey,
+  //               url: getPublicFileUrl(fileKey),
+  //               originalName: `${examType}_Results.xlsx`,
+  //             },
+  //             compiledBy: teacherId,
+  //             compiledAt: new Date(),
+  //           },
+  //         },
+  //         { session }
+  //       );
+  
+  //       await session.commitTransaction();
+  
+  //       res.json({
+  //         message: "Results compiled successfully. Please review the Excel file before submitting to admin.",
+  //         class: `${classInfo.name}${classInfo.division ? " " + classInfo.division : ""}`,
+  //         examType,
+  //         excelFileUrl: getPublicFileUrl(fileKey),
+  //         results: compiledResults,
+  //       });
+  //     } catch (error) {
+  //       await session.abortTransaction();
+  //       throw error;
+  //     } finally {
+  //       session.endSession();
+  //     }
+  //   } catch (error) {
+  //     logger.error(`Error in compileAndSubmitResults: ${error.message}`, { error });
+  //     res.status(500).json({ error: error.message });
+  //   }
+  // },
+
+
+  // compileAndSubmitResults: async (req, res) => {
+  //   try {
+  //     const { classId, examType } = req.params;
+  //     const teacherId = req.user._id;
+  //     const schoolId = req.school._id.toString();
+  //     const connection = req.connection;
+  //     const Exam = getModel("Exam", connection);
+  //     const Class = getModel("Class", connection);
+  //     const Subject = getModel("Subject", connection);
+  //     const User = getModel("User", connection);
+  //     const Result = getModel("Result", connection);
+  //     const ExamEvent = getModel("ExamEvent", connection);
+  //     const School = getModel("School", connection);
+  
+  //     // Get school details for the header
+  //     // const schoolInfo = await School.findById(schoolId).select("name address logo").lean();
+  
+  //     // Verify class teacher role
+  //     const classInfo = await Class.findOne({ _id: classId, school: schoolId });
+  //     if (!classInfo || classInfo.classTeacher.toString() !== teacherId.toString()) {
+  //       return res.status(403).json({ message: "Not authorized as class teacher" });
+  //     }
+  
+  //     // Get all subjects for the class
+  //     const subjects = await Subject.find({ class: classId }).lean();
+  
+  //     // Get all results for the class and exam type with status submittedToClassTeacher
+  //     const results = await Result.find({
+  //       school: schoolId,
+  //       class: classId,
+  //       status: "submittedToClassTeacher",
+  //     })
+  //       .populate({
+  //         path: "exam",
+  //         match: { examType: { $regex: `^${examType}$`, $options: "i" } },
+  //         select: "examType totalMarks subject examEvent",
+  //       })
+  //       .populate("subject", "name")
+  //       .populate("student", "name rollNumber studentDetails")
+  //       .populate("examEvent", "name startDate endDate")
+  //       .lean();
+  
+  //     // Filter out results where exam is null
+  //     const validResults = results.filter((result) => result.exam);
+  
+  //     // Get exam event details
+  //     const examEventId = validResults.length > 0 ? validResults[0].exam.examEvent : null;
+  //     let examEventInfo = null;
+  //     if (examEventId) {
+  //       examEventInfo = await ExamEvent.findById(examEventId).lean();
+  //     }
+  
+  //     // Check if all subjects have submitted marks
+  //     const submittedSubjectIds = [...new Set(validResults.map((r) => r.subject._id.toString()))];
+  //     const allSubjectIds = subjects.map((s) => s._id.toString());
+  //     const missingSubjectIds = allSubjectIds.filter((id) => !submittedSubjectIds.includes(id));
+  //     const missingSubjects = subjects
+  //       .filter((s) => missingSubjectIds.includes(s._id.toString()))
+  //       .map((s) => s.name);
+  
+  //     // if (submittedSubjectIds.length !== subjects.length) {
+  //     //   return res.status(400).json({
+  //     //     message: `Not all subjects have submitted marks. Expected: ${subjects.length}, Found: ${submittedSubjectIds.length}. Missing subjects: ${missingSubjects.join(", ")}`,
+  //     //   });
+  //     // }
+  
+  //     // Get students with all necessary details
+  //     const students = await User.find({ _id: { $in: classInfo.students } })
+  //       .select("name rollNumber studentDetails")
+  //       .lean();
+  
+  //     // Compile results
+  //     const compiledResults = students.map((student) => {
+  //       const studentResult = {
+  //         studentId: student._id,
+  //         name: student.name,
+  //         rollNumber: student.rollNumber,
+  //         grNumber: student.studentDetails?.grNumber || "",
+  //         dob: student.studentDetails?.dob || "",
+  //         gender: student.studentDetails?.gender || "",
+  //         admissionType: student.studentDetails?.admissionType || "Regular",
+  //         subjects: {},
+  //         totalMarks: 0,
+  //         totalMaxMarks: 0,
+  //         percentage: 0,
+  //       };
+  
+  //       subjects.forEach((subject) => {
+  //         // Find the result for this student and subject
+  //         const result = validResults.find(
+  //           (r) =>
+  //             r.student._id.toString() === student._id.toString() &&
+  //             r.subject._id.toString() === subject._id.toString()
+  //         );
+          
+  //         if (result) {
+  //           studentResult.subjects[subject.name] = {
+  //             obtained: result.marksObtained,
+  //             total: result.totalMarks,
+  //             remarks: result.remarks || ""
+  //           };
+  //           studentResult.totalMarks += result.marksObtained;
+  //           studentResult.totalMaxMarks += result.totalMarks;
+  //         } else {
+  //           studentResult.subjects[subject.name] = {
+  //             obtained: 0,
+  //             total: 100,
+  //             remarks: "Absent"
+  //           };
+  //           studentResult.totalMaxMarks += 100;
+  //         }
+  //       });
+  
+  //       studentResult.percentage = studentResult.totalMaxMarks > 0 
+  //         ? (studentResult.totalMarks / studentResult.totalMaxMarks) * 100 
+  //         : 0;
+  
+  //       studentResult.grade = calculateGrade(studentResult.percentage);
+  //       studentResult.result = studentResult.percentage >= 40 ? "PASS" : "FAIL";
+  
+  //       return studentResult;
+  //     });
+  
+  //     // Generate Excel file
+  //     const workbook = new ExcelJS.Workbook();
+      
+  //     // Add metadata
+  //     workbook.creator = 'School Management System';
+  //     workbook.lastModifiedBy = 'Class Teacher';
+  //     workbook.created = new Date();
+  //     workbook.modified = new Date();
+      
+  //     // Create worksheet with proper name
+  //     const className = `${classInfo.name}${classInfo.division ? classInfo.division : ""}`;
+  //     const sheetName = `${className}_${examType}`.replace(/[*?:/\\[\]]/g, '_').substring(0, 31);
+  //     const worksheet = workbook.addWorksheet(sheetName, {
+  //       properties: {
+  //         tabColor: { argb: '6495ED' }
+  //       },
+  //       pageSetup: {
+  //         paperSize: 9, // A4
+  //         orientation: 'landscape',
+  //         fitToPage: true
+  //       }
+  //     });
+  
+  //     // ===== HEADER SECTION =====
+      
+  //     // School name (row 1)
+  //     // worksheet.mergeCells('A1:K1');
+  //     // const schoolNameCell = worksheet.getCell('A1');
+  //     // // schoolNameCell.value = schoolInfo?.name || "SCHOOL NAME";
+  //     // schoolNameCell.font = { bold: true, size: 16 };
+  //     // schoolNameCell.alignment = { horizontal: 'center', vertical: 'middle' };
+  //     // worksheet.getRow(1).height = 25;
+      
+  //     // // School address (row 2)
+  //     // worksheet.mergeCells('A2:K2');
+  //     // const schoolAddressCell = worksheet.getCell('A2');
+  //     // // schoolAddressCell.value = schoolInfo?.address || "";
+  //     // schoolAddressCell.font = { size: 10 };
+  //     // schoolAddressCell.alignment = { horizontal: 'center', vertical: 'middle' };
+      
+  //     // Title (row 3)
+  //     worksheet.mergeCells('A3:K3');
+  //     const titleCell = worksheet.getCell('A3');
+  //     titleCell.value = `${examType.toUpperCase()} EXAMINATION RESULT ${examEventInfo?.name ? `- ${examEventInfo.name}` : ''}`;
+  //     titleCell.font = { bold: true, size: 14 };
+  //     titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
+  //     titleCell.fill = {
+  //       type: 'pattern',
+  //       pattern: 'solid',
+  //       fgColor: { argb: 'E0E0E0' }
+  //     };
+  //     worksheet.getRow(3).height = 22;
+      
+  //     // Separator
+  //     worksheet.addRow([]);
+      
+  //     // Class info (row 5)
+  //     const classRow = worksheet.addRow([
+  //       'Class & Section:',
+  //       className,
+  //       '',
+  //       'Academic Year:',
+  //       examEventInfo?.startDate ? new Date(examEventInfo.startDate).getFullYear() : new Date().getFullYear()
+  //     ]);
+  //     classRow.font = { bold: true };
+  //     classRow.height = 20;
+      
+  //     // Blank row
+  //     worksheet.addRow([]);
+      
+  //     // ===== STUDENT DATA SECTION =====
+      
+  //     // Header row for student data
+  //     const headerRow = worksheet.addRow([
+  //       'GR No.',
+  //       'Student Name',
+  //       'Gender',
+  //       'Admission Type'
+  //     ]);
+      
+  //     // Add subject headers
+  //     subjects.forEach(subject => {
+  //       headerRow.getCell(headerRow.cellCount + 1).value = subject.name;
+  //     });
+      
+  //     // Add summary columns
+  //     headerRow.getCell(headerRow.cellCount + 1).value = 'Total';
+  //     headerRow.getCell(headerRow.cellCount + 1).value = 'Max Marks';
+  //     headerRow.getCell(headerRow.cellCount + 1).value = 'Percentage';
+  //     headerRow.getCell(headerRow.cellCount + 1).value = 'Grade';
+  //     headerRow.getCell(headerRow.cellCount + 1).value = 'Result';
+      
+  //     // Style the header row
+  //     headerRow.eachCell((cell) => {
+  //       cell.font = { bold: true, color: { argb: 'FFFFFF' } };
+  //       cell.fill = {
+  //         type: 'pattern',
+  //         pattern: 'solid',
+  //         fgColor: { argb: '4472C4' }
+  //       };
+  //       cell.alignment = { horizontal: 'center', vertical: 'middle' };
+  //       cell.border = {
+  //         top: { style: 'thin' },
+  //         left: { style: 'thin' },
+  //         bottom: { style: 'thin' },
+  //         right: { style: 'thin' }
+  //       };
+  //     });
+  //     headerRow.height = 20;
+      
+  //     // Format columns
+  //     const columnCount = headerRow.cellCount;
+  //     for (let i = 1; i <= columnCount; i++) {
+  //       const col = worksheet.getColumn(i);
+  //       if (i === 3) { // Student Name
+  //         col.width = 30;
+  //       } else if (i >= 6 && i < 6 + subjects.length) { // Subject marks
+  //         col.width = 15;
+  //       } else {
+  //         col.width = 12;
+  //       }
+  //       col.alignment = { horizontal: 'center', vertical: 'middle' };
+  //     }
+      
+  //     // Add student data rows
+  //     compiledResults.forEach((result, index) => {
+  //       const dataRow = worksheet.addRow([
+  //         result.grNumber,
+  //         // result.rollNumber,
+  //         result.name,
+  //         result.gender,
+  //         result.admissionType
+  //       ]);
+        
+  //       // Add subject marks
+  //       subjects.forEach((subject) => {
+  //         const subjectData = result.subjects[subject.name];
+  //         dataRow.getCell(dataRow.cellCount + 1).value = subjectData.obtained;
+  //       });
+        
+  //       // Add summary data
+  //       dataRow.getCell(dataRow.cellCount + 1).value = result.totalMarks;
+  //       dataRow.getCell(dataRow.cellCount + 1).value = result.totalMaxMarks;
+  //       dataRow.getCell(dataRow.cellCount + 1).value = parseFloat(result.percentage.toFixed(2));
+  //       dataRow.getCell(dataRow.cellCount + 1).value = result.grade;
+        
+  //       const resultCell = dataRow.getCell(dataRow.cellCount + 1);
+  //       resultCell.value = result.result;
+        
+  //       // Apply alternating row background colors
+  //       if (index % 2 === 1) {
+  //         dataRow.eachCell((cell) => {
+  //           cell.fill = {
+  //             type: 'pattern',
+  //             pattern: 'solid',
+  //             fgColor: { argb: 'F2F2F2' }
+  //           };
+  //         });
+  //       }
+        
+  //       // Apply conditional formatting for passing/failing
+  //       if (result.result === 'FAIL') {
+  //         resultCell.font = { color: { argb: 'FF0000' }, bold: true };
+  //       } else {
+  //         resultCell.font = { color: { argb: '008000' }, bold: true };
+  //       }
+        
+  //       // Add borders to all cells
+  //       dataRow.eachCell((cell) => {
+  //         cell.border = {
+  //           top: { style: 'thin' },
+  //           left: { style: 'thin' },
+  //           bottom: { style: 'thin' },
+  //           right: { style: 'thin' }
+  //         };
+  //       });
+  //     });
+      
+  //     // ===== FOOTER SECTION =====
+      
+  //     // Add some empty rows
+  //     worksheet.addRow([]);
+  //     worksheet.addRow([]);
+      
+  //     // Add signature sections
+  //     const signatureRow = worksheet.addRow(['', '', 'Class Teacher', '', '', '', 'Principal']);
+  //     signatureRow.font = { bold: true };
+  //     signatureRow.height = 30;
+      
+  //     // Add date of generation
+  //     worksheet.mergeCells(`A${worksheet.rowCount + 2}:D${worksheet.rowCount + 2}`);
+  //     worksheet.getCell(`A${worksheet.rowCount}`).value = `Generated on: ${new Date().toLocaleDateString()}`;
+      
+  //     // Save Excel file to buffer
+  //     const buffer = await workbook.xlsx.writeBuffer();
+  
+  //     // Upload to S3
+  //     const fileKey = `results/${schoolId}/${classId}/${examType}_${Date.now()}.xlsx`;
+  //     await uploadToS3(buffer, fileKey, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+  
+  //     // Update results with Excel file reference
+  //     const session = await connection.startSession();
+  //     session.startTransaction();
+  
+  //     try {
+  //       await Result.updateMany(
+  //         {
+  //           school: schoolId,
+  //           class: classId,
+  //           status: "submittedToClassTeacher",
+  //           exam: { $in: validResults.map((r) => r.exam._id) },
+  //         },
+  //         {
+  //           $set: {
+  //             status: "compiled",
+  //             excelFile: {
+  //               key: fileKey,
+  //               url: getPublicFileUrl(fileKey),
+  //               originalName: `${className}_${examType}_Results.xlsx`,
+  //             },
+  //             compiledBy: teacherId,
+  //             compiledAt: new Date(),
+  //           },
+  //         },
+  //         { session }
+  //       );
+  
+  //       await session.commitTransaction();
+  
+  //       res.json({
+  //         message: "Results compiled successfully. Please review the Excel file before submitting to admin.",
+  //         class: className,
+  //         examType,
+  //         excelFileUrl: getPublicFileUrl(fileKey),
+  //         results: compiledResults,
+  //       });
+  //     } catch (error) {
+  //       await session.abortTransaction();
+  //       throw error;
+  //     } finally {
+  //       session.endSession();
+  //     }
+  //   } catch (error) {
+  //     logger.error(`Error in compileAndSubmitResults: ${error.message}`, { error });
+  //     res.status(500).json({ error: error.message });
+  //   }
+  // },
+
+
+  // compileAndSubmitResults: async (req, res) => {
+  //   try {
+  //     const { classId, examType } = req.params;
+  //     const teacherId = req.user._id;
+  //     const schoolId = req.school._id.toString();
+  //     const connection = req.connection;
+  //     const Exam = getModel("Exam", connection);
+  //     const Class = getModel("Class", connection);
+  //     const Subject = getModel("Subject", connection);
+  //     const User = getModel("User", connection);
+  //     const Result = getModel("Result", connection);
+  //     const ExamEvent = getModel("ExamEvent", connection);
+  //     const School = getModel("School", connection);
+  
+  //     // Get school details for the header
+  //     // const schoolInfo = await School.findById(schoolId).select("name address logo").lean();
+  
+  //     // Verify class teacher role
+  //     const classInfo = await Class.findOne({ _id: classId, school: schoolId });
+  //     if (!classInfo || classInfo.classTeacher.toString() !== teacherId.toString()) {
+  //       return res.status(403).json({ message: "Not authorized as class teacher" });
+  //     }
+  
+  //     // Get all subjects for the class
+  //     const subjects = await Subject.find({ class: classId }).lean();
+  
+  //     // Get all results for the class and exam type with status submittedToClassTeacher
+  //     const results = await Result.find({
+  //       school: schoolId,
+  //       class: classId,
+  //       status: "submittedToClassTeacher",
+  //     })
+  //       .populate({
+  //         path: "exam",
+  //         match: { examType: { $regex: `^${examType}$`, $options: "i" } },
+  //         select: "examType totalMarks subject examEvent",
+  //       })
+  //       .populate("subject", "name")
+  //       .populate("student", "name rollNumber studentDetails")
+  //       .populate("examEvent", "name startDate endDate")
+  //       .lean();
+  
+  //     // Filter out results where exam is null
+  //     const validResults = results.filter((result) => result.exam);
+  
+  //     // Get exam event details
+  //     const examEventId = validResults.length > 0 ? validResults[0].exam.examEvent : null;
+  //     let examEventInfo = null;
+  //     if (examEventId) {
+  //       examEventInfo = await ExamEvent.findById(examEventId).lean();
+  //     }
+  
+  //     // Check if all subjects have submitted marks
+  //     const submittedSubjectIds = [...new Set(validResults.map((r) => r.subject._id.toString()))];
+  //     const allSubjectIds = subjects.map((s) => s._id.toString());
+  //     const missingSubjectIds = allSubjectIds.filter((id) => !submittedSubjectIds.includes(id));
+  //     const missingSubjects = subjects
+  //       .filter((s) => missingSubjectIds.includes(s._id.toString()))
+  //       .map((s) => s.name);
+  
+  //     if (submittedSubjectIds.length !== subjects.length) {
+  //       return res.status(400).json({
+  //         message: `Not all subjects have submitted marks. Expected: ${subjects.length}, Found: ${submittedSubjectIds.length}. Missing subjects: ${missingSubjects.join(", ")}`,
+  //       });
+  //     }
+  
+  //     // Get students with all necessary details
+  //     const students = await User.find({ _id: { $in: classInfo.students } })
+  //       .select("name rollNumber studentDetails")
+  //       .lean();
+  
+  //     // Compile results
+  //     const compiledResults = students.map((student) => {
+  //       const studentResult = {
+  //         studentId: student._id,
+  //         name: student.name,
+  //         rollNumber: student.rollNumber,
+  //         grNumber: student.studentDetails?.grNumber || "",
+  //         dob: student.studentDetails?.dob || "",
+  //         gender: student.studentDetails?.gender || "",
+  //         admissionType: student.studentDetails?.admissionType || "Regular",
+  //         subjects: {},
+  //         totalMarks: 0,
+  //         totalMaxMarks: 0,
+  //         percentage: 0,
+  //         failedSubjects: [] // Track failed subjects
+  //       };
+  
+  //       subjects.forEach((subject) => {
+  //         // Find the result for this student and subject
+  //         const result = validResults.find(
+  //           (r) =>
+  //             r.student._id.toString() === student._id.toString() &&
+  //             r.subject._id.toString() === subject._id.toString()
+  //         );
+          
+  //         if (result) {
+  //           const subjectPercentage = (result.marksObtained / result.totalMarks) * 100;
+            
+  //           studentResult.subjects[subject.name] = {
+  //             obtained: result.marksObtained,
+  //             total: result.totalMarks,
+  //             percentage: subjectPercentage,
+  //             remarks: result.remarks || ""
+  //           };
+            
+  //           // Check if subject percentage is less than 33%
+  //           if (subjectPercentage < 33) {
+  //             studentResult.failedSubjects.push(subject.name);
+  //             studentResult.subjects[subject.name].remarks = "Fail";
+  //           }
+            
+  //           studentResult.totalMarks += result.marksObtained;
+  //           studentResult.totalMaxMarks += result.totalMarks;
+  //         } else {
+  //           studentResult.subjects[subject.name] = {
+  //             obtained: 0,
+  //             total: 100,
+  //             percentage: 0,
+  //             remarks: "Absent"
+  //           };
+  //           studentResult.failedSubjects.push(subject.name);
+  //           studentResult.totalMaxMarks += 100;
+  //         }
+  //       });
+  
+  //       studentResult.percentage = studentResult.totalMaxMarks > 0 
+  //         ? (studentResult.totalMarks / studentResult.totalMaxMarks) * 100 
+  //         : 0;
+  
+  //       studentResult.grade = calculateGrade(studentResult.percentage);
+        
+  //       // Student fails if overall percentage is below 40% OR if any subject has less than 33%
+  //       studentResult.result = (studentResult.percentage >= 40 && studentResult.failedSubjects.length === 0) 
+  //         ? "PASS" 
+  //         : "FAIL";
+  
+  //       return studentResult;
+  //     });
+  
+  //     // Generate Excel file
+  //     const workbook = new ExcelJS.Workbook();
+      
+  //     // Add metadata
+  //     workbook.creator = 'School Management System';
+  //     workbook.lastModifiedBy = 'Class Teacher';
+  //     workbook.created = new Date();
+  //     workbook.modified = new Date();
+      
+  //     // Create worksheet with proper name
+  //     const className = `${classInfo.name}${classInfo.division ? classInfo.division : ""}`;
+  //     const sheetName = `${className}_${examType}`.replace(/[*?:/\\[\]]/g, '_').substring(0, 31);
+  //     const worksheet = workbook.addWorksheet(sheetName, {
+  //       properties: {
+  //         tabColor: { argb: '6495ED' }
+  //       },
+  //       pageSetup: {
+  //         paperSize: 9, // A4
+  //         orientation: 'landscape',
+  //         fitToPage: true
+  //       }
+  //     });
+  
+  //     // ===== HEADER SECTION =====
+      
+  //     // School name (row 1)
+  //     // worksheet.mergeCells('A1:K1');
+  //     // const schoolNameCell = worksheet.getCell('A1');
+  //     // schoolNameCell.value = schoolInfo?.name || "SCHOOL NAME";
+  //     // schoolNameCell.font = { bold: true, size: 16 };
+  //     // schoolNameCell.alignment = { horizontal: 'center', vertical: 'middle' };
+  //     // worksheet.getRow(1).height = 25;
+      
+  //     // // School address (row 2)
+  //     // worksheet.mergeCells('A2:K2');
+  //     // const schoolAddressCell = worksheet.getCell('A2');
+  //     // schoolAddressCell.value = schoolInfo?.address || "";
+  //     // schoolAddressCell.font = { size: 10 };
+  //     // schoolAddressCell.alignment = { horizontal: 'center', vertical: 'middle' };
+      
+  //     // Title (row 3)
+  //     worksheet.mergeCells('A3:K3');
+  //     const titleCell = worksheet.getCell('A3');
+  //     titleCell.value = `${examType.toUpperCase()} EXAMINATION RESULT ${examEventInfo?.name ? `- ${examEventInfo.name}` : ''}`;
+  //     titleCell.font = { bold: true, size: 14 };
+  //     titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
+  //     titleCell.fill = {
+  //       type: 'pattern',
+  //       pattern: 'solid',
+  //       fgColor: { argb: 'E0E0E0' }
+  //     };
+  //     worksheet.getRow(3).height = 22;
+      
+  //     // Separator
+  //     worksheet.addRow([]);
+      
+  //     // Class info (row 5)
+  //     const classRow = worksheet.addRow([
+  //       'Class & Section:',
+  //       className,
+  //       '',
+  //       'Academic Year:',
+  //       examEventInfo?.startDate ? new Date(examEventInfo.startDate).getFullYear() : new Date().getFullYear()
+  //     ]);
+  //     classRow.font = { bold: true };
+  //     classRow.height = 20;
+      
+  //     // Blank row
+  //     worksheet.addRow([]);
+      
+  //     // ===== STUDENT DATA SECTION =====
+      
+  //     // Header row for student data
+  //     const headerRow = worksheet.addRow([
+  //       'GR No.',
+  //       // 'Roll No.',
+  //       'Student Name',
+  //       'Gender',
+  //       'Admission Type'
+  //     ]);
+      
+  //     // Add subject headers
+  //     subjects.forEach(subject => {
+  //       headerRow.getCell(headerRow.cellCount + 1).value = subject.name;
+  //     });
+      
+  //     // Add summary columns
+  //     headerRow.getCell(headerRow.cellCount + 1).value = 'Total';
+  //     headerRow.getCell(headerRow.cellCount + 1).value = 'Max Marks';
+  //     headerRow.getCell(headerRow.cellCount + 1).value = 'Percentage';
+  //     headerRow.getCell(headerRow.cellCount + 1).value = 'Grade';
+  //     headerRow.getCell(headerRow.cellCount + 1).value = 'Result';
+  //     headerRow.getCell(headerRow.cellCount + 1).value = 'Failed Subjects';
+      
+  //     // Style the header row
+  //     headerRow.eachCell((cell) => {
+  //       cell.font = { bold: true, color: { argb: 'FFFFFF' } };
+  //       cell.fill = {
+  //         type: 'pattern',
+  //         pattern: 'solid',
+  //         fgColor: { argb: '4472C4' }
+  //       };
+  //       cell.alignment = { horizontal: 'center', vertical: 'middle' };
+  //       cell.border = {
+  //         top: { style: 'thin' },
+  //         left: { style: 'thin' },
+  //         bottom: { style: 'thin' },
+  //         right: { style: 'thin' }
+  //       };
+  //     });
+  //     headerRow.height = 20;
+      
+  //     // Format columns
+  //     const columnCount = headerRow.cellCount;
+  //     for (let i = 1; i <= columnCount; i++) {
+  //       const col = worksheet.getColumn(i);
+  //       if (i === 3) { // Student Name
+  //         col.width = 30;
+  //       } else if (i >= 6 && i < 6 + subjects.length) { // Subject marks
+  //         col.width = 15;
+  //       } else if (i === columnCount) { // Failed Subjects
+  //         col.width = 25;
+  //       } else {
+  //         col.width = 12;
+  //       }
+  //       col.alignment = { horizontal: 'center', vertical: 'middle' };
+  //     }
+      
+  //     // Add student data rows
+  //     compiledResults.forEach((result, index) => {
+  //       const dataRow = worksheet.addRow([
+  //         result.grNumber,
+  //         // result.rollNumber,
+  //         result.name,
+  //         result.gender,
+  //         result.admissionType
+  //       ]);
+        
+  //       // Add subject marks
+  //       subjects.forEach((subject) => {
+  //         const subjectData = result.subjects[subject.name];
+  //         const subjectCell = dataRow.getCell(dataRow.cellCount + 1);
+  //         subjectCell.value = subjectData.obtained;
+          
+  //         // Highlight failed subjects
+  //         if (result.failedSubjects.includes(subject.name)) {
+  //           subjectCell.font = { color: { argb: 'FF0000' }, bold: true };
+  //         }
+  //       });
+        
+  //       // Add summary data
+  //       dataRow.getCell(dataRow.cellCount + 1).value = result.totalMarks;
+  //       dataRow.getCell(dataRow.cellCount + 1).value = result.totalMaxMarks;
+  //       dataRow.getCell(dataRow.cellCount + 1).value = parseFloat(result.percentage.toFixed(2));
+  //       dataRow.getCell(dataRow.cellCount + 1).value = result.grade;
+        
+  //       const resultCell = dataRow.getCell(dataRow.cellCount + 1);
+  //       resultCell.value = result.result;
+        
+  //       // Add failed subjects list
+  //       const failedSubjectsCell = dataRow.getCell(dataRow.cellCount + 1);
+  //       failedSubjectsCell.value = result.failedSubjects.join(", ");
+        
+  //       // Apply alternating row background colors
+  //       if (index % 2 === 1) {
+  //         dataRow.eachCell((cell) => {
+  //           cell.fill = {
+  //             type: 'pattern',
+  //             pattern: 'solid',
+  //             fgColor: { argb: 'F2F2F2' }
+  //           };
+  //         });
+  //       }
+        
+  //       // Apply conditional formatting for passing/failing
+  //       if (result.result === 'FAIL') {
+  //         resultCell.font = { color: { argb: 'FF0000' }, bold: true };
+  //         failedSubjectsCell.font = { color: { argb: 'FF0000' } };
+  //       } else {
+  //         resultCell.font = { color: { argb: '008000' }, bold: true };
+  //       }
+        
+  //       // Add borders to all cells
+  //       dataRow.eachCell((cell) => {
+  //         cell.border = {
+  //           top: { style: 'thin' },
+  //           left: { style: 'thin' },
+  //           bottom: { style: 'thin' },
+  //           right: { style: 'thin' }
+  //         };
+  //       });
+  //     });
+      
+  //     // ===== FOOTER SECTION =====
+      
+  //     // Add some empty rows
+  //     worksheet.addRow([]);
+  //     worksheet.addRow([]);
+      
+  //     // Add passing criteria information
+  //     const passingCriteriaRow = worksheet.addRow(['', '', 'Passing Criteria: Overall 40% and at least 33% in each subject']);
+  //     passingCriteriaRow.font = { italic: true };
+      
+  //     // Add signature sections
+  //     const signatureRow = worksheet.addRow(['', '', 'Class Teacher', '', '', '', 'Principal']);
+  //     signatureRow.font = { bold: true };
+  //     signatureRow.height = 30;
+      
+  //     // Add date of generation
+  //     worksheet.mergeCells(`A${worksheet.rowCount + 2}:D${worksheet.rowCount + 2}`);
+  //     worksheet.getCell(`A${worksheet.rowCount}`).value = `Generated on: ${new Date().toLocaleDateString()}`;
+      
+  //     // Save Excel file to buffer
+  //     const buffer = await workbook.xlsx.writeBuffer();
+  
+  //     // Upload to S3
+  //     const fileKey = `results/${schoolId}/${classId}/${examType}_${Date.now()}.xlsx`;
+  //     await uploadToS3(buffer, fileKey, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+  
+  //     // Update results with Excel file reference
+  //     const session = await connection.startSession();
+  //     session.startTransaction();
+  
+  //     try {
+  //       await Result.updateMany(
+  //         {
+  //           school: schoolId,
+  //           class: classId,
+  //           status: "submittedToClassTeacher",
+  //           exam: { $in: validResults.map((r) => r.exam._id) },
+  //         },
+  //         {
+  //           $set: {
+  //             status: "compiled",
+  //             excelFile: {
+  //               key: fileKey,
+  //               url: getPublicFileUrl(fileKey),
+  //               originalName: `${className}_${examType}_Results.xlsx`,
+  //             },
+  //             compiledBy: teacherId,
+  //             compiledAt: new Date(),
+  //           },
+  //         },
+  //         { session }
+  //       );
+  
+  //       await session.commitTransaction();
+  
+  //       res.json({
+  //         message: "Results compiled successfully. Please review the Excel file before submitting to admin.",
+  //         class: className,
+  //         examType,
+  //         excelFileUrl: getPublicFileUrl(fileKey),
+  //         results: compiledResults,
+  //       });
+  //     } catch (error) {
+  //       await session.abortTransaction();
+  //       throw error;
+  //     } finally {
+  //       session.endSession();
+  //     }
+  //   } catch (error) {
+  //     logger.error(`Error in compileAndSubmitResults: ${error.message}`, { error });
+  //     res.status(500).json({ error: error.message });
+  //   }
+  // },
+
+
   compileAndSubmitResults: async (req, res) => {
     try {
       const { classId, examType } = req.params;
       const teacherId = req.user._id;
       const schoolId = req.school._id.toString();
       const connection = req.connection;
-      const Exam = require("../models/Exam")(connection);
-      const Class = require("../models/Class")(connection);
-      const Subject = require("../models/Subject")(connection);
-      const User = require("../models/User")(connection);
+      const Exam = getModel("Exam", connection);
+      const Class = getModel("Class", connection);
+      const Subject = getModel("Subject", connection);
+      const User = getModel("User", connection);
+      const Result = getModel("Result", connection);
+      const ExamEvent = getModel("ExamEvent", connection);
+
+      // Use owner_db connection for School model
+      const ownerConnection = getOwnerConnection();
+      const School = ownerConnection.model('School', require('../models/School')(ownerConnection).schema);
+
+      // Debug logging
+      console.log('Fetching school with schoolId:', schoolId);
+      console.log('Owner connection name:', ownerConnection.name);
+
+      // Get school details for the header
+      const schoolInfo = await School.findById(schoolId).select("name address logo").lean();
+      if (!schoolInfo) {
+        console.error('School not found for schoolId:', schoolId);
+        return res.status(404).json({ message: "School not found" });
+      }
+      console.log('School found:', schoolInfo);
 
       // Verify class teacher role
       const classInfo = await Class.findOne({ _id: classId, school: schoolId });
@@ -1478,23 +3358,52 @@ const teacherController = {
         return res.status(403).json({ message: "Not authorized as class teacher" });
       }
 
-      // Get all subjects and exams
-      const subjects = await Subject.find({ class: classId });
-      const exams = await Exam.find({
+      // Get all subjects for the class
+      const subjects = await Subject.find({ class: classId }).lean();
+
+      // Get all results for the class and exam type with status submittedToClassTeacher
+      const results = await Result.find({
         school: schoolId,
         class: classId,
-        examType: examType,
         status: "submittedToClassTeacher",
-      }).populate("subject", "name");
+      })
+        .populate({
+          path: "exam",
+          match: { examType: { $regex: `^${examType}$`, $options: "i" } },
+          select: "examType totalMarks subject examEvent",
+        })
+        .populate("subject", "name")
+        .populate("student", "name rollNumber studentDetails")
+        .populate("examEvent", "name startDate endDate")
+        .lean();
 
-      if (exams.length !== subjects.length) {
+      // Filter out results where exam is null
+      const validResults = results.filter((result) => result.exam);
+
+      // Get exam event details
+      const examEventId = validResults.length > 0 ? validResults[0].exam.examEvent : null;
+      let examEventInfo = null;
+      if (examEventId) {
+        examEventInfo = await ExamEvent.findById(examEventId).lean();
+      }
+
+      // Check if all subjects have submitted marks
+      const submittedSubjectIds = [...new Set(validResults.map((r) => r.subject._id.toString()))];
+      const allSubjectIds = subjects.map((s) => s._id.toString());
+      const missingSubjectIds = allSubjectIds.filter((id) => !submittedSubjectIds.includes(id));
+      const missingSubjects = subjects
+        .filter((s) => missingSubjectIds.includes(s._id.toString()))
+        .map((s) => s.name);
+
+      if (submittedSubjectIds.length !== subjects.length) {
         return res.status(400).json({
-          message: `Not all subjects have submitted marks. Expected: ${subjects.length}, Found: ${exams.length}`,
+          message: `Not all subjects have submitted marks. Expected: ${subjects.length}, Found: ${submittedSubjectIds.length}. Missing subjects: ${missingSubjects.join(", ")}`,
         });
       }
 
+      // Get students with all necessary details
       const students = await User.find({ _id: { $in: classInfo.students } })
-        .select("name rollNumber")
+        .select("name rollNumber studentDetails")
         .lean();
 
       // Compile results
@@ -1503,41 +3412,322 @@ const teacherController = {
           studentId: student._id,
           name: student.name,
           rollNumber: student.rollNumber,
+          grNumber: student.studentDetails?.grNumber || "",
+          dob: student.studentDetails?.dob || "",
+          gender: student.studentDetails?.gender || "",
+          admissionType: student.studentDetails?.admissionType || "Regular",
           subjects: {},
           totalMarks: 0,
+          totalMaxMarks: 0,
           percentage: 0,
+          failedSubjects: [] // Track failed subjects
         };
 
-        exams.forEach((exam) => {
-          const result = exam.results.find(
-            (r) => r.student.toString() === student._id.toString()
+        subjects.forEach((subject) => {
+          // Find the result for this student and subject
+          const result = validResults.find(
+            (r) =>
+              r.student._id.toString() === student._id.toString() &&
+              r.subject._id.toString() === subject._id.toString()
           );
-          studentResult.subjects[exam.subject.name] = result ? result.marksObtained : 0;
-          studentResult.totalMarks += result ? result.marksObtained : 0;
+          
+          if (result) {
+            const subjectPercentage = (result.marksObtained / result.totalMarks) * 100;
+            
+            studentResult.subjects[subject.name] = {
+              obtained: result.marksObtained,
+              total: result.totalMarks,
+              percentage: subjectPercentage,
+              remarks: result.remarks || ""
+            };
+            
+            // Check if subject percentage is less than 33%
+            if (subjectPercentage < 33) {
+              studentResult.failedSubjects.push(subject.name);
+              studentResult.subjects[subject.name].remarks = "Fail";
+            }
+            
+            studentResult.totalMarks += result.marksObtained;
+            studentResult.totalMaxMarks += result.totalMarks;
+          } else {
+            studentResult.subjects[subject.name] = {
+              obtained: 0,
+              total: 100,
+              percentage: 0,
+              remarks: "Absent"
+            };
+            studentResult.failedSubjects.push(subject.name);
+            studentResult.totalMaxMarks += 100;
+          }
         });
 
-        const maxTotalMarks = subjects.length * 100;
-        studentResult.percentage = (studentResult.totalMarks / maxTotalMarks) * 100;
+        studentResult.percentage = studentResult.totalMaxMarks > 0 
+          ? (studentResult.totalMarks / studentResult.totalMaxMarks) * 100 
+          : 0;
+
+        studentResult.grade = calculateGrade(studentResult.percentage);
+        
+        // Student fails if overall percentage is below 40% OR if any subject has less than 33%
+        studentResult.result = (studentResult.percentage >= 40 && studentResult.failedSubjects.length === 0) 
+          ? "PASS" 
+          : "FAIL";
 
         return studentResult;
       });
 
-      // Update exam statuses in a transaction
+      // Generate Excel file
+      const workbook = new ExcelJS.Workbook();
+      
+      // Add metadata
+      workbook.creator = 'School Management System';
+      workbook.lastModifiedBy = 'Class Teacher';
+      workbook.created = new Date();
+      workbook.modified = new Date();
+      
+      // Create worksheet with proper name
+      const className = `${classInfo.name}${classInfo.division ? classInfo.division : ""}`;
+      const sheetName = `${className}_${examType}`.replace(/[*?:/\\[\]]/g, '_').substring(0, 31);
+      const worksheet = workbook.addWorksheet(sheetName, {
+        properties: {
+          tabColor: { argb: '6495ED' }
+        },
+        pageSetup: {
+          paperSize: 9, // A4
+          orientation: 'landscape',
+          fitToPage: true
+        }
+      });
+
+      // ===== HEADER SECTION =====
+      
+      // School name (row 1)
+      worksheet.mergeCells('A1:K1');
+      const schoolNameCell = worksheet.getCell('A1');
+      schoolNameCell.value = schoolInfo?.name || "SCHOOL NAME";
+      schoolNameCell.font = { bold: true, size: 16 };
+      schoolNameCell.alignment = { horizontal: 'center', vertical: 'middle' };
+      worksheet.getRow(1).height = 25;
+      
+      // School address (row 2)
+      worksheet.mergeCells('A2:K2');
+      const schoolAddressCell = worksheet.getCell('A2');
+      schoolAddressCell.value = schoolInfo?.address || "";
+      schoolAddressCell.font = { size: 10 };
+      schoolAddressCell.alignment = { horizontal: 'center', vertical: 'middle' };
+      
+      // Title (row 3)
+      worksheet.mergeCells('A3:K3');
+      const titleCell = worksheet.getCell('A3');
+      titleCell.value = `${examType.toUpperCase()} EXAMINATION RESULT ${examEventInfo?.name ? `- ${examEventInfo.name}` : ''}`;
+      titleCell.font = { bold: true, size: 14 };
+      titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
+      titleCell.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'E0E0E0' }
+      };
+      worksheet.getRow(3).height = 22;
+      
+      // Separator
+      worksheet.addRow([]);
+      
+      // Class info (row 5)
+      const classRow = worksheet.addRow([
+        'Class & Section:',
+        className,
+        '',
+        'Academic Year:',
+        examEventInfo?.startDate ? new Date(examEventInfo.startDate).getFullYear() : new Date().getFullYear()
+      ]);
+      classRow.font = { bold: true };
+      classRow.height = 20;
+      
+      // Blank row
+      worksheet.addRow([]);
+      
+      // ===== STUDENT DATA SECTION =====
+      
+      // Header row for student data
+      const headerRow = worksheet.addRow([
+        'GR No.',
+        // 'Roll No.',
+        'Student Name',
+        'Gender',
+        'Admission Type'
+      ]);
+      
+      // Add subject headers
+      subjects.forEach(subject => {
+        headerRow.getCell(headerRow.cellCount + 1).value = subject.name;
+      });
+      
+      // Add summary columns
+      headerRow.getCell(headerRow.cellCount + 1).value = 'Total';
+      headerRow.getCell(headerRow.cellCount + 1).value = 'Max Marks';
+      headerRow.getCell(headerRow.cellCount + 1).value = 'Percentage';
+      headerRow.getCell(headerRow.cellCount + 1).value = 'Grade';
+      headerRow.getCell(headerRow.cellCount + 1).value = 'Result';
+      headerRow.getCell(headerRow.cellCount + 1).value = 'Failed Subjects';
+      
+      // Style the header row
+      headerRow.eachCell((cell) => {
+        cell.font = { bold: true, color: { argb: 'FFFFFF' } };
+        cell.fill = {
+          type: 'pattern',
+          pattern: 'solid',
+          fgColor: { argb: '4472C4' }
+        };
+        cell.alignment = { horizontal: 'center', vertical: 'middle' };
+        cell.border = {
+          top: { style: 'thin' },
+          left: { style: 'thin' },
+          bottom: { style: 'thin' },
+          right: { style: 'thin' }
+        };
+      });
+      headerRow.height = 20;
+      
+      // Format columns
+      const columnCount = headerRow.cellCount;
+      for (let i = 1; i <= columnCount; i++) {
+        const col = worksheet.getColumn(i);
+        if (i === 3) { // Student Name
+          col.width = 30;
+        } else if (i >= 6 && i < 6 + subjects.length) { // Subject marks
+          col.width = 15;
+        } else if (i === columnCount) { // Failed Subjects
+          col.width = 25;
+        } else {
+          col.width = 12;
+        }
+        col.alignment = { horizontal: 'center', vertical: 'middle' };
+      }
+      
+      // Add student data rows
+      compiledResults.forEach((result, index) => {
+        const dataRow = worksheet.addRow([
+          result.grNumber,
+          // result.rollNumber,
+          result.name,
+          result.gender,
+          result.admissionType
+        ]);
+        
+        // Add subject marks
+        subjects.forEach((subject) => {
+          const subjectData = result.subjects[subject.name];
+          const subjectCell = dataRow.getCell(dataRow.cellCount + 1);
+          subjectCell.value = subjectData.obtained;
+          
+          // Highlight failed subjects
+          if (result.failedSubjects.includes(subject.name)) {
+            subjectCell.font = { color: { argb: 'FF0000' }, bold: true };
+          }
+        });
+        
+        // Add summary data
+        dataRow.getCell(dataRow.cellCount + 1).value = result.totalMarks;
+        dataRow.getCell(dataRow.cellCount + 1).value = result.totalMaxMarks;
+        dataRow.getCell(dataRow.cellCount + 1).value = parseFloat(result.percentage.toFixed(2));
+        dataRow.getCell(dataRow.cellCount + 1).value = result.grade;
+        
+        const resultCell = dataRow.getCell(dataRow.cellCount + 1);
+        resultCell.value = result.result;
+        
+        // Add failed subjects list
+        const failedSubjectsCell = dataRow.getCell(dataRow.cellCount + 1);
+        failedSubjectsCell.value = result.failedSubjects.join(", ");
+        
+        // Apply alternating row background colors
+        if (index % 2 === 1) {
+          dataRow.eachCell((cell) => {
+            cell.fill = {
+              type: 'pattern',
+              pattern: 'solid',
+              fgColor: { argb: 'F2F2F2' }
+            };
+          });
+        }
+        
+        // Apply conditional formatting for passing/failing
+        if (result.result === 'FAIL') {
+          resultCell.font = { color: { argb: 'FF0000' }, bold: true };
+          failedSubjectsCell.font = { color: { argb: 'FF0000' } };
+        } else {
+          resultCell.font = { color: { argb: '008000' }, bold: true };
+        }
+        
+        // Add borders to all cells
+        dataRow.eachCell((cell) => {
+          cell.border = {
+            top: { style: 'thin' },
+            left: { style: 'thin' },
+            bottom: { style: 'thin' },
+            right: { style: 'thin' }
+          };
+        });
+      });
+      
+      // ===== FOOTER SECTION =====
+      
+      // Add some empty rows
+      worksheet.addRow([]);
+      worksheet.addRow([]);
+      
+      // Add passing criteria information
+      const passingCriteriaRow = worksheet.addRow(['', '', 'Passing Criteria: Overall 40% and at least 33% in each subject']);
+      passingCriteriaRow.font = { italic: true };
+      
+      // Add signature sections
+      const signatureRow = worksheet.addRow(['', '', 'Class Teacher', '', '', '', 'Principal']);
+      signatureRow.font = { bold: true };
+      signatureRow.height = 30;
+      
+      // Add date of generation
+      worksheet.mergeCells(`A${worksheet.rowCount + 2}:D${worksheet.rowCount + 2}`);
+      worksheet.getCell(`A${worksheet.rowCount}`).value = `Generated on: ${new Date().toLocaleDateString()}`;
+      
+      // Save Excel file to buffer
+      const buffer = await workbook.xlsx.writeBuffer();
+
+      // Upload to S3
+      const fileKey = `results/${schoolId}/${classId}/${examType}_${Date.now()}.xlsx`;
+      await uploadToS3(buffer, fileKey, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+
+      // Update results with Excel file reference
       const session = await connection.startSession();
       session.startTransaction();
 
       try {
-        await Exam.updateMany(
-          { _id: { $in: exams.map((e) => e._id) } },
-          { status: "submittedToAdmin", submittedToAdminAt: new Date() },
+        await Result.updateMany(
+          {
+            school: schoolId,
+            class: classId,
+            status: "submittedToClassTeacher",
+            exam: { $in: validResults.map((r) => r.exam._id) },
+          },
+          {
+            $set: {
+              status: "compiled",
+              excelFile: {
+                key: fileKey,
+                url: getPublicFileUrl(fileKey),
+                originalName: `${className}_${examType}_Results.xlsx`,
+              },
+              compiledBy: teacherId,
+              compiledAt: new Date(),
+            },
+          },
           { session }
         );
 
         await session.commitTransaction();
+
         res.json({
-          message: "Results compiled and submitted to admin successfully",
-          class: `${classInfo.name}${classInfo.division ? " " + classInfo.division : ""}`,
+          message: "Results compiled successfully. Please review the Excel file before submitting to admin.",
+          class: className,
           examType,
+          excelFileUrl: getPublicFileUrl(fileKey),
           results: compiledResults,
         });
       } catch (error) {
@@ -1547,13 +3737,151 @@ const teacherController = {
         session.endSession();
       }
     } catch (error) {
-      console.error("Error in compileAndSubmitResults:", error);
+      logger.error(`Error in compileAndSubmitResults: ${error.message}`, { error });
+      res.status(500).json({ error: error.message });
+    }
+  },
+  
+  getCompiledExcel: async (req, res) => {
+    try {
+      const { classId, examType } = req.params;
+      const teacherId = req.user._id;
+      const schoolId = req.school._id.toString();
+      const connection = req.connection;
+      const Result = require("../models/Results")(connection);
+      const Class = require("../models/Class")(connection);
+      const Exam= require('../models/Exam')(connection)
+
+      // Validate inputs
+      if (!mongoose.Types.ObjectId.isValid(classId)) {
+        return res.status(400).json({ message: "Invalid class ID" });
+      }
+
+      // Verify class teacher role
+      const classData = await Class.findOne({
+        _id: classId,
+        school: schoolId,
+        classTeacher: teacherId,
+      });
+      if (!classData) {
+        return res.status(403).json({ message: "Class not found or you are not authorized as class teacher" });
+      }
+
+      // Find a result with the Excel file
+      const result = await Result.findOne({
+        school: schoolId,
+        class: classId,
+        status: "compiled",
+        excelFile: { $ne: null },
+      })
+        .populate({
+          path: "exam",
+          match: { examType: { $regex: `^${examType}$`, $options: "i" } },
+          select: "examType",
+        })
+        .lean();
+
+      if (!result || !result.exam) {
+        return res.status(404).json({ message: "Compiled Excel file not found for this exam type and class" });
+      }
+
+      res.json({
+        message: "Excel file retrieved successfully",
+        excelFile: result.excelFile,
+      });
+    } catch (error) {
+      logger.error(`Error fetching compiled Excel: ${error.message}`, { error });
+      res.status(500).json({ error: error.message });
+    }
+  },
+
+  submitCompiledResultsToAdmin: async (req, res) => {
+    try {
+      const { classId, examType } = req.params;
+      const teacherId = req.user._id;
+      const schoolId = req.school._id.toString();
+      const connection = req.connection;
+      const Result = require("../models/Results")(connection);
+      const Class = require("../models/Class")(connection);
+      const Exam = require('../models/Exam')(connection)
+
+      // Verify class teacher role
+      const classInfo = await Class.findOne({ _id: classId, school: schoolId });
+      if (!classInfo || classInfo.classTeacher.toString() !== teacherId.toString()) {
+        return res.status(403).json({ message: "Not authorized as class teacher" });
+      }
+
+      // Find compiled results
+      const results = await Result.find({
+        school: schoolId,
+        class: classId,
+        status: "compiled",
+      })
+        .populate({
+          path: "exam",
+          match: { examType: { $regex: `^${examType}$`, $options: "i" } },
+          select: "examType",
+        })
+        .lean();
+
+      const validResults = results.filter((result) => result.exam);
+      if (!validResults.length) {
+        return res.status(400).json({
+          message: "No compiled results found for this exam type and class",
+        });
+      }
+
+      // Update result statuses
+      const session = await connection.startSession();
+      session.startTransaction();
+
+      try {
+        await Result.updateMany(
+          {
+            _id: { $in: validResults.map((r) => r._id) },
+          },
+          {
+            $set: {
+              status: "submittedToAdmin",
+              submittedToAdminAt: new Date(),
+              submittedToAdminBy: teacherId,
+            },
+          },
+          { session }
+        );
+
+        await session.commitTransaction();
+
+        res.json({
+          message: "Results submitted to admin successfully",
+          class: `${classInfo.name}${classInfo.division ? " " + classInfo.division : ""}`,
+          examType,
+        });
+      } catch (error) {
+        await session.abortTransaction();
+        throw error;
+      } finally {
+        session.endSession();
+      }
+    } catch (error) {
+      logger.error(`Error in submitCompiledResultsToAdmin: ${error.message}`, { error });
       res.status(500).json({ error: error.message });
     }
   },
 };
 
 // Helper Functions
+
+
+function calculateGrade(percentage) {
+  if (percentage >= 90) return "A+";
+  if (percentage >= 80) return "A";
+  if (percentage >= 70) return "B+";
+  if (percentage >= 60) return "B";
+  if (percentage >= 50) return "C";
+  if (percentage >= 40) return "D";
+  return "F";
+}
 
 const verifyTeacherSubjectAssignment = async (teacherId, classId, subjectId, connection) => {
   const Subject = require("../models/Subject")(connection);

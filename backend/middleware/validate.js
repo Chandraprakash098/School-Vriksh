@@ -143,7 +143,28 @@ const studentFeeValidations = {
     query('month').isInt({ min: 1, max: 12 }).withMessage('Month must be between 1 and 12'),
     query('year').isInt().toInt().withMessage('Year must be an integer'),
   ],
-  payFeesByType: [
+//   payFeesByType: [
+//     param('studentId').isMongoId().withMessage('Invalid student ID'),
+//     body('feeTypes').isArray().withMessage('feeTypes must be an array'),
+//     body('feeTypes.*')
+//       .isIn(['school', 'computer', 'transportation', 'examination', 'classroom', 'educational', 'library'])
+//       .withMessage('Invalid fee type'),
+//     body('month').isInt({ min: 1, max: 12 }).withMessage('Month must be between 1 and 12'),
+//     body('year').isInt().toInt().withMessage('Year must be an integer'),
+//     body('paymentMethod').isIn(['online', 'card', 'upi']).withMessage('Invalid payment method'),
+//     body('amounts').optional().isArray().withMessage('Amounts must be an array'),
+//     body('amounts.*').optional().isFloat({ min: 0 }).withMessage('Amount must be a positive number'),
+//   ],
+
+//   getFeeReceipts: [
+//     param('studentId').isMongoId().withMessage('Invalid student ID'),
+//   ],
+//   getStudentFeeStatus: [
+//     param('studentId').isMongoId().withMessage('Invalid student ID'),
+//   ],
+// };
+
+payFeesByType: [
     param('studentId').isMongoId().withMessage('Invalid student ID'),
     body('feeTypes').isArray().withMessage('feeTypes must be an array'),
     body('feeTypes.*')
@@ -151,7 +172,9 @@ const studentFeeValidations = {
       .withMessage('Invalid fee type'),
     body('month').isInt({ min: 1, max: 12 }).withMessage('Month must be between 1 and 12'),
     body('year').isInt().toInt().withMessage('Year must be an integer'),
-    body('paymentMethod').isIn(['online', 'card', 'upi']).withMessage('Invalid payment method'),
+    body('selectedPaymentType')
+      .isIn(['bank_account', 'razorpay', 'upi', 'stripe', 'paytm'])
+      .withMessage('Invalid payment type'),
     body('amounts').optional().isArray().withMessage('Amounts must be an array'),
     body('amounts.*').optional().isFloat({ min: 0 }).withMessage('Amount must be a positive number'),
   ],
@@ -163,4 +186,34 @@ const studentFeeValidations = {
   ],
 };
 
-module.exports = { validate, feeValidations, studentFeeValidations };
+
+const setSchoolContext = async (req, res, next) => {
+  try {
+    let schoolId;
+
+    // For Paytm callback, extract schoolId from ORDERID
+    if (req.path === '/api/payment/paytm/callback' && req.body.ORDERID) {
+      const connection = await getSchoolConnection('default'); // Use a default connection to query Payment
+      const payment = await PaymentModel(connection).findOne({ orderId: req.body.ORDERID });
+      if (!payment) {
+        return res.status(404).json({ message: 'Payment not found' });
+      }
+      schoolId = payment.school.toString();
+    } else {
+      // Existing logic for other routes
+      schoolId = req.headers['x-school-id'] || req.user?.schoolId; // Adjust based on your auth mechanism
+    }
+
+    if (!schoolId) {
+      return res.status(400).json({ message: 'School ID not provided' });
+    }
+
+    req.school = { _id: schoolId };
+    req.connection = await getSchoolConnection(schoolId);
+    next();
+  } catch (error) {
+    logger.error('Error setting school context', { error: error.message });
+    res.status(500).json({ error: 'Failed to set school context' });
+  }
+};
+module.exports = { validate, feeValidations, studentFeeValidations,setSchoolContext };

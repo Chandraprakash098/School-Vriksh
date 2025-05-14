@@ -3,7 +3,7 @@
 console.log('Loading models/index.js');
 
 const models = {
-  User: require('../models/User'),
+  User: require('../models/User'),  
   Class: require('../models/Class'),
   Fee: require('../models/Fee'),
   Payment: require('../models/Payment'),
@@ -15,6 +15,7 @@ const models = {
   Certificate: require('../models/Certificate'),
   Leave: require('../models/Leave'),
   Exam: require('../models/Exam'),
+  ExamEvent: require('../models/ExamEvent'),
   Result: require('../models/Results'),
   Announcement: require('../models/Announcement'),
   Meeting: require('../models/Meeting'),
@@ -24,7 +25,8 @@ const models = {
   StudyMaterial:require('../models/StudyMaterial'),
   ProgressReport:require('../models/ProgressReport'),
   DailyWork: require('../models/DailyWork'),
-  AuditLog:require('../models/AuditLog')
+  AuditLog:require('../models/AuditLog'),
+  Marks: require("../models/marks"),
 };
 
 console.log('Loaded models:', Object.keys(models).map(name => ({

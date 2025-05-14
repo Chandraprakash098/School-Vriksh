@@ -11,10 +11,12 @@ const { checkRTEExemption } = require("../utils/rteUtils");
 const logger = require("../utils/logger");
 const { getSignedUrl } = require("@aws-sdk/s3-request-presigner");
 const { generateFeeSlip } = require("../utils/generateFeeSlip");
+// const { generateFeeSlip } = require("../utils/helpers");
 const { sendPaymentConfirmation } = require("../utils/notifications");
 const { deleteFromS3 } = require("../config/s3Upload");
 const s3Upload = require("../config/s3Upload");
 const AuditLog = require("../models/AuditLog");
+const {getOwnerConnection}= require("../config/database");
 
 const s3Client = new S3Client({
   region: process.env.AWS_REGION,
@@ -909,237 +911,475 @@ const feesController = {
     }
   },
 
+  // getStudentByGrNumber: async (req, res) => {
+  //   try {
+  //     const { grNumber } = req.params;
+  //     const schoolId = req.school._id.toString();
+  //     const connection = req.connection;
+  //     const FeeModel = require("../models/Fee")(connection);
+  //     const PaymentModel = require("../models/Payment")(connection);
+  //     const UserModel = require("../models/User")(connection);
+  //     const ClassModel = require("../models/Class")(connection);
+
+  //     const student = await UserModel.findOne({
+  //       "studentDetails.grNumber": grNumber,
+  //       school: schoolId,
+  //     })
+  //       .select(
+  //         "_id name studentDetails.grNumber studentDetails.class studentDetails.transportDetails studentDetails.isRTE"
+  //       )
+  //       .populate("studentDetails.class", "name division");
+
+  //     if (!student) {
+  //       return res.status(404).json({ message: "Student not found" });
+  //     }
+
+  //     const currentYear = new Date().getFullYear();
+  //     const studentFees = await FeeModel.find({
+  //       school: schoolId,
+  //       student: student._id,
+  //       year: { $gte: currentYear, $lte: currentYear + 1 },
+  //     });
+
+  //     const payments = await PaymentModel.find({
+  //       school: schoolId,
+  //       student: student._id,
+  //       status: "completed",
+  //       year: { $gte: currentYear, $lte: currentYear + 1 },
+  //     });
+
+  //     const generalFeeDefinitions = await FeeModel.find({
+  //       school: schoolId,
+  //       student: null,
+  //       classes: student.studentDetails.class._id,
+  //       year: { $gte: currentYear, $lte: currentYear + 1 },
+  //     });
+
+  //     // Process general fee definitions
+  //     const feeTypesMap = new Map();
+  //     generalFeeDefinitions.forEach((fee) => {
+  //       const key =
+  //         fee.type === "transportation" &&
+  //         fee.transportationDetails?.distanceSlab
+  //           ? `${fee.type}_${fee.transportationDetails.distanceSlab}_${fee.month}_${fee.year}`
+  //           : `${fee.type}_${fee.month}_${fee.year}`;
+  //       feeTypesMap.set(key, {
+  //         type: fee.type,
+  //         amount: fee.amount,
+  //         description: fee.description,
+  //         dueDate: fee.dueDate,
+  //         transportationDetails: fee.transportationDetails || null,
+  //         month: fee.month,
+  //         year: fee.year,
+  //       });
+  //     });
+
+  //     // Process student-specific fees
+  //     const studentFeeMap = new Map();
+  //     studentFees.forEach((fee) => {
+  //       const key =
+  //         fee.type === "transportation" &&
+  //         fee.transportationDetails?.distanceSlab
+  //           ? `${fee.type}_${fee.transportationDetails.distanceSlab}_${fee.month}_${fee.year}`
+  //           : `${fee.type}_${fee.month}_${fee.year}`;
+  //       studentFeeMap.set(key, fee);
+  //     });
+
+  //     // Process payments
+  //     const paymentMap = new Map();
+  //     payments.forEach((payment) => {
+  //       payment.feesPaid.forEach((feePaid) => {
+  //         const key =
+  //           feePaid.type === "transportation" && feePaid.transportationSlab
+  //             ? `${feePaid.type}_${feePaid.transportationSlab}_${feePaid.month}_${feePaid.year}`
+  //             : `${feePaid.type}_${feePaid.month}_${feePaid.year}`;
+  //         const existing = paymentMap.get(key) || {
+  //           amount: 0,
+  //           date: null,
+  //           details: [],
+  //         };
+  //         paymentMap.set(key, {
+  //           amount: existing.amount + feePaid.amount,
+  //           date:
+  //             payment.paymentDate > existing.date
+  //               ? payment.paymentDate
+  //               : existing.date,
+  //           details: [
+  //             ...existing.details,
+  //             {
+  //               transactionId: payment.receiptNumber,
+  //               paymentDate: payment.paymentDate,
+  //               paymentMethod: payment.paymentMethod,
+  //               receiptNumber: payment.receiptNumber,
+  //               amount: feePaid.amount,
+  //             },
+  //           ],
+  //         });
+  //       });
+  //     });
+
+  //     // Construct fee data
+  //     const feeData = {};
+  //     const months = Array.from({ length: 12 }, (_, i) => i + 1);
+  //     const years = [currentYear, currentYear + 1];
+
+  //     years.forEach((year) => {
+  //       months.forEach((month) => {
+  //         const key = `${year}-${month}`;
+  //         feeData[key] = {
+  //           total: 0,
+  //           totalPaid: 0,
+  //           totalPending: 0,
+  //           fees: {},
+  //         };
+
+  //         // Process fee types
+  //         const feeTypes = ["school", "transportation"];
+  //         feeTypes.forEach((feeType) => {
+  //           const slabKey =
+  //             feeType === "transportation" &&
+  //             student.studentDetails.transportDetails?.distanceSlab
+  //               ? `${feeType}_${student.studentDetails.transportDetails.distanceSlab}_${month}_${year}`
+  //               : `${feeType}_${month}_${year}`;
+
+  //           if (
+  //             feeType === "transportation" &&
+  //             (!student.studentDetails.transportDetails?.isApplicable ||
+  //               student.studentDetails.transportDetails.distanceSlab !==
+  //                 student.studentDetails.transportDetails?.distanceSlab)
+  //           ) {
+  //             return;
+  //           }
+
+  //           const studentFee = studentFeeMap.get(slabKey);
+  //           const generalFee = feeTypesMap.get(slabKey);
+
+  //           if (!studentFee && !generalFee) {
+  //             return;
+  //           }
+
+  //           const feeAmount = studentFee
+  //             ? studentFee.amount
+  //             : generalFee
+  //             ? generalFee.amount
+  //             : 0;
+  //           const paidAmount = studentFee ? studentFee.paidAmount : 0;
+  //           const remainingAmount = studentFee
+  //             ? studentFee.remainingAmount
+  //             : feeAmount;
+  //           const status = studentFee
+  //             ? studentFee.status
+  //             : remainingAmount === 0
+  //             ? "paid"
+  //             : "pending";
+
+  //           const paymentInfo = paymentMap.get(slabKey) || {
+  //             amount: 0,
+  //             date: null,
+  //             details: [],
+  //           };
+  //           const paymentDetails =
+  //             paymentInfo.details.length > 0 ? paymentInfo.details[0] : {};
+
+  //           feeData[key].fees[feeType] = {
+  //             amount: feeAmount,
+  //             paidAmount: paidAmount,
+  //             remainingAmount: remainingAmount,
+  //             dueDate: studentFee
+  //               ? studentFee.dueDate
+  //               : generalFee
+  //               ? generalFee.dueDate
+  //               : null,
+  //             description: studentFee
+  //               ? studentFee.description
+  //               : generalFee
+  //               ? generalFee.description
+  //               : "",
+  //             status,
+  //             paymentDetails: paymentDetails,
+  //             ...(feeType === "transportation" &&
+  //               (studentFee?.transportationDetails?.distanceSlab ||
+  //                 generalFee?.transportationDetails?.distanceSlab) && {
+  //                 transportationSlab:
+  //                   studentFee?.transportationDetails?.distanceSlab ||
+  //                   generalFee?.transportationDetails?.distanceSlab,
+  //               }),
+  //           };
+
+  //           feeData[key].total += feeAmount;
+  //           feeData[key].totalPaid += paidAmount;
+  //           feeData[key].totalPending += remainingAmount;
+  //         });
+  //       });
+  //     });
+
+  //     // Clean up empty months
+  //     Object.keys(feeData).forEach((key) => {
+  //       if (Object.keys(feeData[key].fees).length === 0) {
+  //         delete feeData[key];
+  //       }
+  //     });
+
+  //     res.json({
+  //       student: {
+  //         _id: student._id,
+  //         name: student.name,
+  //         grNumber: student.studentDetails.grNumber,
+  //         class: student.studentDetails.class
+  //           ? {
+  //               _id: student.studentDetails.class._id,
+  //               name: student.studentDetails.class.name,
+  //               division: student.studentDetails.class.division,
+  //             }
+  //           : null,
+  //         transportDetails: student.studentDetails.transportDetails || null,
+  //         isRTE: student.studentDetails.isRTE || false,
+  //       },
+  //       feeData,
+  //     });
+  //   } catch (error) {
+  //     logger.error(`Error fetching student fees: ${error.message}`, { error });
+  //     res.status(500).json({ error: error.message });
+  //   }
+  // },
+
   getStudentByGrNumber: async (req, res) => {
-    try {
-      const { grNumber } = req.params;
-      const schoolId = req.school._id.toString();
-      const connection = req.connection;
-      const FeeModel = require("../models/Fee")(connection);
-      const PaymentModel = require("../models/Payment")(connection);
-      const UserModel = require("../models/User")(connection);
-      const ClassModel = require("../models/Class")(connection);
+  try {
+    const { grNumber } = req.params;
+    const schoolId = req.school._id.toString();
+    const connection = req.connection;
+    const FeeModel = require("../models/Fee")(connection);
+    const PaymentModel = require("../models/Payment")(connection);
+    const UserModel = require("../models/User")(connection);
+    const ClassModel = require("../models/Class")(connection);
 
-      const student = await UserModel.findOne({
-        "studentDetails.grNumber": grNumber,
-        school: schoolId,
-      })
-        .select(
-          "_id name studentDetails.grNumber studentDetails.class studentDetails.transportDetails studentDetails.isRTE"
-        )
-        .populate("studentDetails.class", "name division");
+    const student = await UserModel.findOne({
+      "studentDetails.grNumber": grNumber,
+      school: schoolId,
+    })
+      .select(
+        "_id name studentDetails.grNumber studentDetails.class studentDetails.transportDetails studentDetails.isRTE"
+      )
+      .populate("studentDetails.class", "name division");
 
-      if (!student) {
-        return res.status(404).json({ message: "Student not found" });
-      }
+    if (!student) {
+      return res.status(404).json({ message: "Student not found" });
+    }
 
-      const currentYear = new Date().getFullYear();
-      const studentFees = await FeeModel.find({
-        school: schoolId,
-        student: student._id,
-        year: { $gte: currentYear, $lte: currentYear + 1 },
+    const currentYear = new Date().getFullYear();
+    const studentFees = await FeeModel.find({
+      school: schoolId,
+      student: student._id,
+      year: { $gte: currentYear, $lte: currentYear + 1 },
+    });
+
+    const payments = await PaymentModel.find({
+      school: schoolId,
+      student: student._id,
+      status: "completed",
+      year: { $gte: currentYear, $lte: currentYear + 1 },
+    });
+
+    const generalFeeDefinitions = await FeeModel.find({
+      school: schoolId,
+      student: null,
+      classes: student.studentDetails.class._id,
+      year: { $gte: currentYear, $lte: currentYear + 1 },
+    });
+
+    // Get all distinct fee types for the student's class
+    const feeTypes = [
+      ...new Set(generalFeeDefinitions.map((fee) => fee.type)),
+      ...new Set(studentFees.map((fee) => fee.type)),
+    ];
+
+    // Process general fee definitions
+    const feeTypesMap = new Map();
+    generalFeeDefinitions.forEach((fee) => {
+      const key =
+        fee.type === "transportation" &&
+        fee.transportationDetails?.distanceSlab
+          ? `${fee.type}_${fee.transportationDetails.distanceSlab}_${fee.month}_${fee.year}`
+          : `${fee.type}_${fee.month}_${fee.year}`;
+      feeTypesMap.set(key, {
+        type: fee.type,
+        amount: fee.amount,
+        description: fee.description,
+        dueDate: fee.dueDate,
+        transportationDetails: fee.transportationDetails || null,
+        month: fee.month,
+        year: fee.year,
       });
+    });
 
-      const payments = await PaymentModel.find({
-        school: schoolId,
-        student: student._id,
-        status: "completed",
-        year: { $gte: currentYear, $lte: currentYear + 1 },
-      });
+    // Process student-specific fees
+    const studentFeeMap = new Map();
+    studentFees.forEach((fee) => {
+      const key =
+        fee.type === "transportation" &&
+        fee.transportationDetails?.distanceSlab
+          ? `${fee.type}_${fee.transportationDetails.distanceSlab}_${fee.month}_${fee.year}`
+          : `${fee.type}_${fee.month}_${fee.year}`;
+      studentFeeMap.set(key, fee);
+    });
 
-      const generalFeeDefinitions = await FeeModel.find({
-        school: schoolId,
-        student: null,
-        classes: student.studentDetails.class._id,
-        year: { $gte: currentYear, $lte: currentYear + 1 },
-      });
-
-      // Process general fee definitions
-      const feeTypesMap = new Map();
-      generalFeeDefinitions.forEach((fee) => {
+    // Process payments
+    const paymentMap = new Map();
+    payments.forEach((payment) => {
+      payment.feesPaid.forEach((feePaid) => {
         const key =
-          fee.type === "transportation" &&
-          fee.transportationDetails?.distanceSlab
-            ? `${fee.type}_${fee.transportationDetails.distanceSlab}_${fee.month}_${fee.year}`
-            : `${fee.type}_${fee.month}_${fee.year}`;
-        feeTypesMap.set(key, {
-          type: fee.type,
-          amount: fee.amount,
-          description: fee.description,
-          dueDate: fee.dueDate,
-          transportationDetails: fee.transportationDetails || null,
-          month: fee.month,
-          year: fee.year,
+          feePaid.type === "transportation" && feePaid.transportationSlab
+            ? `${feePaid.type}_${feePaid.transportationSlab}_${feePaid.month}_${feePaid.year}`
+            : `${feePaid.type}_${feePaid.month}_${feePaid.year}`;
+        const existing = paymentMap.get(key) || {
+          amount: 0,
+          date: null,
+          details: [],
+        };
+        paymentMap.set(key, {
+          amount: existing.amount + feePaid.amount,
+          date:
+            payment.paymentDate > existing.date
+              ? payment.paymentDate
+              : existing.date,
+          details: [
+            ...existing.details,
+            {
+              transactionId: payment.receiptNumber,
+              paymentDate: payment.paymentDate,
+              paymentMethod: payment.paymentMethod,
+              receiptNumber: payment.receiptNumber,
+              amount: feePaid.amount,
+            },
+          ],
         });
       });
+    });
 
-      // Process student-specific fees
-      const studentFeeMap = new Map();
-      studentFees.forEach((fee) => {
-        const key =
-          fee.type === "transportation" &&
-          fee.transportationDetails?.distanceSlab
-            ? `${fee.type}_${fee.transportationDetails.distanceSlab}_${fee.month}_${fee.year}`
-            : `${fee.type}_${fee.month}_${fee.year}`;
-        studentFeeMap.set(key, fee);
-      });
+    // Construct fee data
+    const feeData = {};
+    const months = Array.from({ length: 12 }, (_, i) => i + 1);
+    const years = [currentYear, currentYear + 1];
 
-      // Process payments
-      const paymentMap = new Map();
-      payments.forEach((payment) => {
-        payment.feesPaid.forEach((feePaid) => {
-          const key =
-            feePaid.type === "transportation" && feePaid.transportationSlab
-              ? `${feePaid.type}_${feePaid.transportationSlab}_${feePaid.month}_${feePaid.year}`
-              : `${feePaid.type}_${feePaid.month}_${feePaid.year}`;
-          const existing = paymentMap.get(key) || {
+    years.forEach((year) => {
+      months.forEach((month) => {
+        const key = `${year}-${month}`;
+        feeData[key] = {
+          total: 0,
+          totalPaid: 0,
+          totalPending: 0,
+          fees: {},
+        };
+
+        // Process all fee types
+        feeTypes.forEach((feeType) => {
+          const slabKey =
+            feeType === "transportation" &&
+            student.studentDetails.transportDetails?.distanceSlab
+              ? `${feeType}_${student.studentDetails.transportDetails.distanceSlab}_${month}_${year}`
+              : `${feeType}_${month}_${year}`;
+
+          if (
+            feeType === "transportation" &&
+            (!student.studentDetails.transportDetails?.isApplicable ||
+              (student.studentDetails.transportDetails?.distanceSlab &&
+                student.studentDetails.transportDetails.distanceSlab !==
+                  student.studentDetails.transportDetails?.distanceSlab))
+          ) {
+            return;
+          }
+
+          const studentFee = studentFeeMap.get(slabKey);
+          const generalFee = feeTypesMap.get(slabKey);
+
+          if (!studentFee && !generalFee) {
+            return;
+          }
+
+          const feeAmount = studentFee
+            ? studentFee.amount
+            : generalFee
+            ? generalFee.amount
+            : 0;
+          const paidAmount = studentFee ? studentFee.paidAmount : 0;
+          const remainingAmount = studentFee
+            ? studentFee.remainingAmount
+            : feeAmount;
+          const status = studentFee
+            ? studentFee.status
+            : remainingAmount === 0
+            ? "paid"
+            : "pending";
+
+          const paymentInfo = paymentMap.get(slabKey) || {
             amount: 0,
             date: null,
             details: [],
           };
-          paymentMap.set(key, {
-            amount: existing.amount + feePaid.amount,
-            date:
-              payment.paymentDate > existing.date
-                ? payment.paymentDate
-                : existing.date,
-            details: [
-              ...existing.details,
-              {
-                transactionId: payment.receiptNumber,
-                paymentDate: payment.paymentDate,
-                paymentMethod: payment.paymentMethod,
-                receiptNumber: payment.receiptNumber,
-                amount: feePaid.amount,
-              },
-            ],
-          });
-        });
-      });
+          const paymentDetails =
+            paymentInfo.details.length > 0 ? paymentInfo.details[0] : {};
 
-      // Construct fee data
-      const feeData = {};
-      const months = Array.from({ length: 12 }, (_, i) => i + 1);
-      const years = [currentYear, currentYear + 1];
-
-      years.forEach((year) => {
-        months.forEach((month) => {
-          const key = `${year}-${month}`;
-          feeData[key] = {
-            total: 0,
-            totalPaid: 0,
-            totalPending: 0,
-            fees: {},
+          feeData[key].fees[feeType] = {
+            amount: feeAmount,
+            paidAmount: paidAmount,
+            remainingAmount: remainingAmount,
+            dueDate: studentFee
+              ? studentFee.dueDate
+              : generalFee
+              ? generalFee.dueDate
+              : null,
+            description: studentFee
+              ? studentFee.description
+              : generalFee
+              ? generalFee.description
+              : "",
+            status,
+            paymentDetails: paymentDetails,
+            ...(feeType === "transportation" &&
+              (studentFee?.transportationDetails?.distanceSlab ||
+                generalFee?.transportationDetails?.distanceSlab) && {
+                transportationSlab:
+                  studentFee?.transportationDetails?.distanceSlab ||
+                  generalFee?.transportationDetails?.distanceSlab,
+              }),
           };
 
-          // Process fee types
-          const feeTypes = ["school", "transportation"];
-          feeTypes.forEach((feeType) => {
-            const slabKey =
-              feeType === "transportation" &&
-              student.studentDetails.transportDetails?.distanceSlab
-                ? `${feeType}_${student.studentDetails.transportDetails.distanceSlab}_${month}_${year}`
-                : `${feeType}_${month}_${year}`;
-
-            if (
-              feeType === "transportation" &&
-              (!student.studentDetails.transportDetails?.isApplicable ||
-                student.studentDetails.transportDetails.distanceSlab !==
-                  student.studentDetails.transportDetails?.distanceSlab)
-            ) {
-              return;
-            }
-
-            const studentFee = studentFeeMap.get(slabKey);
-            const generalFee = feeTypesMap.get(slabKey);
-
-            if (!studentFee && !generalFee) {
-              return;
-            }
-
-            const feeAmount = studentFee
-              ? studentFee.amount
-              : generalFee
-              ? generalFee.amount
-              : 0;
-            const paidAmount = studentFee ? studentFee.paidAmount : 0;
-            const remainingAmount = studentFee
-              ? studentFee.remainingAmount
-              : feeAmount;
-            const status = studentFee
-              ? studentFee.status
-              : remainingAmount === 0
-              ? "paid"
-              : "pending";
-
-            const paymentInfo = paymentMap.get(slabKey) || {
-              amount: 0,
-              date: null,
-              details: [],
-            };
-            const paymentDetails =
-              paymentInfo.details.length > 0 ? paymentInfo.details[0] : {};
-
-            feeData[key].fees[feeType] = {
-              amount: feeAmount,
-              paidAmount: paidAmount,
-              remainingAmount: remainingAmount,
-              dueDate: studentFee
-                ? studentFee.dueDate
-                : generalFee
-                ? generalFee.dueDate
-                : null,
-              description: studentFee
-                ? studentFee.description
-                : generalFee
-                ? generalFee.description
-                : "",
-              status,
-              paymentDetails: paymentDetails,
-              ...(feeType === "transportation" &&
-                (studentFee?.transportationDetails?.distanceSlab ||
-                  generalFee?.transportationDetails?.distanceSlab) && {
-                  transportationSlab:
-                    studentFee?.transportationDetails?.distanceSlab ||
-                    generalFee?.transportationDetails?.distanceSlab,
-                }),
-            };
-
-            feeData[key].total += feeAmount;
-            feeData[key].totalPaid += paidAmount;
-            feeData[key].totalPending += remainingAmount;
-          });
+          feeData[key].total += feeAmount;
+          feeData[key].totalPaid += paidAmount;
+          feeData[key].totalPending += remainingAmount;
         });
       });
+    });
 
-      // Clean up empty months
-      Object.keys(feeData).forEach((key) => {
-        if (Object.keys(feeData[key].fees).length === 0) {
-          delete feeData[key];
-        }
-      });
+    // Clean up empty months
+    Object.keys(feeData).forEach((key) => {
+      if (Object.keys(feeData[key].fees).length === 0) {
+        delete feeData[key];
+      }
+    });
 
-      res.json({
-        student: {
-          _id: student._id,
-          name: student.name,
-          grNumber: student.studentDetails.grNumber,
-          class: student.studentDetails.class
-            ? {
-                _id: student.studentDetails.class._id,
-                name: student.studentDetails.class.name,
-                division: student.studentDetails.class.division,
-              }
-            : null,
-          transportDetails: student.studentDetails.transportDetails || null,
-          isRTE: student.studentDetails.isRTE || false,
-        },
-        feeData,
-      });
-    } catch (error) {
-      logger.error(`Error fetching student fees: ${error.message}`, { error });
-      res.status(500).json({ error: error.message });
-    }
-  },
+    res.json({
+      student: {
+        _id: student._id,
+        name: student.name,
+        grNumber: student.studentDetails.grNumber,
+        class: student.studentDetails.class
+          ? {
+              _id: student.studentDetails.class._id,
+              name: student.studentDetails.class.name,
+              division: student.studentDetails.class.division,
+            }
+          : null,
+        transportDetails: student.studentDetails.transportDetails || null,
+        isRTE: student.studentDetails.isRTE || false,
+      },
+      feeData,
+    });
+  } catch (error) {
+    logger.error(`Error fetching student fees: ${error.message}`, { error });
+    res.status(500).json({ error: error.message });
+  }
+},
 
   payFeesForStudent: async (req, res) => {
     try {
@@ -1482,11 +1722,28 @@ const feesController = {
     }
   },
 
-  // verifyPaymentLogic : async ({ connection, schoolId, razorpay_order_id, razorpay_payment_id }) => {
+
+
+  // verifyPayment: async (req, res) => {
   //   try {
+  //     const { razorpay_payment_id, razorpay_order_id, razorpay_signature } =
+  //       req.body;
+  //     const schoolId = req.school._id.toString();
+  //     const connection = req.connection;
   //     const PaymentModel = require("../models/Payment")(connection);
   //     const FeeModel = require("../models/Fee")(connection);
   //     const UserModel = require("../models/User")(connection);
+  //     const ClassModel = require("../models/Class")(connection);
+
+  //     // Verify signature (uncomment if using)
+  //     // const generatedSignature = crypto
+  //     //   .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
+  //     //   .update(`${razorpay_order_id}|${razorpay_payment_id}`)
+  //     //   .digest("hex");
+
+  //     // if (generatedSignature !== razorpay_signature) {
+  //     //   return res.status(400).json({ message: "Invalid payment signature" });
+  //     // }
 
   //     const payment = await PaymentModel.findOne({
   //       orderId: razorpay_order_id,
@@ -1494,22 +1751,27 @@ const feesController = {
   //     });
 
   //     if (!payment) {
-  //       throw new Error("Payment not found");
+  //       return res.status(404).json({ message: "Payment not found" });
   //     }
 
   //     if (payment.status === "completed") {
-  //       throw new Error("Payment already verified");
+  //       return res.status(400).json({ message: "Payment already verified" });
   //     }
 
-  //     // Update payment record
   //     payment.status = "completed";
   //     payment.transactionId = razorpay_payment_id;
   //     payment.paymentDate = new Date();
   //     payment.receiptNumber = `REC-ONLINE-${Date.now()}`;
   //     await payment.save();
 
-  //     // Update associated fees
-  //     const feesPaid = payment.feesPaid;
+  //     const uniqueFeeKeys = new Set();
+  //     const feesPaid = payment.feesPaid.filter((feePaid) => {
+  //       const key = `${feePaid.type}-${feePaid.month}-${feePaid.year}`;
+  //       if (uniqueFeeKeys.has(key)) return false;
+  //       uniqueFeeKeys.add(key);
+  //       return true;
+  //     });
+
   //     const feeUpdates = feesPaid.map(async (feePaid) => {
   //       const fee = await FeeModel.findOne({
   //         student: payment.student,
@@ -1528,333 +1790,6 @@ const feesController = {
   //           paymentDate: payment.paymentDate,
   //           paymentMethod: payment.paymentMethod,
   //           receiptNumber: payment.receiptNumber,
-  //           amount: feePaid.amount,
-  //         });
-  //         await fee.save();
-  //       }
-  //     });
-
-  //     await Promise.all(feeUpdates);
-
-  //     // Generate fee slips
-  //     const receiptUrls = {};
-  //     const uniqueMonthYear = [
-  //       ...new Set(
-  //         feesPaid.map((fee) => `${fee.month}-${fee.year}`)
-  //       ),
-  //     ];
-
-  //     for (const monthYear of uniqueMonthYear) {
-  //       const [month, year] = monthYear.split("-").map(Number);
-  //       const slipFees = feesPaid.filter(
-  //         (fee) => fee.month === month && fee.year === year
-  //       );
-  //       const receiptUrl = await generateFeeSlip({
-  //         payment,
-  //         fees: slipFees,
-  //         month,
-  //         year,
-  //         connection,
-  //       });
-  //       receiptUrls[monthYear] = receiptUrl;
-  //     }
-
-  //     payment.receiptUrls = receiptUrls;
-  //     await payment.save();
-
-  //     // Notify student
-  //     const student = await UserModel.findById(payment.student);
-  //     await sendEmail({
-  //       to: student.email,
-  //       subject: "Payment Confirmation",
-  //       body: `Your payment of ₹${payment.amount} has been confirmed. Receipt: ${Object.values(receiptUrls)[0]}`,
-  //     });
-
-  //     return { payment, receiptUrls };
-  //   } catch (error) {
-  //     logger.error(`Error in verifyPaymentLogic: ${error.message}`, { error });
-  //     throw error;
-  //   }
-  // },
-
-  // // Webhook handler for Razorpay
-  // webhookHandler : async (req, res) => {
-  //   try {
-  //     const signature = req.headers["x-razorpay-signature"];
-  //     const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET;
-  //     const body = JSON.stringify(req.body);
-
-  //     // Verify webhook signature
-  //     const expectedSignature = crypto
-  //       .createHmac("sha256", webhookSecret)
-  //       .update(body)
-  //       .digest("hex");
-
-  //     if (signature !== expectedSignature) {
-  //       logger.error("Invalid webhook signature");
-  //       return res.status(400).json({ message: "Invalid webhook signature" });
-  //     }
-
-  //     const event = req.body.event;
-  //     if (event === "payment.captured") {
-  //       const { order_id, id: payment_id } = req.body.payload.payment.entity;
-  //       const schoolId = req.school._id.toString(); // Assumes school context is set
-  //       const connection = req.connection;
-
-  //       // Verify payment
-  //       const result = await verifyPaymentLogic({
-  //         connection,
-  //         schoolId,
-  //         razorpay_order_id: order_id,
-  //         razorpay_payment_id: payment_id,
-  //       });
-
-  //       // Notify fee manager for review
-  //       const UserModel = require("../models/User")(connection);
-  //       const feeManagers = await UserModel.find({
-  //         school: schoolId,
-  //         "permissions.canManageFees": true,
-  //       });
-
-  //       for (const manager of feeManagers) {
-  //         await sendEmail({
-  //           to: manager.email,
-  //           subject: "New Payment Verification",
-  //           body: `A payment (Order ID: ${order_id}, Payment ID: ${payment_id}) has been verified. Please review in the fee manager dashboard.\nReceipt: ${Object.values(result.receiptUrls)[0]}`,
-  //         });
-  //       }
-
-  //       logger.info(`Webhook processed for payment ${payment_id}`);
-  //     }
-
-  //     res.status(200).json({ status: "ok" });
-  //   } catch (error) {
-  //     logger.error(`Webhook error: ${error.message}`, { error });
-  //     res.status(500).json({ error: error.message });
-  //   }
-  // },
-
-  verifyPayment: async (req, res) => {
-    try {
-      const { razorpay_payment_id, razorpay_order_id, razorpay_signature } =
-        req.body;
-      const schoolId = req.school._id.toString();
-      const connection = req.connection;
-      const PaymentModel = require("../models/Payment")(connection);
-      const FeeModel = require("../models/Fee")(connection);
-      const UserModel = require("../models/User")(connection);
-      const ClassModel = require("../models/Class")(connection);
-
-      // Verify signature (uncomment if using)
-      // const generatedSignature = crypto
-      //   .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
-      //   .update(`${razorpay_order_id}|${razorpay_payment_id}`)
-      //   .digest("hex");
-
-      // if (generatedSignature !== razorpay_signature) {
-      //   return res.status(400).json({ message: "Invalid payment signature" });
-      // }
-
-      const payment = await PaymentModel.findOne({
-        orderId: razorpay_order_id,
-        school: schoolId,
-      });
-
-      if (!payment) {
-        return res.status(404).json({ message: "Payment not found" });
-      }
-
-      if (payment.status === "completed") {
-        return res.status(400).json({ message: "Payment already verified" });
-      }
-
-      payment.status = "completed";
-      payment.transactionId = razorpay_payment_id;
-      payment.paymentDate = new Date();
-      payment.receiptNumber = `REC-ONLINE-${Date.now()}`;
-      await payment.save();
-
-      const uniqueFeeKeys = new Set();
-      const feesPaid = payment.feesPaid.filter((feePaid) => {
-        const key = `${feePaid.type}-${feePaid.month}-${feePaid.year}`;
-        if (uniqueFeeKeys.has(key)) return false;
-        uniqueFeeKeys.add(key);
-        return true;
-      });
-
-      const feeUpdates = feesPaid.map(async (feePaid) => {
-        const fee = await FeeModel.findOne({
-          student: payment.student,
-          school: schoolId,
-          type: feePaid.type,
-          month: feePaid.month,
-          year: feePaid.year,
-        });
-
-        if (fee) {
-          fee.paidAmount += feePaid.amount;
-          fee.remainingAmount = fee.amount - fee.paidAmount;
-          fee.status = fee.paidAmount >= fee.amount ? "paid" : "partially_paid";
-          fee.paymentDetails.push({
-            transactionId: razorpay_payment_id,
-            paymentDate: payment.paymentDate,
-            paymentMethod: payment.paymentMethod,
-            receiptNumber: payment.receiptNumber,
-            amount: feePaid.amount,
-          });
-          await fee.save();
-        }
-      });
-
-      await Promise.all(feeUpdates);
-
-      const student = await UserModel.findById(payment.student)
-        .select(
-          "_id name studentDetails.grNumber studentDetails.class studentDetails.transportDetails studentDetails.isRTE studentDetails.parentDetails email"
-        )
-        .populate("studentDetails.class", "name division");
-
-      const feesByMonthYear = feesPaid.reduce((acc, fee) => {
-        const key = `${fee.month}-${fee.year}`;
-        if (!acc[key]) acc[key] = [];
-        acc[key].push(fee);
-        return acc;
-      }, {});
-
-      const receiptUrls = {};
-      for (const [key, fees] of Object.entries(feesByMonthYear)) {
-        let attempts = 3;
-        let feeSlip;
-        while (attempts > 0) {
-          try {
-            feeSlip = await generateFeeSlip(
-              student,
-              payment,
-              fees.map((f) => ({
-                _id: f.feeId,
-                type: f.type,
-                month: f.month,
-                year: f.year,
-                amount: f.amount,
-              })),
-              schoolId,
-              key
-            );
-            break;
-          } catch (uploadError) {
-            logger.warn(
-              `Failed to generate fee slip for ${key}, attempt ${
-                4 - attempts
-              }: ${uploadError.message}`
-            );
-            attempts--;
-            if (attempts === 0) throw uploadError;
-          }
-        }
-        receiptUrls[key] = feeSlip.pdfUrl;
-      }
-
-      payment.receiptUrl =
-        receiptUrls[`${feesPaid[0].month}-${feesPaid[0].year}`];
-      payment.receiptUrls = receiptUrls;
-      await payment.save();
-
-      // Log the action
-      await logFeeAction(
-        connection,
-        schoolId,
-        req.user._id,
-        "VERIFY_PAYMENT",
-        `Verified payment for order ${razorpay_order_id} with payment ID ${razorpay_payment_id}`,
-        {
-          razorpay_order_id,
-          razorpay_payment_id,
-          amount: payment.amount,
-          studentId: payment.student.toString(),
-        }
-      );
-
-      await sendPaymentConfirmation(student, payment, payment.receiptUrl);
-
-      logger.info(
-        `Payment verified for order ${razorpay_order_id}: ${payment.amount}`
-      );
-
-      res.json({
-        message: "Payment verified successfully",
-        payment,
-        receiptUrls,
-      });
-    } catch (error) {
-      logger.error(`Error verifying payment: ${error.message}`, { error });
-      res.status(500).json({ error: error.message });
-    }
-  },
-
-  // verifyPayment: async (req, res) => {
-  //   try {
-  //     const { razorpay_payment_id, razorpay_order_id, razorpay_signature } = req.body;
-  //     const schoolId = req.school._id.toString();
-  //     const connection = req.connection;
-  //     const PaymentModel = require("../models/Payment")(connection);
-  //     const FeeModel = require("../models/Fee")(connection);
-  //     const UserModel = require("../models/User")(connection);
-  //     const ClassModel = require("../models/Class")(connection);
-
-  //     if (!req.user.permissions.canManageFees) {
-  //       return res.status(403).json({
-  //         message: "Unauthorized: Only fee managers can verify payments",
-  //       });
-  //     }
-
-  //     const payment = await PaymentModel.findOne({
-  //       orderId: razorpay_order_id,
-  //       school: schoolId,
-  //     });
-
-  //     if (!payment) {
-  //       return res.status(404).json({ message: "Payment not found" });
-  //     }
-
-  //     if (payment.status === "completed") {
-  //       return res.status(400).json({ message: "Payment already verified" });
-  //     }
-
-  //     payment.status = "completed";
-  //     payment.transactionId = razorpay_payment_id;
-  //     payment.paymentDate = new Date();
-  //     payment.receptNumber = `REC-ONLINE-${Date.now()}`;
-  //     await payment.save();
-
-  //     const uniqueFeeKeys = new Set();
-  //     const feesPaid = payment.feesPaid.filter((feePaid) => {
-  //       const key = `${feePaid.type}-${feePaid.month}-${feePaid.year}-${feePaid.transportationSlab || ''}`;
-  //       if (uniqueFeeKeys.has(key)) return false;
-  //       uniqueFeeKeys.add(key);
-  //       return true;
-  //     });
-
-  //     const feeUpdates = feesPaid.map(async (feePaid) => {
-  //       const fee = await FeeModel.findOne({
-  //         student: payment.student,
-  //         school: schoolId,
-  //         type: feePaid.type,
-  //         month: feePaid.month,
-  //         year: feePaid.year,
-  //         ...(feePaid.transportationSlab
-  //           ? { "transportationDetails.distanceSlab": feePaid.transportationSlab }
-  //           : {}),
-  //       });
-
-  //       if (fee) {
-  //         fee.paidAmount += feePaid.amount;
-  //         fee.remainingAmount = fee.amount - fee.paidAmount;
-  //         fee.status = fee.paidAmount >= fee.amount ? "paid" : "partially_paid";
-  //         fee.paymentDetails.push({
-  //           transactionId: razorpay_payment_id,
-  //           paymentDate: payment.paymentDate,
-  //           paymentMethod: payment.paymentMethod,
-  //           receiptNumber: payment.receptNumber,
   //           amount: feePaid.amount,
   //         });
   //         await fee.save();
@@ -1891,7 +1826,300 @@ const feesController = {
   //               month: f.month,
   //               year: f.year,
   //               amount: f.amount,
-  //               transportationSlab: f.transportationSlab,
+  //             })),
+  //             schoolId,
+  //             key
+  //           );
+  //           break;
+  //         } catch (uploadError) {
+  //           logger.warn(
+  //             `Failed to generate fee slip for ${key}, attempt ${
+  //               4 - attempts
+  //             }: ${uploadError.message}`
+  //           );
+  //           attempts--;
+  //           if (attempts === 0) throw uploadError;
+  //         }
+  //       }
+  //       receiptUrls[key] = feeSlip.pdfUrl;
+  //     }
+
+  //     payment.receiptUrl =
+  //       receiptUrls[`${feesPaid[0].month}-${feesPaid[0].year}`];
+  //     payment.receiptUrls = receiptUrls;
+  //     await payment.save();
+
+  //     // Log the action
+  //     await logFeeAction(
+  //       connection,
+  //       schoolId,
+  //       req.user._id,
+  //       "VERIFY_PAYMENT",
+  //       `Verified payment for order ${razorpay_order_id} with payment ID ${razorpay_payment_id}`,
+  //       {
+  //         razorpay_order_id,
+  //         razorpay_payment_id,
+  //         amount: payment.amount,
+  //         studentId: payment.student.toString(),
+  //       }
+  //     );
+
+  //     await sendPaymentConfirmation(student, payment, payment.receiptUrl);
+
+  //     logger.info(
+  //       `Payment verified for order ${razorpay_order_id}: ${payment.amount}`
+  //     );
+
+  //     res.json({
+  //       message: "Payment verified successfully",
+  //       payment,
+  //       receiptUrls,
+  //     });
+  //   } catch (error) {
+  //     logger.error(`Error verifying payment: ${error.message}`, { error });
+  //     res.status(500).json({ error: error.message });
+  //   }
+  // },
+
+
+getPendingPaymentsFor : async (req, res) => {
+  try {
+    const schoolId = req.school._id.toString();
+    const connection = req.connection;
+    const PaymentModel = require('../models/Payment')(connection);
+    const UserModel = require('../models/User')(connection);
+    const FeeModel = require('../models/Fee')(connection);
+    const ClassModel= require('../models/Class')(connection)
+
+    // Validate fee manager role
+    // if (!req.user || !['FEE_MANAGER', 'ADMIN'].includes(req.user.role)) {
+    //   logger.error('Unauthorized access to pending payments', { userId: req.user?._id });
+    //   return res.status(403).json({ message: 'Only fee managers or admins can view pending payments' });
+    // }
+
+    // Optional filter by payment method
+    const { paymentMethod } = req.query;
+    const query = {
+      school: schoolId,
+      status: { $in: ['pending', 'awaiting_verification'] },
+    };
+    if (paymentMethod) {
+      query.paymentMethod = paymentMethod;
+    }
+
+    // Fetch pending payments
+    const payments = await PaymentModel.find(query)
+      .populate({
+        path: 'student',
+        select: 'name studentDetails.grNumber studentDetails.class studentDetails.parentDetails.email',
+        populate: {
+          path: 'studentDetails.class',
+          select: 'name division',
+        },
+      })
+      .lean();
+
+    // Enrich payments with fee details
+    const enrichedPayments = await Promise.all(
+      payments.map(async (payment) => {
+        const fees = await FeeModel.find({
+          _id: { $in: payment.feesPaid.map((f) => f.feeId) },
+        }).lean();
+
+        return {
+          paymentId: payment._id,
+          orderId: payment.orderId,
+          student: {
+            id: payment.student._id,
+            name: payment.student.name,
+            grNumber: payment.student.studentDetails.grNumber,
+            class: payment.student.studentDetails.class
+              ? `${payment.student.studentDetails.class.name} ${payment.student.studentDetails.class.division}`
+              : 'N/A',
+            email: payment.student.studentDetails.parentDetails?.email || payment.student.email,
+          },
+          paymentMethod: payment.paymentMethod,
+          totalAmount: payment.totalAmount,
+          status: payment.status,
+          transactionId: payment.transactionId || null,
+          proofOfPayment: payment.proofOfPayment
+            ? {
+                url: payment.proofOfPayment.url,
+                transactionId: payment.proofOfPayment.transactionId,
+                mimeType: payment.proofOfPayment.mimeType,
+                size: payment.proofOfPayment.size,
+                amount: payment.proofOfPayment.amount,
+                uploadedAt: payment.proofOfPayment.uploadedAt,
+              }
+            : null,
+          feesPaid: payment.feesPaid.map((feePaid) => {
+            const fee = fees.find((f) => f._id.toString() === feePaid.feeId.toString());
+            return {
+              feeId: feePaid.feeId,
+              type: feePaid.type,
+              month: feePaid.month,
+              year: feePaid.year,
+              amount: feePaid.amount,
+              feeStatus: fee ? fee.status : 'N/A',
+            };
+          }),
+          createdAt: payment.createdAt,
+        };
+      })
+    );
+
+    logger.info('Retrieved pending payments', { schoolId, count: enrichedPayments.length });
+
+    res.status(200).json({
+      message: 'Pending payments retrieved successfully',
+      payments: enrichedPayments,
+    });
+  } catch (error) {
+    logger.error('Error retrieving pending payments', { error: error.message, stack: error.stack });
+    res.status(500).json({ message: 'Error retrieving pending payments', error: error.message });
+  }
+},
+
+  // verifyPayment: async (req, res) => {
+  //   try {
+  //     const { paymentId, paymentMethod, razorpay_payment_id, razorpay_order_id, razorpay_signature, stripe_payment_intent_id, proofOfPayment } = req.body;
+  //     const schoolId = req.school._id.toString();
+  //     const connection = req.connection;
+  //     const PaymentModel = require("../models/Payment")(connection);
+  //     const FeeModel = require("../models/Fee")(connection);
+  //     const UserModel = require("../models/User")(connection);
+  //     const classModel= require("../models/Class")(connection)
+
+  //     const payment = await PaymentModel.findById(paymentId) || await PaymentModel.findOne({ orderId: razorpay_order_id, school: schoolId });
+  //     if (!payment) {
+  //       return res.status(404).json({ message: "Payment not found" });
+  //     }
+
+  //     if (payment.status === "completed") {
+  //       return res.status(400).json({ message: "Payment already verified" });
+  //     }
+
+  //     // Fetch school payment configuration
+  //     const ownerConnection = await getOwnerConnection();
+  //     const School = require("../models/School")(ownerConnection);
+  //     const school = await School.findById(schoolId).lean();
+  //     const paymentConfig = school.paymentConfig.find(config => config.paymentType === payment.paymentMethod);
+
+  //     if (!paymentConfig) {
+  //       return res.status(400).json({ message: `Payment method ${payment.paymentMethod} not configured` });
+  //     }
+
+  //     let isVerified = false;
+  //     if (payment.paymentMethod === 'razorpay') {
+  //       const razorpay = new Razorpay({
+  //         key_id: decrypt(paymentConfig.details.razorpayKeyId),
+  //         key_secret: decrypt(paymentConfig.details.razorpayKeySecret),
+  //       });
+  //       // Verify signature (uncomment if using)
+  //       // const generatedSignature = crypto
+  //       //   .createHmac("sha256", decrypt(paymentConfig.details.razorpayKeySecret))
+  //       //   .update(`${razorpay_order_id}|${razorpay_payment_id}`)
+  //       //   .digest("hex");
+  //       // if (generatedSignature !== razorpay_signature) {
+  //       //   return res.status(400).json({ message: "Invalid payment signature" });
+  //       // }
+  //       isVerified = true;
+  //       payment.transactionId = razorpay_payment_id;
+  //     } else if (payment.paymentMethod === 'stripe') {
+  //       const stripe = new Stripe(decrypt(paymentConfig.details.stripeSecretKey));
+  //       const paymentIntent = await stripe.paymentIntents.retrieve(stripe_payment_intent_id);
+  //       if (paymentIntent.status === 'succeeded') {
+  //         isVerified = true;
+  //         payment.transactionId = stripe_payment_intent_id;
+  //       }
+  //     } else if (['bank_account', 'upi'].includes(payment.paymentMethod)) {
+  //       if (!proofOfPayment?.url) {
+  //         return res.status(400).json({ message: "Proof of payment required for manual verification" });
+  //       }
+  //       payment.proofOfPayment = {
+  //         url: proofOfPayment.url,
+  //         uploadedAt: new Date(),
+  //         verified: true,
+  //         verifiedBy: req.user._id,
+  //         verifiedAt: new Date()
+  //       };
+  //       isVerified = true;
+  //       payment.transactionId = `MANUAL-${payment.receiptNumber}`;
+  //     }
+
+  //     if (!isVerified) {
+  //       payment.status = "failed";
+  //       await payment.save();
+  //       return res.status(400).json({ message: "Payment verification failed" });
+  //     }
+
+  //     payment.status = "completed";
+  //     payment.paymentDate = new Date();
+  //     payment.receiptNumber = payment.receiptNumber || `REC-${payment.paymentMethod.toUpperCase()}-${Date.now()}`;
+  //     await payment.save();
+
+  //     const uniqueFeeKeys = new Set();
+  //     const feesPaid = payment.feesPaid.filter((feePaid) => {
+  //       const key = `${feePaid.type}-${feePaid.month}-${feePaid.year}`;
+  //       if (uniqueFeeKeys.has(key)) return false;
+  //       uniqueFeeKeys.add(key);
+  //       return true;
+  //     });
+
+  //     const feeUpdates = feesPaid.map(async (feePaid) => {
+  //       const fee = await FeeModel.findOne({
+  //         student: payment.student,
+  //         school: schoolId,
+  //         type: feePaid.type,
+  //         month: feePaid.month,
+  //         year: feePaid.year,
+  //       });
+
+  //       if (fee) {
+  //         fee.paidAmount += feePaid.amount;
+  //         fee.remainingAmount = fee.amount - fee.paidAmount;
+  //         fee.status = fee.paidAmount >= fee.amount ? "paid" : "partially_paid";
+  //         fee.paymentDetails.push({
+  //           transactionId: payment.transactionId,
+  //           paymentDate: payment.paymentDate,
+  //           paymentMethod: payment.paymentMethod,
+  //           receiptNumber: payment.receiptNumber,
+  //           amount: feePaid.amount,
+  //         });
+  //         await fee.save();
+  //       }
+  //     });
+
+  //     await Promise.all(feeUpdates);
+
+  //     const student = await UserModel.findById(payment.student)
+  //       .select(
+  //         "_id name studentDetails.grNumber studentDetails.class studentDetails.transportDetails studentDetails.isRTE studentDetails.parentDetails email"
+  //       )
+  //       .populate("studentDetails.class", "name division");
+
+  //     const feesByMonthYear = feesPaid.reduce((acc, fee) => {
+  //       const key = `${fee.month}-${fee.year}`;
+  //       if (!acc[key]) acc[key] = [];
+  //       acc[key].push(fee);
+  //       return acc;
+  //     }, {});
+
+  //     const receiptUrls = {};
+  //     for (const [key, fees] of Object.entries(feesByMonthYear)) {
+  //       let attempts = 3;
+  //       let feeSlip;
+  //       while (attempts > 0) {
+  //         try {
+  //           feeSlip = await generateFeeSlip(
+  //             student,
+  //             payment,
+  //             fees.map((f) => ({
+  //               _id: f.feeId,
+  //               type: f.type,
+  //               month: f.month,
+  //               year: f.year,
+  //               amount: f.amount,
   //             })),
   //             schoolId,
   //             key
@@ -1908,27 +2136,13 @@ const feesController = {
   //       receiptUrls[key] = feeSlip.pdfUrl;
   //     }
 
-  //     payment.receptUrl = receiptUrls[`${feesPaid[0].month}-${feesPaid[0].year}`];
-  //     payment.receptUrls = receiptUrls;
+  //     payment.receiptUrl = receiptUrls[`${feesPaid[0].month}-${feesPaid[0].year}`];
+  //     payment.receiptUrls = receiptUrls;
   //     await payment.save();
 
-  //     await logFeeAction(
-  //       connection,
-  //       schoolId,
-  //       req.user._id,
-  //       "VERIFY_PAYMENT",
-  //       `Verified payment for order ${razorpay_order_id} with payment ID ${razorpay_payment_id}`,
-  //       {
-  //         razorpay_order_id,
-  //         razorpay_payment_id,
-  //         amount: payment.amount,
-  //         studentId: payment.student.toString(),
-  //       }
-  //     );
+  //     await sendPaymentConfirmation(student, payment, payment.receiptUrl);
 
-  //     await sendPaymentConfirmation(student, payment, payment.receptUrl);
-
-  //     logger.info(`Payment verified for order ${razorpay_order_id}: ${payment.amount}`);
+  //     logger.info(`Payment verified for ${payment.paymentMethod} with ID ${payment.transactionId}: ${payment.amount}`);
 
   //     res.json({
   //       message: "Payment verified successfully",
@@ -1936,152 +2150,518 @@ const feesController = {
   //       receiptUrls,
   //     });
   //   } catch (error) {
-  //     await logFeeAction(
-  //       req.connection,
-  //       req.school._id.toString(),
-  //       req.user._id,
-  //       "VERIFY_PAYMENT_FAILED",
-  //       `Failed to verify payment for order ${req.body.razorpay_order_id}: ${error.message}`,
-  //       {
-  //         razorpay_order_id: req.body.razorpay_order_id,
-  //         razorpay_payment_id: req.body.razorpay_payment_id,
-  //         error: error.message,
-  //       }
-  //     );
   //     logger.error(`Error verifying payment: ${error.message}`, { error });
   //     res.status(500).json({ error: error.message });
   //   }
   // },
 
-  // verifyPayment : async (req, res) => {
-  //   try {
-  //     const { razorpay_payment_id, razorpay_order_id, razorpay_signature } = req.body;
-  //     const schoolId = req.school._id.toString();
-  //     const connection = req.connection;
 
-  //     if (!req.user.permissions.canManageFees) {
-  //       return res.status(403).json({
-  //         message: "Unauthorized: Only fee managers can verify payments",
-  //       });
-  //     }
+//  verifyPayment : async (req, res) => {
+//   try {
+//     const {
+//       paymentId,
+//       paymentMethod,
+//       razorpay_payment_id,
+//       razorpay_order_id,
+//       razorpay_signature,
+//       stripe_payment_intent_id,
+//       proofOfPayment,
+//     } = req.body;
+//     const schoolId = req.school._id.toString();
+//     const connection = req.connection;
+//     const PaymentModel = require('../models/Payment')(connection);
+//     const FeeModel = require('../models/Fee')(connection);
+//     const UserModel = require('../models/User')(connection);
+//     const ClassModel= require("../models/Class")(connection)
 
-  //     // Optional: Verify signature (if provided)
-  //     if (razorpay_signature) {
-  //       const generatedSignature = crypto
-  //         .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
-  //         .update(`${razorpay_order_id}|${razorpay_payment_id}`)
-  //         .digest("hex");
+    
+//     // Find payment
+//     const payment = await PaymentModel.findById(paymentId) || 
+//                    await PaymentModel.findOne({ orderId: razorpay_order_id, school: schoolId });
+//     if (!payment) {
+//       logger.error('Payment not found', { paymentId, razorpay_order_id });
+//       return res.status(404).json({ message: 'Payment not found' });
+//     }
 
-  //       if (generatedSignature !== razorpay_signature) {
-  //         return res.status(400).json({ message: "Invalid payment signature" });
-  //       }
-  //     }
+//     if (payment.status === 'completed') {
+//       logger.warn('Payment already verified', { paymentId });
+//       return res.status(400).json({ message: 'Payment already verified' });
+//     }
 
-  //     const result = await verifyPaymentLogic({
-  //       connection,
-  //       schoolId,
-  //       razorpay_order_id,
-  //       razorpay_payment_id,
-  //     });
+//     // Fetch school payment configuration
+//     const ownerConnection = await getOwnerConnection();
+//     const School = require('../models/School')(ownerConnection);
+//     const school = await School.findById(schoolId).lean();
+//     const paymentConfig = school.paymentConfig.find(config => config.paymentType === payment.paymentMethod);
 
-  //     res.json({
-  //       message: "Payment verified successfully",
-  //       payment: result.payment,
-  //       receiptUrls: result.receiptUrls,
-  //     });
-  //   } catch (error) {
-  //     logger.error(`Error verifying payment: ${error.message}`, { error });
-  //     res.status(500).json({ error: error.message });
-  //   }
-  // },
+//     if (!paymentConfig) {
+//       logger.error(`Payment method ${payment.paymentMethod} not configured`, { schoolId });
+//       return res.status(400).json({ message: `Payment method ${payment.paymentMethod} not configured` });
+//     }
 
-  // downloadReceipt : async (req, res) => {
-  //   try {
-  //     const { paymentId } = req.params;
-  //     const schoolId = req.school._id.toString();
-  //     const connection = req.connection;
-  //     const PaymentModel = require("../models/Payment")(connection);
+//     let isVerified = false;
+//     let transactionId = payment.transactionId;
 
-  //     if (!req.user.permissions.canManageFees) {
-  //       return res.status(403).json({
-  //         message: "Unauthorized: Only fee managers can download receipts",
-  //       });
-  //     }
+//     // Verify payment based on method
+//     if (payment.paymentMethod === 'razorpay') {
+//       if (!razorpay_payment_id || !razorpay_order_id || !razorpay_signature) {
+//         logger.error('Missing Razorpay verification parameters', { paymentId });
+//         return res.status(400).json({ message: 'Missing Razorpay verification parameters' });
+//       }
+//       const razorpaySecret = decrypt(paymentConfig.details.razorpayKeySecret);
+//       const generatedSignature = crypto
+//         .createHmac('sha256', razorpaySecret)
+//         .update(`${razorpay_order_id}|${razorpay_payment_id}`)
+//         .digest('hex');
+//       if (generatedSignature === razorpay_signature) {
+//         isVerified = true;
+//         transactionId = razorpay_payment_id;
+//       } else {
+//         logger.error('Invalid Razorpay signature', { paymentId, razorpay_payment_id });
+//         return res.status(400).json({ message: 'Invalid Razorpay signature' });
+//       }
+//     } else if (payment.paymentMethod === 'stripe') {
+//       if (!stripe_payment_intent_id) {
+//         logger.error('Missing Stripe payment intent ID', { paymentId });
+//         return res.status(400).json({ message: 'Missing Stripe payment intent ID' });
+//       }
+//       const stripe = new Stripe(decrypt(paymentConfig.details.stripeSecretKey));
+//       const paymentIntent = await stripe.paymentIntents.retrieve(stripe_payment_intent_id);
+//       if (paymentIntent.status === 'succeeded') {
+//         isVerified = true;
+//         transactionId = stripe_payment_intent_id;
+//       } else {
+//         logger.error('Stripe payment not succeeded', { paymentId, stripe_payment_intent_id });
+//         return res.status(400).json({ message: 'Stripe payment not succeeded' });
+//       }
+//     } else if (['bank_account', 'upi'].includes(payment.paymentMethod)) {
+//       if (!proofOfPayment?.url ) {
+//         logger.error('Missing proof of payment details', { paymentId });
+//         return res.status(400).json({ message: 'Proof of payment URL, transaction ID, amount, and MIME type required' });
+//       }
+//       const validFileTypes = ['application/pdf', 'image/jpeg', 'image/png'];
+//       const maxFileSize = 5 * 1024 * 1024; // 5MB
+//       // if (!validFileTypes.includes(proofOfPayment.mimeType)) {
+//       //   logger.error('Invalid proof file type', { paymentId, mimeType: proofOfPayment.mimeType });
+//       //   return res.status(400).json({ message: 'Invalid file type. Only PDF, JPEG, or PNG allowed' });
+//       // }
+//       // if (proofOfPayment.size > maxFileSize) {
+//       //   logger.error('Proof file size exceeds limit', { paymentId, size: proofOfPayment.size });
+//       //   return res.status(400).json({ message: 'File size exceeds 5MB limit' });
+//       // }
+//       if (proofOfPayment.amount !== payment.totalAmount) {
+//         logger.error('Proof amount does not match payment amount', {
+//           paymentId,
+//           proofAmount: proofOfPayment.amount,
+//           paymentAmount: payment.totalAmount,
+//         });
+//         return res.status(400).json({ message: 'Proof amount does not match payment amount' });
+//       }
+//       payment.proofOfPayment = {
+//         url: proofOfPayment.url,
+//         transactionId: proofOfPayment.transactionId,
+//         // mimeType: proofOfPayment.mimeType,
+//         // size: proofOfPayment.size,
+//         uploadedAt: new Date(),
+//         verified: true,
+//         verifiedBy: req.user._id,
+//         verifiedAt: new Date(),
+//       };
+//       isVerified = true;
+//       transactionId = proofOfPayment.transactionId;
+//     } else {
+//       logger.error('Unsupported payment method', { paymentId, paymentMethod: payment.paymentMethod });
+//       return res.status(400).json({ message: 'Unsupported payment method' });
+//     }
 
-  //     const payment = await PaymentModel.findOne({
-  //       _id: paymentId,
-  //       school: schoolId,
-  //       status: "completed",
-  //     }).populate(
-  //       "student",
-  //       "name studentDetails.grNumber studentDetails.class studentDetails.parentDetails email"
-  //     );
+//     if (!isVerified) {
+//       payment.status = 'failed';
+//       await payment.save();
+//       logger.error('Payment verification failed', { paymentId });
+//       return res.status(400).json({ message: 'Payment verification failed' });
+//     }
 
-  //     if (!payment) {
-  //       return res.status(404).json({
-  //         message: "Payment not found or not completed",
-  //       });
-  //     }
+//     // Update payment and fees within a transaction
+//     const session = await connection.startSession();
+//     let receiptUrls = {};
+//     try {
+//       await session.withTransaction(async () => {
+//         payment.status = 'completed';
+//         payment.transactionId = transactionId;
+//         payment.paymentDate = new Date();
+//         payment.receiptNumber = payment.receiptNumber || `REC-${payment.paymentMethod.toUpperCase()}-${Date.now()}`;
+//         await payment.save({ session });
 
-  //     let receiptUrl = payment.receiptUrl; // Corrected typo from 'receptUrl'
+//         const uniqueFeeKeys = new Set();
+//         const feesPaid = payment.feesPaid.filter((feePaid) => {
+//           const key = `${feePaid.type}-${feePaid.month}-${feePaid.year}`;
+//           if (uniqueFeeKeys.has(key)) return false;
+//           uniqueFeeKeys.add(key);
+//           return true;
+//         });
 
-  //     if (!receiptUrl) {
-  //       const feeSlip = await generateFeeSlip(
-  //         payment.student,
-  //         payment,
-  //         payment.feesPaid,
-  //         schoolId,
-  //         `${payment.feesPaid[0].month}-${payment.feesPaid[0].year}`
-  //       );
-  //       payment.receiptUrl = feeSlip.pdfUrl;
-  //       payment.receiptUrls = {
-  //         ...payment.receiptUrls,
-  //         [`${payment.feesPaid[0].month}-${payment.feesPaid[0].year}`]: feeSlip.pdfUrl,
-  //       };
-  //       await payment.save();
-  //       receiptUrl = feeSlip.pdfUrl;
-  //     }
+//         const feeUpdates = feesPaid.map(async (feePaid) => {
+//           const fee = await FeeModel.findOne({
+//             student: payment.student,
+//             school: schoolId,
+//             type: feePaid.type,
+//             month: feePaid.month,
+//             year: feePaid.year,
+//           }).session(session);
 
-  //     // Extract S3 key from receiptUrl
-  //     const url = new URL(receiptUrl);
-  //     const s3Key = decodeURIComponent(url.pathname.slice(1)); // Remove leading '/' from pathname
+//           if (fee) {
+//             fee.paidAmount += feePaid.amount;
+//             fee.remainingAmount = fee.amount - fee.paidAmount;
+//             fee.status = fee.paidAmount >= fee.amount ? 'paid' : 'partially_paid';
+//             fee.paymentDetails.push({
+//               transactionId: payment.transactionId,
+//               paymentDate: payment.paymentDate,
+//               paymentMethod: payment.paymentMethod,
+//               receiptNumber: payment.receiptNumber,
+//               amount: feePaid.amount,
+//             });
+//             await fee.save({ session });
+//           }
+//         });
 
-  //     // Generate S3 presigned URL
-  //     const command = new GetObjectCommand({
-  //       Bucket: process.env.AWS_S3_BUCKET_NAME,
-  //       Key: s3Key,
-  //     });
+//         await Promise.all(feeUpdates);
 
-  //     const expiresIn = 7 * 24 * 3600; // 7 days in seconds
-  //     const signedUrl = await getSignedUrl(s3Client, command, { expiresIn });
+//         const student = await UserModel.findById(payment.student)
+//           .select(
+//             '_id name studentDetails.grNumber studentDetails.class studentDetails.transportDetails studentDetails.isRTE studentDetails.parentDetails email'
+//           )
+//           .populate('studentDetails.class', 'name division')
+//           .session(session);
 
-  //     await logFeeAction(
-  //       connection,
-  //       schoolId,
-  //       req.user._id,
-  //       "DOWNLOAD_RECEIPT",
-  //       `Downloaded receipt for payment ${paymentId}`,
-  //       {
-  //         paymentId,
-  //         receiptNumber: payment.receiptNumber,
-  //         studentId: payment.student.toString(),
-  //       }
-  //     );
+//         const feesByMonthYear = feesPaid.reduce((acc, fee) => {
+//           const key = `${fee.month}-${fee.year}`;
+//           if (!acc[key]) acc[key] = [];
+//           acc[key].push(fee);
+//           return acc;
+//         }, {});
 
-  //     res.json({
-  //       message: "Receipt ready for download",
-  //       receiptUrl: signedUrl,
-  //     });
-  //   } catch (error) {
-  //     logger.error(`Error generating signed URL for receipt: ${error.message}`, { error });
-  //     if (error.name === "NoSuchKey") {
-  //       return res.status(404).json({
-  //         error: `Receipt not found in S3: ${error.message}`,
-  //       });
-  //     }
-  //     res.status(500).json({ error: error.message });
-  //   }
-  // },
+//         // const receiptUrls = {};
+//         for (const [key, fees] of Object.entries(feesByMonthYear)) {
+//           let attempts = 3;
+//           let feeSlip;
+//           while (attempts > 0) {
+//             try {
+//               feeSlip = await generateFeeSlip(
+//                 student,
+//                 payment,
+//                 fees.map((f) => ({
+//                   _id: f.feeId,
+//                   type: f.type,
+//                   month: f.month,
+//                   year: f.year,
+//                   amount: f.amount,
+//                 })),
+//                 schoolId,
+//                 key
+//               );
+//               break;
+//             } catch (uploadError) {
+//               logger.warn(
+//                 `Failed to generate fee slip for ${key}, attempt ${4 - attempts}: ${uploadError.message}`
+//               );
+//               attempts--;
+//               if (attempts === 0) throw uploadError;
+//             }
+//           }
+//           receiptUrls[key] = feeSlip.pdfUrl;
+//         }
+
+//         payment.receiptUrl = receiptUrls[`${feesPaid[0].month}-${feesPaid[0].year}`];
+//         payment.receiptUrls = receiptUrls;
+//         await payment.save({ session });
+
+//         await sendPaymentConfirmation(student, payment, payment.receiptUrl);
+
+//         // Log verification action
+//         await logFeeAction(
+//           connection,
+//           schoolId,
+//           req.user._id,
+//           'PAYMENT_VERIFICATION',
+//           `Verified ${payment.paymentMethod} payment for paymentId ${paymentId}`,
+//           { paymentId, transactionId, paymentMethod: payment.paymentMethod }
+//         );
+//       });
+
+//       logger.info(`Payment verified for ${payment.paymentMethod} with ID ${transactionId}: ${payment.totalAmount}`);
+
+//       res.status(200).json({
+//         success: true,
+//         message: 'Payment verified successfully',
+//         payment,
+//         receiptUrls,
+//       });
+//     } finally {
+//       await session.endSession();
+//     }
+//   } catch (error) {
+//     logger.error('Error verifying payment', { error: error.message, stack: error.stack });
+//     res.status(500).json({ success: false, error: error.message });
+//   }
+// },
+  
+
+verifyPayment : async (req, res) => {
+  try {
+    const {
+      paymentId,
+      paymentMethod,
+      razorpay_payment_id,
+      razorpay_order_id,
+      razorpay_signature,
+      stripe_payment_intent_id,
+      proofOfPayment,
+    } = req.body;
+    const schoolId = req.school._id.toString();
+    const connection = req.connection;
+    const PaymentModel = require('../models/Payment')(connection);
+    const FeeModel = require('../models/Fee')(connection);
+    const UserModel = require('../models/User')(connection);
+    const ClassModel = require('../models/Class')(connection);
+
+    // Validate fee manager role
+    // if (!req.user || !['FEE_MANAGER', 'ADMIN'].includes(req.user.role)) {
+    //   logger.error('Unauthorized payment verification attempt', { userId: req.user?._id });
+    //   return res.status(403).json({ message: 'Only fee managers or admins can verify payments' });
+    // }
+
+    // Find payment
+    const payment = await PaymentModel.findById(paymentId) ||
+                   await PaymentModel.findOne({ orderId: razorpay_order_id, school: schoolId });
+    if (!payment) {
+      logger.error('Payment not found', { paymentId, razorpay_order_id });
+      return res.status(404).json({ message: 'Payment not found' });
+    }
+
+    if (payment.status === 'completed') {
+      logger.warn('Payment already verified', { paymentId });
+      return res.status(400).json({ message: 'Payment already verified' });
+    }
+
+    // Fetch school payment configuration
+    const ownerConnection = await getOwnerConnection();
+    const School = require('../models/School')(ownerConnection);
+    const school = await School.findById(schoolId).lean();
+    const paymentConfig = school.paymentConfig.find(config => config.paymentType === payment.paymentMethod);
+
+    if (!paymentConfig) {
+      logger.error(`Payment method ${payment.paymentMethod} not configured`, { schoolId });
+      return res.status(400).json({ message: `Payment method ${payment.paymentMethod} not configured` });
+    }
+
+    let isVerified = false;
+    let transactionId = payment.transactionId;
+
+    // Verify payment based on method
+    if (payment.paymentMethod === 'razorpay') {
+      // if (!razorpay_payment_id || !razorpay_order_id /*|| !razorpay_signature*/) {
+      //   logger.error('Missing Razorpay verification parameters', { paymentId });
+      //   return res.status(400).json({ message: 'Missing Razorpay verification parameters' });
+      // }
+      // const razorpaySecret = decrypt(paymentConfig.details.razorpayKeySecret);
+      // const generatedSignature = crypto
+      //   .createHmac('sha256', razorpaySecret)
+      //   .update(`${razorpay_order_id}|${razorpay_payment_id}`)
+      //   .digest('hex');
+      // if (generatedSignature === razorpay_signature) {
+      //   isVerified = true;
+      //   transactionId = razorpay_payment_id;
+      // } else {
+      //   logger.error('Invalid Razorpay signature', { paymentId, razorpay_payment_id });
+      //   return res.status(400).json({ message: 'Invalid Razorpay signature' });
+      // }
+      isVerified = true;
+      transactionId = 'mock_razorpay_txn_' + Date.now();
+    } else if (payment.paymentMethod === 'stripe') {
+      if (!stripe_payment_intent_id) {
+        logger.error('Missing Stripe payment intent ID', { paymentId });
+        return res.status(400).json({ message: 'Missing Stripe payment intent ID' });
+      }
+      const stripe = new Stripe(decrypt(paymentConfig.details.stripeSecretKey));
+      const paymentIntent = await stripe.paymentIntents.retrieve(stripe_payment_intent_id);
+      if (paymentIntent.status === 'succeeded') {
+        isVerified = true;
+        transactionId = stripe_payment_intent_id;
+      } else {
+        logger.error('Stripe payment not succeeded', { paymentId, stripe_payment_intent_id });
+        return res.status(400).json({ message: 'Stripe payment not succeeded' });
+      }
+    } else if (['bank_account', 'upi'].includes(payment.paymentMethod)) {
+      if (!proofOfPayment?.url) {
+        logger.error('Missing proof of payment details', { paymentId, proofOfPayment });
+        return res.status(400).json({ message: 'Proof of payment URL, transaction ID, and amount required' });
+      }
+      const validFileTypes = ['application/pdf', 'image/jpeg', 'image/png'];
+      const maxFileSize = 5 * 1024 * 1024; // 5MB
+      const mimeType = proofOfPayment.mimeType || (proofOfPayment.url.endsWith('.pdf') ? 'application/pdf' : 'image/jpeg');
+      if (!validFileTypes.includes(mimeType)) {
+        logger.error('Invalid proof file type', { paymentId, mimeType });
+        return res.status(400).json({ message: 'Invalid file type. Only PDF, JPEG, or PNG allowed' });
+      }
+      if (proofOfPayment.size && proofOfPayment.size > maxFileSize) {
+        logger.error('Proof file size exceeds limit', { paymentId, size: proofOfPayment.size });
+        return res.status(400).json({ message: 'File size exceeds 5MB limit' });
+      }
+      if (proofOfPayment.amount !== payment.amount) {
+        logger.error('Proof amount does not match payment amount', {
+          paymentId,
+          proofAmount: proofOfPayment.amount,
+          paymentAmount: payment.amount,
+        });
+        return res.status(400).json({ message: 'Proof amount does not match payment amount' });
+      }
+      payment.proofOfPayment = {
+        url: proofOfPayment.url,
+        transactionId: proofOfPayment.transactionId,
+        mimeType: mimeType,
+        size: proofOfPayment.size || null,
+        amount: proofOfPayment.amount,
+        uploadedAt: proofOfPayment.uploadedAt || new Date(),
+        verified: true,
+        verifiedBy: req.user._id,
+        verifiedAt: new Date(),
+      };
+      isVerified = true;
+      transactionId = proofOfPayment.transactionId;
+    } else {
+      logger.error('Unsupported payment method', { paymentId, paymentMethod: payment.paymentMethod });
+      return res.status(400).json({ message: 'Unsupported payment method' });
+    }
+
+    if (!isVerified) {
+      payment.status = 'failed';
+      await payment.save();
+      logger.error('Payment verification failed', { paymentId });
+      return res.status(400).json({ message: 'Payment verification failed' });
+    }
+
+    // Update payment and fees within a transaction
+    const session = await connection.startSession();
+    let receiptUrls = {};
+    try {
+      await session.withTransaction(async () => {
+        payment.status = 'completed';
+        payment.transactionId = transactionId; // Ensure transactionId is set
+        payment.paymentDate = new Date();
+        payment.receiptNumber = payment.receiptNumber || `REC-${payment.paymentMethod.toUpperCase()}-${Date.now()}`;
+        await payment.save({ session });
+
+        const uniqueFeeKeys = new Set();
+        const feesPaid = payment.feesPaid.filter((feePaid) => {
+          const key = `${feePaid.type}-${feePaid.month}-${feePaid.year}`;
+          if (uniqueFeeKeys.has(key)) return false;
+          uniqueFeeKeys.add(key);
+          return true;
+        });
+
+        const feeUpdates = feesPaid.map(async (feePaid) => {
+          const fee = await FeeModel.findOne({
+            student: payment.student,
+            school: schoolId,
+            type: feePaid.type,
+            month: feePaid.month,
+            year: feePaid.year,
+          }).session(session);
+
+          if (fee) {
+            fee.paidAmount += feePaid.amount;
+            fee.remainingAmount = fee.amount - fee.paidAmount;
+            fee.status = fee.paidAmount >= fee.amount ? 'paid' : 'partially_paid';
+            fee.paymentDetails.push({
+              transactionId: payment.transactionId,
+              paymentDate: payment.paymentDate,
+              paymentMethod: payment.paymentMethod,
+              receiptNumber: payment.receiptNumber,
+              amount: feePaid.amount,
+            });
+            await fee.save({ session });
+          }
+        });
+
+        await Promise.all(feeUpdates);
+
+        const student = await UserModel.findById(payment.student)
+          .select(
+            '_id name studentDetails.grNumber studentDetails.class studentDetails.transportDetails studentDetails.isRTE studentDetails.parentDetails email'
+          )
+          .populate('studentDetails.class', 'name division')
+          .session(session);
+
+        const feesByMonthYear = feesPaid.reduce((acc, fee) => {
+          const key = `${fee.month}-${fee.year}`;
+          if (!acc[key]) acc[key] = [];
+          acc[key].push(fee);
+          return acc;
+        }, {});
+
+        for (const [key, fees] of Object.entries(feesByMonthYear)) {
+          let attempts = 3;
+          let feeSlip;
+          while (attempts > 0) {
+            try {
+              feeSlip = await generateFeeSlip(
+                student,
+                payment,
+                fees.map((f) => ({
+                  _id: f.feeId,
+                  type: f.type,
+                  month: f.month,
+                  year: f.year,
+                  amount: f.amount,
+                })),
+                schoolId,
+                key
+              );
+              break;
+            } catch (uploadError) {
+              logger.warn(
+                `Failed to generate fee slip for ${key}, attempt ${4 - attempts}: ${uploadError.message}`
+              );
+              attempts--;
+              if (attempts === 0) throw uploadError;
+            }
+          }
+          receiptUrls[key] = feeSlip.pdfUrl;
+        }
+
+        payment.receiptUrl = receiptUrls[`${feesPaid[0].month}-${feesPaid[0].year}`];
+        payment.receiptUrls = receiptUrls;
+        await payment.save({ session });
+
+        await sendPaymentConfirmation(student, payment, payment.receiptUrl);
+
+        // Log verification action
+        await logFeeAction(
+          connection,
+          schoolId,
+          req.user._id,
+          'PAYMENT_VERIFICATION',
+          `Verified ${payment.paymentMethod} payment for paymentId ${paymentId}`,
+          { paymentId, transactionId, paymentMethod: payment.paymentMethod }
+        );
+      });
+
+      logger.info(`Payment verified for ${payment.paymentMethod} with ID ${transactionId}: ${payment.amount}`);
+
+      res.status(200).json({
+        success: true,
+        message: 'Payment verified successfully',
+        payment,
+        receiptUrls,
+      });
+    } finally {
+      await session.endSession();
+    }
+  } catch (error) {
+    logger.error('Error verifying payment', { error: error.message, stack: error.stack });
+    res.status(500).json({ success: false, error: error.message });
+  }
+},
 
   downloadReceipt: async (req, res) => {
     try {

@@ -128,6 +128,7 @@ const userSchema = new mongoose.Schema(
       children: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
       dob: Date,
       gender: String,
+      mobile: String,
       isRTE: { type: Boolean, default: false },
       transportDetails: {
         isApplicable: { type: Boolean, default: false },

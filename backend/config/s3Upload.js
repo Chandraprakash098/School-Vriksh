@@ -7,6 +7,7 @@ const path = require('path');
 const { setTimeout } = require('timers/promises');
 const logger = require("../utils/logger");
 
+
 const s3Client = new S3Client({
   region: process.env.AWS_REGION,
   credentials: {
@@ -16,6 +17,23 @@ const s3Client = new S3Client({
 });
 
 const BUCKET_NAME = process.env.AWS_S3_BUCKET_NAME;
+
+// Configure multer for file uploads
+const storage = multer.memoryStorage();
+const upload = multer({
+  storage,
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = ["image/jpeg", "image/png", "application/pdf"];
+    if (allowedTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error("Only JPEG, PNG, and PDF files are allowed"));
+    }
+  },
+});
+
+
 
 
 const admissionStorage = multerS3({
@@ -185,8 +203,59 @@ const uploadSyllabus = multer({
   },
 }).single('file');
 
+// Excel results upload configuration
+const excelResultsStorage = multerS3({
+  s3: s3Client,
+  bucket: BUCKET_NAME,
+  acl: 'public-read',
+  contentType: multerS3.AUTO_CONTENT_TYPE,
+  metadata: (req, file, cb) => {
+    logger.info("Processing file metadata", { originalName: file.originalname });
+    cb(null, {
+      originalName: file.originalname,
+      uploadedBy: req.user?._id?.toString() || 'unknown',
+    });
+  },
+  key: (req, file, cb) => {
+    const schoolId = req.school?._id.toString() || 'unknown';
+    const classId = req.params.classId || 'unknown';
+    const examType = req.params.examType || 'unknown';
+    const fileExt = path.extname(file.originalname);
+    const fileName = `results_${classId}_${examType}_${Date.now()}${fileExt}`;
+    const fileKey = `results/${schoolId}/${classId}/${fileName}`;
+    logger.info(`Uploading results Excel to S3 with key: ${fileKey}`);
+    cb(null, fileKey);
+  },
+});
 
-
+const uploadExcelResults = multer({
+  storage: excelResultsStorage,
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = [
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'application/vnd.ms-excel',
+    ];
+    if (allowedTypes.includes(file.mimetype)) {
+      logger.info("File type accepted", { mimetype: file.mimetype });
+      cb(null, true);
+    } else {
+      logger.error("Invalid file type", { mimetype: file.mimetype });
+      cb(
+        new Error(
+          `Invalid file type: ${file.mimetype}. Allowed: ${allowedTypes.join(', ')}`
+        ),
+        false
+      );
+    }
+  },
+}).single("file", (err, req, res, next) => {
+  if (err) {
+    logger.error("Multer error", { error: err.message });
+    return res.status(400).json({ success: false, error: err.message });
+  }
+  next();
+});
 
 
 const getPublicFileUrl = (key) => {
@@ -208,7 +277,8 @@ const uploadToS3 = async (buffer, key, mimetype, retries = 3, delay = 1000) => {
           ACL: 'public-read',
         },
       });
-      return await upload.done();
+      await upload.done();
+      return getPublicFileUrl(key);
     } catch (error) {
       lastError = error;
       logger.warn(`S3 upload attempt ${attempt} failed for ${key}: ${error.message}`);
@@ -249,6 +319,6 @@ const streamS3Object = async (key, res) => {
   }
 };
 
-module.exports = { uploadDocuments, certificateUpload, uploadToS3, deleteFromS3, streamS3Object, s3: s3Client,uploadStudyMaterial,getPublicFileUrl,uploadSyllabus};
+module.exports = { uploadDocuments, certificateUpload, uploadToS3, deleteFromS3, streamS3Object, s3: s3Client,uploadStudyMaterial,getPublicFileUrl,uploadSyllabus,uploadExcelResults};
 
 

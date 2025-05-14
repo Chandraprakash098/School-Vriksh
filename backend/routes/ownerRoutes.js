@@ -3,13 +3,15 @@ const router = express.Router();
 const ownerController = require('../controllers/ownerController');
 const auth = require('../middleware/auth');
 const roleCheck = require('../middleware/roleCheck');
+const multer = require('multer');
+const upload = multer({ storage: multer.memoryStorage() });
 
 
 // Apply auth and owner role check middleware to all routes
 router.use(auth, roleCheck(['owner']));
 
 // School registration and management
-router.post('/schools/register', ownerController.registerSchool);
+router.post('/schools/register',upload.single('logo'), ownerController.registerSchool);
 
 router.get('/schools', ownerController.getAllSchools);
 router.get('/schools/:schoolId', ownerController.getSchoolData);
