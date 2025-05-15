@@ -643,10 +643,11 @@ const feesController = {
   // },
 
 
-  editFeesForYear: async (req, res) => {
+
+ editFeesForYear: async (req, res) => {
   try {
     const { year, feeUpdates, classIds, applyToAllMonths = true } = req.body;
-    const schoolId = req.school._id.toString();
+    const schoolId = req.school._id; // Keep as ObjectId
     const connection = req.connection;
     const FeeModel = require("../models/Fee")(connection);
     const ClassModel = require("../models/Class")(connection);
@@ -657,15 +658,19 @@ const feesController = {
       });
     }
 
+    // Validate connection state
+    if (connection.readyState !== 1) {
+      logger.error("MongoDB connection not ready", { readyState: connection.readyState });
+      return res.status(503).json({ message: "Database connection not ready" });
+    }
+
     // Fetch classes based on classIds
     const classes = await ClassModel.find({
       _id: { $in: classIds.map((id) => new mongoose.Types.ObjectId(id)) },
       school: schoolId,
     });
     if (classes.length !== classIds.length) {
-      return res
-        .status(400)
-        .json({ message: "One or more class IDs are invalid" });
+      return res.status(400).json({ message: "One or more class IDs are invalid" });
     }
 
     const validFeeTypes = [
@@ -676,13 +681,13 @@ const feesController = {
       "classroom",
       "educational",
       "library",
-      "sport"
+      "sport",
     ];
 
+    // Validate fee updates
     const validationErrors = [];
     feeUpdates.forEach((update, index) => {
       const { type, amount, description, months, transportationSlab } = update;
-
       if (!validFeeTypes.includes(type)) {
         validationErrors.push(`Invalid fee type at index ${index}: ${type}`);
       }
@@ -698,7 +703,9 @@ const feesController = {
       }
       if (
         !applyToAllMonths &&
-        (!months || !Array.isArray(months) || months.some((m) => !Number.isInteger(m) || m < 1 || m > 12))
+        (!months ||
+          !Array.isArray(months) ||
+          months.some((m) => !Number.isInteger(m) || m < 1 || m > 12))
       ) {
         validationErrors.push(
           `Invalid months array for ${type} at index ${index}`
@@ -716,23 +723,31 @@ const feesController = {
     });
 
     if (validationErrors.length > 0) {
-      return res
-        .status(400)
-        .json({ message: "Validation failed", errors: validationErrors });
+      return res.status(400).json({
+        message: "Validation failed",
+        errors: validationErrors,
+      });
     }
 
+    // Query existing fees with precise matching
     const existingFees = await FeeModel.find({
       school: schoolId,
-      student: { $exists: false },
+      student: null, // Only general fees
       year: parseInt(year),
       classes: { $in: classes.map((c) => c._id) },
     });
 
-    if (!existingFees.length) {
-      return res.status(404).json({
-        message: `No fee definitions found for ${year} and specified classes to edit`,
-      });
-    }
+    logger.info("Existing fees found", {
+      count: existingFees.length,
+      fees: existingFees.map((f) => ({
+        _id: f._id.toString(),
+        type: f.type,
+        month: f.month,
+        year: f.year,
+        classes: f.classes.map((c) => c.toString()),
+        transportationSlab: f.transportationDetails?.distanceSlab,
+      })),
+    });
 
     const operations = [];
     for (const update of feeUpdates) {
@@ -743,20 +758,25 @@ const feesController = {
 
       for (const month of targetMonths) {
         for (const cls of classes) {
-          const existingFee = existingFees.find(
-            (f) =>
-              f.type === type &&
-              f.month === month &&
-              f.classes.includes(cls._id)
-          );
+          // Find matching existing fee
+          const existingFee = existingFees.find((f) => {
+            const matchesType = f.type === type;
+            const matchesMonth = f.month === month;
+            const matchesYear = f.year === parseInt(year);
+            const matchesClass = f.classes.some((c) => c.equals(cls._id));
+            const matchesSlab =
+              type !== "transportation" ||
+              f.transportationDetails?.distanceSlab === transportationSlab ||
+              (!f.transportationDetails?.distanceSlab && !transportationSlab);
+            return (
+              matchesType && matchesMonth && matchesYear && matchesClass && matchesSlab
+            );
+          });
 
           const feeData = {
             amount,
             remainingAmount: amount,
-            description:
-              description ||
-              existingFee?.description ||
-              `${type} fee for ${month}/${year}`,
+            description: description || `${type} fee for ${month}/${year}`,
             dueDate: new Date(year, month - 1, 28),
             updatedAt: new Date(),
             ...(type === "transportation" &&
@@ -769,6 +789,13 @@ const feesController = {
           };
 
           if (existingFee) {
+            logger.debug(`Updating existing fee`, {
+              feeId: existingFee._id.toString(),
+              type,
+              month,
+              year,
+              classId: cls._id.toString(),
+            });
             operations.push({
               updateOne: {
                 filter: { _id: existingFee._id },
@@ -776,6 +803,12 @@ const feesController = {
               },
             });
           } else {
+            logger.debug(`Creating new fee`, {
+              type,
+              month,
+              year,
+              classId: cls._id.toString(),
+            });
             operations.push({
               insertOne: {
                 document: {
@@ -787,8 +820,7 @@ const feesController = {
                   dueDate: new Date(year, month - 1, 28),
                   month,
                   year: parseInt(year),
-                  description:
-                    description || `${type} fee for ${month}/${year}`,
+                  description: description || `${type} fee for ${month}/${year}`,
                   status: "pending",
                   createdAt: new Date(),
                   updatedAt: new Date(),
@@ -807,7 +839,19 @@ const feesController = {
       }
     }
 
-    const result = await FeeModel.bulkWrite(operations);
+    // Perform bulk write in chunks
+    const chunkSize = 100;
+    const result = {
+      modifiedCount: 0,
+      insertedCount: 0,
+    };
+
+    for (let i = 0; i < operations.length; i += chunkSize) {
+      const chunk = operations.slice(i, i + chunkSize);
+      const chunkResult = await FeeModel.bulkWrite(chunk);
+      result.modifiedCount += chunkResult.modifiedCount;
+      result.insertedCount += chunkResult.insertedCount;
+    }
 
     await logFeeAction(
       connection,
@@ -821,25 +865,31 @@ const feesController = {
         year,
         classIds,
         feeUpdates,
-        updatedCount: result.modifiedCount || 0,
-        createdCount: result.insertedCount || 0,
+        updatedCount: result.modifiedCount,
+        createdCount: result.insertedCount,
       }
     );
 
     logger.info(
       `Fees edited for year ${year}, classes ${classes.map((c) => c._id)}: ${
-        result.modifiedCount || 0
-      } updated, ${result.insertedCount || 0} created`
+        result.modifiedCount
+      } updated, ${result.insertedCount} created`
     );
 
     res.status(200).json({
       message: `Fees for ${year} updated successfully`,
-      updatedCount: result.modifiedCount || 0,
-      createdCount: result.insertedCount || 0,
-      totalAffected: (result.modifiedCount || 0) + (result.insertedCount || 0),
+      updatedCount: result.modifiedCount,
+      createdCount: result.insertedCount,
+      totalAffected: result.modifiedCount + result.insertedCount,
     });
   } catch (error) {
     logger.error(`Error editing fees: ${error.message}`, { error });
+    if (error.code === 11000) {
+      return res.status(409).json({
+        message: "Duplicate fee definition detected",
+        error: error.message,
+      });
+    }
     res.status(500).json({ error: error.message });
   }
 },
