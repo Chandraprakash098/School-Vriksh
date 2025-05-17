@@ -129,6 +129,7 @@ const logger = require("../utils/logger");
 const { validate, feeValidations, setSchoolContext } = require('../middleware/validate');
 const { paymentRateLimiter } = require('../middleware/rateLimit');
 const { paytmCallback } = require("../controllers/paytmCallback");
+const { generateFeeSlip } = require("../utils/generateFeeSlip");
 
 // Middleware to prevent concurrent payment attempts
 const preventConcurrentPayments = async (req, res, next) => {
@@ -341,6 +342,60 @@ router.get(
   "/receipt/:paymentId/download",
   authMiddleware,
   feesController.downloadReceipt
+);
+
+router.get(
+  '/fee-slip/:paymentId',
+  authMiddleware,
+  validate([
+    param('paymentId').isMongoId().withMessage('Invalid payment ID'),
+  ]),
+  async (req, res) => {
+    try {
+      const { paymentId } = req.params;
+      const schoolId = req.school._id.toString();
+      const connection = req.connection;
+      const PaymentModel = require('../models/Payment')(connection);
+      const UserModel = require('../models/User')(connection);
+
+      if (!req.user.permissions.canManageFees) {
+        return res.status(403).json({
+          message: 'Unauthorized: Only fee managers can view fee slips',
+        });
+      }
+
+      const payment = await PaymentModel.findOne({
+        _id: paymentId,
+        school: schoolId,
+        status: 'completed',
+      }).populate(
+        'student',
+        'name studentDetails.grNumber studentDetails.class studentDetails.parentDetails email'
+      );
+
+      if (!payment) {
+        return res.status(404).json({
+          message: 'Payment not found or not completed',
+        });
+      }
+
+      const feeSlipData = await generateFeeSlip(
+        payment.student,
+        payment,
+        payment.feesPaid,
+        schoolId,
+        `${payment.feesPaid[0].month}-${payment.feesPaid[0].year}`
+      );
+
+      res.json({
+        message: 'Fee slip data retrieved successfully',
+        data: feeSlipData,
+      });
+    } catch (error) {
+      logger.error(`Error fetching fee slip data: ${error.message}`, { error });
+      res.status(500).json({ error: error.message });
+    }
+  }
 );
 
 router.get("/pending-payments", authMiddleware, feesController.getPendingPayments);
