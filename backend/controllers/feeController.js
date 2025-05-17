@@ -3006,65 +3006,73 @@ verifyPayment : async (req, res) => {
   //   }
   // },
 
-  downloadReceipt: async (req, res) => {
-  try {
-    const { paymentId } = req.params;
-    const schoolId = req.school._id.toString();
-    const connection = req.connection;
-    const PaymentModel = require('../models/Payment')(connection);
 
-    if (!req.user.permissions.canManageFees) {
-      return res.status(403).json({
-        message: 'Unauthorized: Only fee managers can download receipts',
-      });
-    }
 
-    const payment = await PaymentModel.findOne({
-      _id: paymentId,
-      school: schoolId,
-      status: 'completed',
-    }).populate(
-      'student',
-      'name studentDetails.grNumber studentDetails.class studentDetails.parentDetails email'
-    );
+downloadReceipt: async (req, res) => {
+    try {
+      const { paymentId } = req.params;
+      const schoolId = req.school._id.toString();
+      const connection = req.connection;
+      const PaymentModel = require('../models/Payment')(connection);
+      const ClassModel= require("../models/Class")(connection)
 
-    if (!payment) {
-      return res.status(404).json({
-        message: 'Payment not found or not completed',
-      });
-    }
-
-    // Instead of generating PDF, return the fee slip data
-    const feeSlipData = await generateFeeSlip(
-      payment.student,
-      payment,
-      payment.feesPaid,
-      schoolId,
-      `${payment.feesPaid[0].month}-${payment.feesPaid[0].year}`
-    );
-
-    await logFeeAction(
-      connection,
-      schoolId,
-      req.user._id,
-      'DOWNLOAD_RECEIPT',
-      `Requested receipt data for payment ${paymentId}`,
-      {
-        paymentId,
-        receiptNumber: payment.receiptNumber,
-        studentId: payment.student.toString(),
+      if (!req.user.permissions.canManageFees) {
+        return res.status(403).json({
+          message: 'Unauthorized: Only fee managers can download receipts',
+        });
       }
-    );
 
-    res.json({
-      message: 'Fee slip data retrieved successfully',
-      data: feeSlipData,
-    });
-  } catch (error) {
-    logger.error(`Error fetching fee slip data: ${error.message}`, { error });
-    res.status(500).json({ error: error.message });
-  }
-},
+      // Populate student and nested class field
+      const payment = await PaymentModel.findOne({
+        _id: paymentId,
+        school: schoolId,
+        status: 'completed',
+      }).populate({
+        path: 'student',
+        select: 'name studentDetails.grNumber studentDetails.class studentDetails.parentDetails email',
+        populate: {
+          path: 'studentDetails.class',
+          select: 'name division',
+        },
+      });
+
+      if (!payment) {
+        return res.status(404).json({
+          message: 'Payment not found or not completed',
+        });
+      }
+
+      const feeSlipData = await generateFeeSlip(
+        payment.student,
+        payment,
+        payment.feesPaid,
+        schoolId,
+        `${payment.feesPaid[0].month}-${payment.feesPaid[0].year}`
+      );
+
+      await logFeeAction(
+        connection,
+        schoolId,
+        req.user._id,
+        'DOWNLOAD_RECEIPT',
+        `Requested receipt data for payment ${paymentId}`,
+        {
+          paymentId,
+          receiptNumber: payment.receiptNumber,
+          studentId: payment.student.toString(),
+        }
+      );
+
+      res.json({
+        message: 'Fee slip data retrieved successfully',
+        data: feeSlipData,
+      });
+    } catch (error) {
+      logger.error(`Error fetching fee slip data: ${error.message}`, { error });
+      res.status(500).json({ error: error.message });
+    }
+  },
+
 
   // New endpoint to get audit logs
   getAuditLogs: async (req, res) => {

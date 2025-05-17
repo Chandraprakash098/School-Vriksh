@@ -217,9 +217,71 @@ const { getPublicFileUrl } = require('../config/s3Upload');
 const logger = require('../utils/logger');
 const { getOwnerConnection } = require('../config/database');
 
+// const generateFeeSlip = async (student, payment, fees, schoolId, monthYear) => {
+//   try {
+//     // Get school from owner connection
+//     const ownerConnection = await getOwnerConnection();
+//     if (!ownerConnection) {
+//       throw new Error('Owner database connection is not initialized');
+//     }
+
+//     const School = ownerConnection.model('School', require('../models/School')(ownerConnection).schema);
+//     const school = await School.findById(schoolId).lean();
+//     if (!school) {
+//       throw new Error(`School not found for ID: ${schoolId}`);
+//     }
+
+//     // Prepare logo URL if available
+//     let logoUrl = null;
+//     if (school.logo && school.logo.url) {
+//       logoUrl = school.logo.url; // Or use getPublicFileUrl if S3 signed URL is needed
+//       logger.info(`School logo URL: ${logoUrl}`);
+//     }
+
+//     // Structure the fee slip data
+//     const feeSlipData = {
+//       school: {
+//         name: school.name,
+//         address: school.address || 'N/A',
+//         contact: school.contact || 'N/A',
+//         email: school.email || 'N/A',
+//         logoUrl: logoUrl,
+//       },
+//       student: {
+//         name: student.name,
+//         grNumber: student.studentDetails.grNumber,
+//         class: {
+//           name: student.studentDetails.class?.name || 'N/A',
+//           division: student.studentDetails.class?.division || 'N/A',
+//         },
+//       },
+//       payment: {
+//         receiptNumber: payment.receiptNumber,
+//         paymentDate: new Date(payment.paymentDate).toLocaleDateString(),
+//         amount: payment.amount,
+//         paymentMethod: payment.paymentMethod,
+//       },
+//       fees: fees.map((fee) => ({
+//         type: fee.type.toUpperCase(),
+//         month: fee.month,
+//         year: fee.year,
+//         amount: fee.amount || fee.paidAmount,
+//       })),
+//       monthYear,
+//       total: fees.reduce((sum, fee) => sum + (fee.amount || fee.paidAmount), 0),
+//     };
+
+//     logger.info(`Fee slip data prepared for ${school.name} - ${monthYear}`);
+//     return feeSlipData;
+//   } catch (error) {
+//     logger.error(`Error preparing fee slip data: ${error.message}`, error);
+//     throw error;
+//   }
+// };
+
+
 const generateFeeSlip = async (student, payment, fees, schoolId, monthYear) => {
   try {
-    // Get school from owner connection
     const ownerConnection = await getOwnerConnection();
     if (!ownerConnection) {
       throw new Error('Owner database connection is not initialized');
@@ -231,14 +293,12 @@ const generateFeeSlip = async (student, payment, fees, schoolId, monthYear) => {
       throw new Error(`School not found for ID: ${schoolId}`);
     }
 
-    // Prepare logo URL if available
     let logoUrl = null;
     if (school.logo && school.logo.url) {
-      logoUrl = school.logo.url; // Or use getPublicFileUrl if S3 signed URL is needed
+      logoUrl = school.logo.url;
       logger.info(`School logo URL: ${logoUrl}`);
     }
 
-    // Structure the fee slip data
     const feeSlipData = {
       school: {
         name: school.name,
@@ -280,3 +340,5 @@ const generateFeeSlip = async (student, payment, fees, schoolId, monthYear) => {
 };
 
 module.exports = { generateFeeSlip };
+
+

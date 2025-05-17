@@ -344,6 +344,9 @@ router.get(
   feesController.downloadReceipt
 );
 
+
+
+
 router.get(
   '/fee-slip/:paymentId',
   authMiddleware,
@@ -356,7 +359,7 @@ router.get(
       const schoolId = req.school._id.toString();
       const connection = req.connection;
       const PaymentModel = require('../models/Payment')(connection);
-      const UserModel = require('../models/User')(connection);
+      const ClassModel= require('../models/Class')(connection)
 
       if (!req.user.permissions.canManageFees) {
         return res.status(403).json({
@@ -364,14 +367,19 @@ router.get(
         });
       }
 
+      // Populate student and nested class field
       const payment = await PaymentModel.findOne({
         _id: paymentId,
         school: schoolId,
         status: 'completed',
-      }).populate(
-        'student',
-        'name studentDetails.grNumber studentDetails.class studentDetails.parentDetails email'
-      );
+      }).populate({
+        path: 'student',
+        select: 'name studentDetails.grNumber studentDetails.class studentDetails.parentDetails email',
+        populate: {
+          path: 'studentDetails.class',
+          select: 'name division',
+        },
+      });
 
       if (!payment) {
         return res.status(404).json({
