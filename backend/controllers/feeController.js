@@ -2912,166 +2912,166 @@ verifyPayment : async (req, res) => {
   }
 },
 
-  // downloadReceipt: async (req, res) => {
-  //   try {
-  //     const { paymentId } = req.params;
-  //     const schoolId = req.school._id.toString();
-  //     const connection = req.connection;
-  //     const PaymentModel = require("../models/Payment")(connection);
-  //     const {
-  //       getPublicFileUrl,
-  //       streamS3Object,
-  //     } = require("../config/s3Upload");
-
-  //     if (!req.user.permissions.canManageFees) {
-  //       return res.status(403).json({
-  //         message: "Unauthorized: Only fee managers can download receipts",
-  //       });
-  //     }
-
-  //     const payment = await PaymentModel.findOne({
-  //       _id: paymentId,
-  //       school: schoolId,
-  //       status: "completed",
-  //     }).populate(
-  //       "student",
-  //       "name studentDetails.grNumber studentDetails.class studentDetails.parentDetails email"
-  //     );
-
-  //     if (!payment) {
-  //       return res.status(404).json({
-  //         message: "Payment not found or not completed",
-  //       });
-  //     }
-
-  //     let receiptUrl = payment.receiptUrl;
-
-  //     if (!receiptUrl) {
-  //       const feeSlip = await generateFeeSlip(
-  //         payment.student,
-  //         payment,
-  //         payment.feesPaid,
-  //         schoolId,
-  //         `${payment.feesPaid[0].month}-${payment.feesPaid[0].year}`
-  //       );
-  //       payment.receiptUrl = feeSlip.pdfUrl;
-  //       payment.receiptUrls = {
-  //         ...payment.receiptUrls,
-  //         [`${payment.feesPaid[0].month}-${payment.feesPaid[0].year}`]:
-  //           feeSlip.pdfUrl,
-  //       };
-  //       await payment.save();
-  //       receiptUrl = feeSlip.pdfUrl;
-  //     }
-
-  //     // Extract S3 key from receiptUrl
-  //     const url = new URL(receiptUrl);
-  //     const s3Key = decodeURIComponent(url.pathname.slice(1)); // Remove leading '/' from pathname
-
-  //     // Option 1: Stream directly from S3 to the client
-  //     try {
-  //       return streamS3Object(s3Key, res);
-  //     } catch (error) {
-  //       // If streaming fails, fall back to redirecting to a direct URL
-  //       const directUrl = getPublicFileUrl(s3Key);
-
-  //       await logFeeAction(
-  //         connection,
-  //         schoolId,
-  //         req.user._id,
-  //         "DOWNLOAD_RECEIPT",
-  //         `Downloaded receipt for payment ${paymentId}`,
-  //         {
-  //           paymentId,
-  //           receiptNumber: payment.receiptNumber,
-  //           studentId: payment.student.toString(),
-  //         }
-  //       );
-
-  //       res.json({
-  //         message: "Receipt ready for download",
-  //         receiptUrl: directUrl,
-  //       });
-  //     }
-  //   } catch (error) {
-  //     logger.error(`Error generating URL for receipt: ${error.message}`, {
-  //       error,
-  //     });
-  //     if (error.name === "NoSuchKey") {
-  //       return res.status(404).json({
-  //         error: `Receipt not found in S3: ${error.message}`,
-  //       });
-  //     }
-  //     res.status(500).json({ error: error.message });
-  //   }
-  // },
-
-
-
-downloadReceipt: async (req, res) => {
+  downloadReceipt: async (req, res) => {
     try {
       const { paymentId } = req.params;
       const schoolId = req.school._id.toString();
       const connection = req.connection;
-      const PaymentModel = require('../models/Payment')(connection);
-      const ClassModel= require("../models/Class")(connection)
+      const PaymentModel = require("../models/Payment")(connection);
+      const {
+        getPublicFileUrl,
+        streamS3Object,
+      } = require("../config/s3Upload");
 
       if (!req.user.permissions.canManageFees) {
         return res.status(403).json({
-          message: 'Unauthorized: Only fee managers can download receipts',
+          message: "Unauthorized: Only fee managers can download receipts",
         });
       }
 
-      // Populate student and nested class field
       const payment = await PaymentModel.findOne({
         _id: paymentId,
         school: schoolId,
-        status: 'completed',
-      }).populate({
-        path: 'student',
-        select: 'name studentDetails.grNumber studentDetails.class studentDetails.parentDetails email',
-        populate: {
-          path: 'studentDetails.class',
-          select: 'name division',
-        },
-      });
+        status: "completed",
+      }).populate(
+        "student",
+        "name studentDetails.grNumber studentDetails.class studentDetails.parentDetails email"
+      );
 
       if (!payment) {
         return res.status(404).json({
-          message: 'Payment not found or not completed',
+          message: "Payment not found or not completed",
         });
       }
 
-      const feeSlipData = await generateFeeSlip(
-        payment.student,
-        payment,
-        payment.feesPaid,
-        schoolId,
-        `${payment.feesPaid[0].month}-${payment.feesPaid[0].year}`
-      );
+      let receiptUrl = payment.receiptUrl;
 
-      await logFeeAction(
-        connection,
-        schoolId,
-        req.user._id,
-        'DOWNLOAD_RECEIPT',
-        `Requested receipt data for payment ${paymentId}`,
-        {
-          paymentId,
-          receiptNumber: payment.receiptNumber,
-          studentId: payment.student.toString(),
-        }
-      );
+      if (!receiptUrl) {
+        const feeSlip = await generateFeeSlip(
+          payment.student,
+          payment,
+          payment.feesPaid,
+          schoolId,
+          `${payment.feesPaid[0].month}-${payment.feesPaid[0].year}`
+        );
+        payment.receiptUrl = feeSlip.pdfUrl;
+        payment.receiptUrls = {
+          ...payment.receiptUrls,
+          [`${payment.feesPaid[0].month}-${payment.feesPaid[0].year}`]:
+            feeSlip.pdfUrl,
+        };
+        await payment.save();
+        receiptUrl = feeSlip.pdfUrl;
+      }
 
-      res.json({
-        message: 'Fee slip data retrieved successfully',
-        data: feeSlipData,
-      });
+      // Extract S3 key from receiptUrl
+      const url = new URL(receiptUrl);
+      const s3Key = decodeURIComponent(url.pathname.slice(1)); // Remove leading '/' from pathname
+
+      // Option 1: Stream directly from S3 to the client
+      try {
+        return streamS3Object(s3Key, res);
+      } catch (error) {
+        // If streaming fails, fall back to redirecting to a direct URL
+        const directUrl = getPublicFileUrl(s3Key);
+
+        await logFeeAction(
+          connection,
+          schoolId,
+          req.user._id,
+          "DOWNLOAD_RECEIPT",
+          `Downloaded receipt for payment ${paymentId}`,
+          {
+            paymentId,
+            receiptNumber: payment.receiptNumber,
+            studentId: payment.student.toString(),
+          }
+        );
+
+        res.json({
+          message: "Receipt ready for download",
+          receiptUrl: directUrl,
+        });
+      }
     } catch (error) {
-      logger.error(`Error fetching fee slip data: ${error.message}`, { error });
+      logger.error(`Error generating URL for receipt: ${error.message}`, {
+        error,
+      });
+      if (error.name === "NoSuchKey") {
+        return res.status(404).json({
+          error: `Receipt not found in S3: ${error.message}`,
+        });
+      }
       res.status(500).json({ error: error.message });
     }
   },
+
+
+
+// downloadReceipt: async (req, res) => {
+//     try {
+//       const { paymentId } = req.params;
+//       const schoolId = req.school._id.toString();
+//       const connection = req.connection;
+//       const PaymentModel = require('../models/Payment')(connection);
+//       const ClassModel= require("../models/Class")(connection)
+
+//       if (!req.user.permissions.canManageFees) {
+//         return res.status(403).json({
+//           message: 'Unauthorized: Only fee managers can download receipts',
+//         });
+//       }
+
+//       // Populate student and nested class field
+//       const payment = await PaymentModel.findOne({
+//         _id: paymentId,
+//         school: schoolId,
+//         status: 'completed',
+//       }).populate({
+//         path: 'student',
+//         select: 'name studentDetails.grNumber studentDetails.class studentDetails.parentDetails email',
+//         populate: {
+//           path: 'studentDetails.class',
+//           select: 'name division',
+//         },
+//       });
+
+//       if (!payment) {
+//         return res.status(404).json({
+//           message: 'Payment not found or not completed',
+//         });
+//       }
+
+//       const feeSlipData = await generateFeeSlip(
+//         payment.student,
+//         payment,
+//         payment.feesPaid,
+//         schoolId,
+//         `${payment.feesPaid[0].month}-${payment.feesPaid[0].year}`
+//       );
+
+//       await logFeeAction(
+//         connection,
+//         schoolId,
+//         req.user._id,
+//         'DOWNLOAD_RECEIPT',
+//         `Requested receipt data for payment ${paymentId}`,
+//         {
+//           paymentId,
+//           receiptNumber: payment.receiptNumber,
+//           studentId: payment.student.toString(),
+//         }
+//       );
+
+//       res.json({
+//         message: 'Fee slip data retrieved successfully',
+//         data: feeSlipData,
+//       });
+//     } catch (error) {
+//       logger.error(`Error fetching fee slip data: ${error.message}`, { error });
+//       res.status(500).json({ error: error.message });
+//     }
+//   },
 
 
   // New endpoint to get audit logs

@@ -275,6 +275,20 @@ const generateFeeSlip = async (student, payment, fees, schoolId, monthYear) => {
       border: '#e5e7eb'        // Light border
     };
 
+    // Helper function to format currency properly
+    const formatCurrency = (amount) => {
+      return `Rs. ${amount.toLocaleString('en-IN')}`;
+    };
+
+    // Helper function to format date consistently
+    const formatDate = (date) => {
+      return new Date(date).toLocaleDateString('en-IN', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric'
+      });
+    };
+
     // Page dimensions
     const pageWidth = doc.page.width;
     const pageHeight = doc.page.height;
@@ -352,17 +366,13 @@ const generateFeeSlip = async (student, payment, fees, schoolId, monthYear) => {
        .fontSize(10)
        .fillColor(colors.primary)
        .text(`Receipt No: ${payment.receiptNumber}`, margin + 15, receiptBannerY + 10)
-       .text(`Date: ${new Date(payment.paymentDate).toLocaleDateString('en-IN', {
-         day: '2-digit',
-         month: 'short',
-         year: 'numeric'
-       })}`, pageWidth - margin - 120, receiptBannerY + 10);
+       .text(`Date: ${formatDate(payment.paymentDate)}`, pageWidth - margin - 120, receiptBannerY + 10);
     
     doc.y = receiptBannerY + 40;
 
-    // Student Information Card
+    // Student Information Card - INCREASED HEIGHT
     const studentCardY = doc.y;
-    const cardHeight = 75;
+    const cardHeight = 95; // Increased from 75 to 95
     
     // Card shadow effect
     doc.fillColor('rgba(0, 0, 0, 0.1)')
@@ -390,31 +400,36 @@ const generateFeeSlip = async (student, payment, fees, schoolId, monthYear) => {
        .fillColor(colors.background.white)
        .text('STUDENT INFORMATION', margin + 15, studentCardY + 8);
 
-    // Student details content
+    // Student details content - IMPROVED LAYOUT
     const detailsY = studentCardY + 30;
+    const leftColumnX = margin + 15;
+    const rightColumnX = margin + (contentWidth / 2) + 10;
+    const columnWidth = (contentWidth / 2) - 25;
+    
     doc.font('Helvetica')
-       .fontSize(10)
+       .fontSize(9) // Slightly reduced font size
        .fillColor(colors.text.primary);
     
-    // Left column
-    doc.text(`Student Name:`, margin + 15, detailsY)
+    // Left column - with proper spacing
+    doc.text('Student Name:', leftColumnX, detailsY, { width: columnWidth })
        .font('Helvetica-Bold')
-       .text(`${student.name}`, margin + 15, doc.y + 1)
+       .text(student.name || 'N/A', leftColumnX, doc.y + 2, { width: columnWidth })
        .font('Helvetica')
-       .text(`GR Number:`, margin + 15, doc.y + 3)
+       .text('GR Number:', leftColumnX, doc.y + 8, { width: columnWidth })
        .font('Helvetica-Bold')
-       .text(`${student.studentDetails.grNumber}`, margin + 15, doc.y + 1);
+       .text(student.studentDetails?.grNumber || 'N/A', leftColumnX, doc.y + 2, { width: columnWidth });
     
-    // Right column
-    const rightColumnX = margin + (contentWidth / 2);
+    // Right column - reset Y position and add content
+    const rightColumnStartY = detailsY;
     doc.font('Helvetica')
-       .text(`Class:`, rightColumnX, detailsY)
+       .text('Class:', rightColumnX, rightColumnStartY, { width: columnWidth })
        .font('Helvetica-Bold')
-       .text(`${student.studentDetails.class?.name || 'N/A'} - ${student.studentDetails.class?.division || 'N/A'}`, rightColumnX, doc.y + 1)
+       .text(`${student.studentDetails?.class?.name || 'N/A'} - ${student.studentDetails?.class?.division || 'N/A'}`, 
+             rightColumnX, rightColumnStartY + 12, { width: columnWidth })
        .font('Helvetica')
-       .text(`Academic Year:`, rightColumnX, doc.y + 3)
+       .text('Academic Year:', rightColumnX, rightColumnStartY + 32, { width: columnWidth })
        .font('Helvetica-Bold')
-       .text(`${monthYear}`, rightColumnX, doc.y + 1);
+       .text(monthYear || 'N/A', rightColumnX, rightColumnStartY + 44, { width: columnWidth });
 
     doc.y = studentCardY + cardHeight + 20;
 
@@ -436,7 +451,7 @@ const generateFeeSlip = async (student, payment, fees, schoolId, monthYear) => {
       { header: 'Fee Type', width: contentWidth * 0.35 },
       { header: 'Period', width: contentWidth * 0.25 },
       { header: 'Due Date', width: contentWidth * 0.2 },
-      { header: 'Amount (₹)', width: contentWidth * 0.2 }
+      { header: 'Amount', width: contentWidth * 0.2 }
     ];
 
     // Table header
@@ -451,7 +466,7 @@ const generateFeeSlip = async (student, payment, fees, schoolId, monthYear) => {
          .fillColor(colors.background.white)
          .text(col.header, currentX + 10, tableY + 12, {
            width: col.width - 20,
-           align: col.header === 'Amount (₹)' ? 'right' : 'left'
+           align: col.header === 'Amount' ? 'right' : 'left'
          });
       currentX += col.width;
     });
@@ -459,7 +474,7 @@ const generateFeeSlip = async (student, payment, fees, schoolId, monthYear) => {
     // Table rows
     let total = 0;
     fees.forEach((fee, index) => {
-      const amount = fee.amount || fee.paidAmount;
+      const amount = fee.amount || fee.paidAmount || 0;
       total += amount;
       const rowY = tableY + tableHeaderHeight + (index * rowHeight);
       
@@ -482,27 +497,28 @@ const generateFeeSlip = async (student, payment, fees, schoolId, monthYear) => {
          .fillColor(colors.text.primary);
       
       // Fee type
-      doc.text(`${fee.type.toUpperCase()} Fee`, currentX + 10, rowY + 10, {
+      doc.text(`${(fee.type || 'SCHOOL').toUpperCase()} Fee`, currentX + 10, rowY + 10, {
         width: columns[0].width - 20
       });
       currentX += columns[0].width;
       
       // Period
-      doc.text(`${fee.month}/${fee.year}`, currentX + 10, rowY + 10, {
+      const period = fee.month && fee.year ? `${fee.month}/${fee.year}` : monthYear || 'N/A';
+      doc.text(period, currentX + 10, rowY + 10, {
         width: columns[1].width - 20
       });
       currentX += columns[1].width;
       
       // Due date (if available)
-      const dueDate = fee.dueDate ? new Date(fee.dueDate).toLocaleDateString('en-IN') : 'N/A';
+      const dueDate = fee.dueDate ? formatDate(fee.dueDate) : 'N/A';
       doc.text(dueDate, currentX + 10, rowY + 10, {
         width: columns[2].width - 20
       });
       currentX += columns[2].width;
       
-      // Amount - Fixed rupee symbol
+      // Amount - Fixed currency formatting
       doc.font('Helvetica-Bold')
-         .text(`₹${amount.toLocaleString('en-IN')}`, currentX + 10, rowY + 10, {
+         .text(formatCurrency(amount), currentX + 10, rowY + 10, {
            width: columns[3].width - 20,
            align: 'right'
          });
@@ -518,7 +534,7 @@ const generateFeeSlip = async (student, payment, fees, schoolId, monthYear) => {
        .fontSize(12)
        .fillColor(colors.background.white)
        .text('TOTAL AMOUNT', margin + 10, totalRowY + 10)
-       .text(`₹${total.toLocaleString('en-IN')}`, margin + contentWidth - 120, totalRowY + 10, {
+       .text(formatCurrency(total), margin + contentWidth - 120, totalRowY + 10, {
          width: 110,
          align: 'right'
        });
@@ -558,13 +574,15 @@ const generateFeeSlip = async (student, payment, fees, schoolId, monthYear) => {
       
       if (payment.paymentMethod) {
         doc.text(`Payment Method: ${payment.paymentMethod.toUpperCase()}`, margin, doc.y);
+        doc.y += 12;
       }
       
       if (payment.transactionId) {
-        doc.text(`Transaction ID: ${payment.transactionId}`, margin, doc.y + 1);
+        doc.text(`Transaction ID: ${payment.transactionId}`, margin, doc.y);
+        doc.y += 12;
       }
       
-      doc.y += 15;
+      doc.y += 5;
     }
 
     // School information footer
@@ -591,7 +609,10 @@ const generateFeeSlip = async (student, payment, fees, schoolId, monthYear) => {
 
       let contactY = footerY + 20;
       if (school.address) {
-        doc.text(`Address: ${school.address}`, margin + 15, contactY);
+        doc.text(`Address: ${school.address}`, margin + 15, contactY, {
+          width: contentWidth - 30,
+          lineGap: 1
+        });
         contactY += 10;
       }
       
@@ -601,12 +622,18 @@ const generateFeeSlip = async (student, payment, fees, schoolId, monthYear) => {
           school.email ? `Email: ${school.email}` : ''
         ].filter(Boolean).join(' | ');
         
-        doc.text(contactLine, margin + 15, contactY);
+        doc.text(contactLine, margin + 15, contactY, {
+          width: contentWidth - 30,
+          lineGap: 1
+        });
         contactY += 10;
       }
       
       if (school.website) {
-        doc.text(`Website: ${school.website}`, margin + 15, contactY);
+        doc.text(`Website: ${school.website}`, margin + 15, contactY, {
+          width: contentWidth - 30,
+          lineGap: 1
+        });
       }
       
       doc.y = footerY + 70;
@@ -627,7 +654,7 @@ const generateFeeSlip = async (student, payment, fees, schoolId, monthYear) => {
          align: 'center',
          width: contentWidth
        })
-       .text(`Generated on ${new Date().toLocaleDateString('en-IN')} | ${schoolName} Management System`, margin, doc.y + 6, {
+       .text(`Generated on ${formatDate(new Date())} | ${schoolName} Management System`, margin, doc.y + 6, {
          align: 'center',
          width: contentWidth
        });
