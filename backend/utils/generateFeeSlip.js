@@ -248,7 +248,7 @@ const generateFeeSlip = async (student, payment, fees, schoolId, monthYear) => {
     
     const doc = new PDFDocument({ 
       size: 'A4', 
-      margin: 50,
+      margin: 40,
       bufferPages: true
     });
     const buffers = [];
@@ -282,7 +282,7 @@ const generateFeeSlip = async (student, payment, fees, schoolId, monthYear) => {
     const contentWidth = pageWidth - (margin * 2);
 
     // Header Section
-    const headerHeight = 100;
+    const headerHeight = 80;
     
     // Header background with gradient effect
     doc.save()
@@ -299,9 +299,9 @@ const generateFeeSlip = async (student, payment, fees, schoolId, monthYear) => {
     doc.restore();
 
     // School Logo and Name Section
-    const logoSize = 70;
+    const logoSize = 60;
     const logoX = margin;
-    const logoY = 15;
+    const logoY = 10;
     
     if (logoImage) {
       // Logo background circle
@@ -323,18 +323,18 @@ const generateFeeSlip = async (student, payment, fees, schoolId, monthYear) => {
     const availableWidth = pageWidth - textStartX - margin;
     
     doc.font('Helvetica-Bold')
-       .fontSize(26)
+       .fontSize(22)
        .fillColor(colors.background.white)
-       .text(schoolName, textStartX, logoY + 10, {
+       .text(schoolName, textStartX, logoY + 8, {
          width: availableWidth,
          align: logoImage ? 'left' : 'center'
        });
     
     // Subtitle
     doc.font('Helvetica')
-       .fontSize(14)
+       .fontSize(12)
        .fillColor(colors.background.light)
-       .text('Official Fee Receipt', textStartX, doc.y + 5, {
+       .text('Official Fee Receipt', textStartX, doc.y + 3, {
          width: availableWidth,
          align: logoImage ? 'left' : 'center'
        });
@@ -345,24 +345,24 @@ const generateFeeSlip = async (student, payment, fees, schoolId, monthYear) => {
     // Receipt Information Banner
     const receiptBannerY = doc.y;
     doc.fillColor(colors.background.accent)
-       .rect(margin, receiptBannerY, contentWidth, 35)
+       .rect(margin, receiptBannerY, contentWidth, 30)
        .fill();
     
     doc.font('Helvetica-Bold')
-       .fontSize(11)
+       .fontSize(10)
        .fillColor(colors.primary)
-       .text(`Receipt No: ${payment.receiptNumber}`, margin + 15, receiptBannerY + 12)
+       .text(`Receipt No: ${payment.receiptNumber}`, margin + 15, receiptBannerY + 10)
        .text(`Date: ${new Date(payment.paymentDate).toLocaleDateString('en-IN', {
          day: '2-digit',
          month: 'short',
          year: 'numeric'
-       })}`, pageWidth - margin - 120, receiptBannerY + 12);
+       })}`, pageWidth - margin - 120, receiptBannerY + 10);
     
-    doc.y = receiptBannerY + 50;
+    doc.y = receiptBannerY + 40;
 
     // Student Information Card
     const studentCardY = doc.y;
-    const cardHeight = 90;
+    const cardHeight = 75;
     
     // Card shadow effect
     doc.fillColor('rgba(0, 0, 0, 0.1)')
@@ -382,54 +382,54 @@ const generateFeeSlip = async (student, payment, fees, schoolId, monthYear) => {
 
     // Student details header
     doc.fillColor(colors.secondary)
-       .rect(margin, studentCardY, contentWidth, 30)
+       .rect(margin, studentCardY, contentWidth, 25)
        .fill();
     
     doc.font('Helvetica-Bold')
-       .fontSize(14)
+       .fontSize(12)
        .fillColor(colors.background.white)
-       .text('STUDENT INFORMATION', margin + 15, studentCardY + 10);
+       .text('STUDENT INFORMATION', margin + 15, studentCardY + 8);
 
     // Student details content
-    const detailsY = studentCardY + 40;
+    const detailsY = studentCardY + 30;
     doc.font('Helvetica')
-       .fontSize(11)
+       .fontSize(10)
        .fillColor(colors.text.primary);
     
     // Left column
     doc.text(`Student Name:`, margin + 15, detailsY)
        .font('Helvetica-Bold')
-       .text(`${student.name}`, margin + 15, doc.y + 2)
+       .text(`${student.name}`, margin + 15, doc.y + 1)
        .font('Helvetica')
-       .text(`GR Number:`, margin + 15, doc.y + 5)
+       .text(`GR Number:`, margin + 15, doc.y + 3)
        .font('Helvetica-Bold')
-       .text(`${student.studentDetails.grNumber}`, margin + 15, doc.y + 2);
+       .text(`${student.studentDetails.grNumber}`, margin + 15, doc.y + 1);
     
     // Right column
     const rightColumnX = margin + (contentWidth / 2);
     doc.font('Helvetica')
        .text(`Class:`, rightColumnX, detailsY)
        .font('Helvetica-Bold')
-       .text(`${student.studentDetails.class?.name || 'N/A'} - ${student.studentDetails.class?.division || 'N/A'}`, rightColumnX, doc.y + 2)
+       .text(`${student.studentDetails.class?.name || 'N/A'} - ${student.studentDetails.class?.division || 'N/A'}`, rightColumnX, doc.y + 1)
        .font('Helvetica')
-       .text(`Academic Year:`, rightColumnX, doc.y + 5)
+       .text(`Academic Year:`, rightColumnX, doc.y + 3)
        .font('Helvetica-Bold')
-       .text(`${monthYear}`, rightColumnX, doc.y + 2);
+       .text(`${monthYear}`, rightColumnX, doc.y + 1);
 
-    doc.y = studentCardY + cardHeight + 30;
+    doc.y = studentCardY + cardHeight + 20;
 
     // Fee Details Section
     doc.font('Helvetica-Bold')
-       .fontSize(16)
+       .fontSize(14)
        .fillColor(colors.primary)
        .text('FEE BREAKDOWN', margin, doc.y);
     
-    doc.y += 20;
+    doc.y += 15;
 
     // Fee table
     const tableY = doc.y;
-    const rowHeight = 35;
-    const tableHeaderHeight = 40;
+    const rowHeight = 30;
+    const tableHeaderHeight = 35;
     
     // Table dimensions
     const columns = [
@@ -447,9 +447,9 @@ const generateFeeSlip = async (student, payment, fees, schoolId, monthYear) => {
     let currentX = margin;
     columns.forEach(col => {
       doc.font('Helvetica-Bold')
-         .fontSize(12)
+         .fontSize(11)
          .fillColor(colors.background.white)
-         .text(col.header, currentX + 10, tableY + 14, {
+         .text(col.header, currentX + 10, tableY + 12, {
            width: col.width - 20,
            align: col.header === 'Amount (₹)' ? 'right' : 'left'
          });
@@ -461,7 +461,7 @@ const generateFeeSlip = async (student, payment, fees, schoolId, monthYear) => {
     fees.forEach((fee, index) => {
       const amount = fee.amount || fee.paidAmount;
       total += amount;
-      const rowY = tableY + headerHeight + (index * rowHeight);
+      const rowY = tableY + tableHeaderHeight + (index * rowHeight);
       
       // Alternating row colors
       doc.fillColor(index % 2 === 0 ? colors.background.light : colors.background.white)
@@ -478,55 +478,55 @@ const generateFeeSlip = async (student, payment, fees, schoolId, monthYear) => {
       // Row content
       currentX = margin;
       doc.font('Helvetica')
-         .fontSize(10)
+         .fontSize(9)
          .fillColor(colors.text.primary);
       
       // Fee type
-      doc.text(`${fee.type.toUpperCase()} Fee`, currentX + 10, rowY + 12, {
+      doc.text(`${fee.type.toUpperCase()} Fee`, currentX + 10, rowY + 10, {
         width: columns[0].width - 20
       });
       currentX += columns[0].width;
       
       // Period
-      doc.text(`${fee.month}/${fee.year}`, currentX + 10, rowY + 12, {
+      doc.text(`${fee.month}/${fee.year}`, currentX + 10, rowY + 10, {
         width: columns[1].width - 20
       });
       currentX += columns[1].width;
       
       // Due date (if available)
       const dueDate = fee.dueDate ? new Date(fee.dueDate).toLocaleDateString('en-IN') : 'N/A';
-      doc.text(dueDate, currentX + 10, rowY + 12, {
+      doc.text(dueDate, currentX + 10, rowY + 10, {
         width: columns[2].width - 20
       });
       currentX += columns[2].width;
       
-      // Amount
+      // Amount - Fixed rupee symbol
       doc.font('Helvetica-Bold')
-         .text(`₹${amount.toLocaleString('en-IN')}`, currentX + 10, rowY + 12, {
+         .text(`₹${amount.toLocaleString('en-IN')}`, currentX + 10, rowY + 10, {
            width: columns[3].width - 20,
            align: 'right'
          });
     });
 
     // Total row
-    const totalRowY = tableY + headerHeight + (fees.length * rowHeight);
+    const totalRowY = tableY + tableHeaderHeight + (fees.length * rowHeight);
     doc.fillColor(colors.accent)
        .rect(margin, totalRowY, contentWidth, rowHeight)
        .fill();
 
     doc.font('Helvetica-Bold')
-       .fontSize(14)
+       .fontSize(12)
        .fillColor(colors.background.white)
-       .text('TOTAL AMOUNT', margin + 10, totalRowY + 12)
-       .text(`₹${total.toLocaleString('en-IN')}`, margin + contentWidth - 120, totalRowY + 12, {
+       .text('TOTAL AMOUNT', margin + 10, totalRowY + 10)
+       .text(`₹${total.toLocaleString('en-IN')}`, margin + contentWidth - 120, totalRowY + 10, {
          width: 110,
          align: 'right'
        });
 
     // Payment status badge
-    doc.y = totalRowY + rowHeight + 20;
-    const statusBadgeWidth = 120;
-    const statusBadgeHeight = 25;
+    doc.y = totalRowY + rowHeight + 15;
+    const statusBadgeWidth = 100;
+    const statusBadgeHeight = 20;
     const statusX = pageWidth - margin - statusBadgeWidth;
     
     doc.fillColor(colors.accent)
@@ -534,26 +534,26 @@ const generateFeeSlip = async (student, payment, fees, schoolId, monthYear) => {
        .fill();
     
     doc.font('Helvetica-Bold')
-       .fontSize(11)
+       .fontSize(10)
        .fillColor(colors.background.white)
-       .text('PAID', statusX, doc.y + 8, {
+       .text('PAID', statusX, doc.y + 6, {
          width: statusBadgeWidth,
          align: 'center'
        });
 
-    doc.y += statusBadgeHeight + 30;
+    doc.y += statusBadgeHeight + 15;
 
     // Payment method and transaction details
     if (payment.paymentMethod || payment.transactionId) {
       doc.font('Helvetica-Bold')
-         .fontSize(12)
+         .fontSize(11)
          .fillColor(colors.primary)
          .text('PAYMENT DETAILS', margin, doc.y);
       
-      doc.y += 15;
+      doc.y += 10;
       
       doc.font('Helvetica')
-         .fontSize(10)
+         .fontSize(9)
          .fillColor(colors.text.secondary);
       
       if (payment.paymentMethod) {
@@ -561,10 +561,10 @@ const generateFeeSlip = async (student, payment, fees, schoolId, monthYear) => {
       }
       
       if (payment.transactionId) {
-        doc.text(`Transaction ID: ${payment.transactionId}`, margin, doc.y + 2);
+        doc.text(`Transaction ID: ${payment.transactionId}`, margin, doc.y + 1);
       }
       
-      doc.y += 20;
+      doc.y += 15;
     }
 
     // School information footer
@@ -572,27 +572,27 @@ const generateFeeSlip = async (student, payment, fees, schoolId, monthYear) => {
       const footerY = doc.y;
       
       doc.fillColor(colors.background.light)
-         .rect(margin, footerY, contentWidth, 80)
+         .rect(margin, footerY, contentWidth, 60)
          .fill();
       
       doc.strokeColor(colors.border)
          .lineWidth(1)
-         .rect(margin, footerY, contentWidth, 80)
+         .rect(margin, footerY, contentWidth, 60)
          .stroke();
 
       doc.font('Helvetica-Bold')
-         .fontSize(11)
+         .fontSize(10)
          .fillColor(colors.primary)
-         .text('SCHOOL CONTACT INFORMATION', margin + 15, footerY + 10);
+         .text('SCHOOL CONTACT INFORMATION', margin + 15, footerY + 8);
 
       doc.font('Helvetica')
-         .fontSize(9)
+         .fontSize(8)
          .fillColor(colors.text.secondary);
 
-      let contactY = footerY + 25;
+      let contactY = footerY + 20;
       if (school.address) {
         doc.text(`Address: ${school.address}`, margin + 15, contactY);
-        contactY += 12;
+        contactY += 10;
       }
       
       if (school.contact || school.email) {
@@ -602,31 +602,32 @@ const generateFeeSlip = async (student, payment, fees, schoolId, monthYear) => {
         ].filter(Boolean).join(' | ');
         
         doc.text(contactLine, margin + 15, contactY);
-        contactY += 12;
+        contactY += 10;
       }
       
       if (school.website) {
         doc.text(`Website: ${school.website}`, margin + 15, contactY);
       }
+      
+      doc.y = footerY + 70;
     }
 
     // Footer with disclaimer
-    doc.y = pageHeight - 80;
     doc.strokeColor(colors.border)
        .lineWidth(0.5)
        .moveTo(margin, doc.y)
        .lineTo(pageWidth - margin, doc.y)
        .stroke();
 
-    doc.y += 10;
+    doc.y += 8;
     doc.font('Helvetica')
-       .fontSize(8)
+       .fontSize(7)
        .fillColor(colors.text.light)
        .text('This is a computer-generated receipt and does not require a signature.', margin, doc.y, {
          align: 'center',
          width: contentWidth
        })
-       .text(`Generated on ${new Date().toLocaleDateString('en-IN')} | ${schoolName} Management System`, margin, doc.y + 8, {
+       .text(`Generated on ${new Date().toLocaleDateString('en-IN')} | ${schoolName} Management System`, margin, doc.y + 6, {
          align: 'center',
          width: contentWidth
        });
@@ -634,10 +635,10 @@ const generateFeeSlip = async (student, payment, fees, schoolId, monthYear) => {
     // Add security watermark
     doc.save()
        .font('Helvetica-Bold')
-       .fontSize(60)
-       .fillColor('rgba(30, 58, 138, 0.05)')
+       .fontSize(50)
+       .fillColor('rgba(30, 58, 138, 0.03)')
        .rotate(-45, { origin: [pageWidth/2, pageHeight/2] })
-       .text('OFFICIAL RECEIPT', pageWidth/2 - 150, pageHeight/2 - 30)
+       .text('OFFICIAL RECEIPT', pageWidth/2 - 120, pageHeight/2 - 25)
        .restore();
 
     doc.end();
