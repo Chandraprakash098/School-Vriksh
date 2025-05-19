@@ -4638,6 +4638,107 @@ publishIndividualMarksheet: async (req, res) => {
     }
   },
 
+  getUnpublishedMarksheets: async (req, res) => {
+  try {
+    const { examEventId, classId } = req.params;
+    const schoolId = req.school._id.toString();
+    const connection = req.connection;
+    const ExamEvent = getModel("ExamEvent", connection);
+    const Class = getModel("Class", connection);
+    const Result = getModel("Result", connection);
+    const User = getModel("User", connection);
+    const Subject = getModel("Subject", connection);
+
+    // Validate exam event and class
+    const examEvent = await ExamEvent.findOne({ _id: examEventId, school: schoolId }).lean();
+    if (!examEvent) {
+      return res.status(404).json({ success: false, error: "Exam event not found" });
+    }
+
+    const classInfo = await Class.findOne({ _id: classId, school: schoolId }).lean();
+    if (!classInfo) {
+      return res.status(404).json({ success: false, error: "Class not found" });
+    }
+
+    // Verify class is part of the exam event
+    if (!examEvent.classes.map(id => id.toString()).includes(classId)) {
+      return res.status(400).json({ message: "Class is not associated with this exam event" });
+    }
+
+    // Fetch results that are not yet published
+    const results = await Result.find({
+      examEvent: examEventId,
+      class: classId,
+      school: schoolId,
+      status: "submittedToAdmin",
+    })
+      .populate("student", "name studentDetails.grNumber")
+      .populate("subject", "name")
+      .lean();
+
+    if (!results.length) {
+      return res.status(200).json({
+        success: true,
+        class: {
+          id: classId,
+          name: classInfo.name,
+          division: classInfo.division,
+        },
+        examEvent: {
+          id: examEventId,
+          name: examEvent.examType === "Other" ? examEvent.customExamType : examEvent.examType,
+          type: examEvent.examType,
+        },
+        marksheets: [],
+        message: "No unpublished marksheets found",
+      });
+    }
+
+    // Aggregate results by student
+    const marksheets = {};
+    results.forEach((result) => {
+      const studentId = result.student._id.toString();
+      if (!marksheets[studentId]) {
+        marksheets[studentId] = {
+          student: {
+            id: studentId,
+            name: result.student.name,
+            grNumber: result.student.studentDetails?.grNumber || "N/A",
+          },
+          marksheet: result.marksheet,
+          status: result.status,
+          subjects: [],
+        };
+      }
+      marksheets[studentId].subjects.push({
+        subjectId: result.subject._id,
+        subjectName: result.subject.name,
+        marksObtained: result.marksObtained,
+        totalMarks: result.totalMarks,
+      });
+    });
+
+    res.status(200).json({
+      success: true,
+      class: {
+        id: classId,
+        name: classInfo.name,
+        division: classInfo.division,
+      },
+      examEvent: {
+        id: examEventId,
+        name: examEvent.examType === "Other" ? examEvent.customExamType : examEvent.examType,
+        type: examEvent.examType,
+      },
+      marksheets: Object.values(marksheets),
+      message: "Unpublished marksheets retrieved successfully",
+    });
+  } catch (error) {
+    console.error("Error in getUnpublishedMarksheets:", error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+},
+
   trackPerformanceMetrics: async (req, res) => {
     try {
       const { classId, examId } = req.params;
@@ -5672,69 +5773,6 @@ const isValidTimeFormat = (time) => {
 };
 
 
-
-
-
-// const calculateClassStatistics = (results, totalSubjects) => {
-//   if (!results.length) {
-//     return {
-//       averagePercentage: 0,
-//       highestPercentage: 0,
-//       lowestPercentage: 0,
-//       passRate: 0,
-//       totalStudents: 0,
-//       subjectAverages: {},
-//     };
-//   }
-
-//   const stats = {
-//     averagePercentage: 0,
-//     highestPercentage: 0,
-//     lowestPercentage: Infinity,
-//     passRate: 0,
-//     totalStudents: results.length,
-//     subjectAverages: {},
-//   };
-
-//   results.forEach((result) => {
-//     stats.averagePercentage += result.percentage;
-//     stats.highestPercentage = Math.max(
-//       stats.highestPercentage,
-//       result.percentage
-//     );
-//     stats.lowestPercentage = Math.min(
-//       stats.lowestPercentage,
-//       result.percentage
-//     );
-//     if (result.percentage >= 40) stats.passRate++;
-
-//     Object.entries(result.subjects).forEach(([subjectId, subjectData]) => {
-//       if (!stats.subjectAverages[subjectId]) {
-//         stats.subjectAverages[subjectId] = {
-//           name: subjectData.subjectName,
-//           totalMarks: 0,
-//           count: 0,
-//         };
-//       }
-//       stats.subjectAverages[subjectId].totalMarks += subjectData.marksObtained;
-//       stats.subjectAverages[subjectId].count++;
-//     });
-//   });
-
-//   stats.averagePercentage /= results.length;
-//   stats.passRate = (stats.passRate / results.length) * 100;
-
-//   stats.subjectAverages = Object.entries(stats.subjectAverages).map(
-//     ([subjectId, data]) => ({
-//       subjectId,
-//       name: data.name,
-//       averageMarks: data.totalMarks / data.count,
-//       averagePercentage: (data.totalMarks / data.count / 100) * 100, // Assuming 100 as max marks per subject
-//     })
-//   );
-
-//   return stats;
-// };
 
 const calculateClassStatistics = (results, totalSubjects) => {
   if (!results.length) {

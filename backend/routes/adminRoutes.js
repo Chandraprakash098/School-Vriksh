@@ -313,6 +313,13 @@ router.post(
   [auth, roleCheck(["admin"])],
   adminController.publishIndividualMarksheet
 );
+
+router.get(
+  "/exam-events/:examEventId/classes/:classId/unpublished-marksheets",
+  [auth, roleCheck(["admin"])],
+  adminController.getUnpublishedMarksheets
+);
+
 router.get(
   "/exams/:examId/classes/:classId/report-cards",
   [auth, roleCheck(["admin"])],

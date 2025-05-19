@@ -181,7 +181,7 @@ router.get(
 router.post(
   "/pay-for-student",
   authMiddleware,
-  paymentRateLimiter,
+  // paymentRateLimiter,
   preventConcurrentPayments,
   validate(feeValidations.payFees),
   feesController.payFeesForStudent

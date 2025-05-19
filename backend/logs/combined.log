@@ -1064,3 +1064,11 @@
 {"level":"info","message":"School logo URL: https://school-admission-bucket.s3.ap-south-1.amazonaws.com/school_logos/1747114200350_dpslogo.jpg","timestamp":"2025-05-17T06:54:17.152Z"}
 {"level":"info","message":"Fee slip data prepared for Delhi Public School - 3-2025","timestamp":"2025-05-17T06:54:17.177Z"}
 {"level":"info","message":"Audit log created: DOWNLOAD_RECEIPT - Requested receipt data for payment 6826e9d6da394e3597abc109","timestamp":"2025-05-17T06:54:17.258Z"}
+{"level":"info","message":"School logo URL: https://school-admission-bucket.s3.ap-south-1.amazonaws.com/school_logos/1747114200350_dpslogo.jpg","timestamp":"2025-05-17T10:40:36.495Z"}
+{"level":"info","message":"Fee slip data prepared for Delhi Public School - 4-2025","timestamp":"2025-05-17T10:40:36.721Z"}
+{"level":"info","message":"Audit log created: DOWNLOAD_RECEIPT - Requested receipt data for payment 6828376c903e0b867e0539bd","timestamp":"2025-05-17T10:40:36.983Z"}
+{"level":"info","message":"School logo URL: https://school-admission-bucket.s3.ap-south-1.amazonaws.com/school_logos/1747114200350_dpslogo.jpg","timestamp":"2025-05-17T10:44:11.946Z"}
+{"level":"info","message":"Fee slip data prepared for Delhi Public School - 12-2025","timestamp":"2025-05-17T10:44:11.948Z"}
+{"level":"info","message":"Audit log created: PAY_FEES - Processed payment for student whose grNumber is 1 of amount ₹400 via cash","timestamp":"2025-05-17T10:44:12.166Z"}
+{"level":"info","message":"Payment confirmation email sent to chandra.ece89@gmail.com","timestamp":"2025-05-17T10:44:17.649Z"}
+{"level":"info","message":"Payment processed for student 1: 400 via cash","timestamp":"2025-05-17T10:44:17.651Z"}
