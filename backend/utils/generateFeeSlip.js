@@ -662,8 +662,8 @@ const generateFeeSlip = async (student, payment, fees, schoolId, monthYear) => {
     // Add security watermark
     doc.save()
        .font('Helvetica')
-       .fontSize(50)
-       .fillColor('rgba(30, 58, 138, 0.015)')
+       .fontSize(40)
+       .fillColor('rgba(30, 58, 138, 0.009)')
        .rotate(-45, { origin: [pageWidth/2, pageHeight/2] })
        .text('OFFICIAL RECEIPT', pageWidth/2 - 120, pageHeight/2 - 25)
        .restore();
