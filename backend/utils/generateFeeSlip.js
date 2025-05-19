@@ -345,13 +345,13 @@ const generateFeeSlip = async (student, payment, fees, schoolId, monthYear) => {
        });
     
     // Subtitle
-    doc.font('Helvetica')
-       .fontSize(12)
-       .fillColor(colors.background.light)
-       .text('Official Fee Receipt', textStartX, doc.y + 3, {
-         width: availableWidth,
-         align: logoImage ? 'left' : 'center'
-       });
+    // doc.font('Helvetica')
+    //    .fontSize(10)
+    //    .fillColor('rgba(255, 255, 255, 0.7)')
+    //    .text('Official Fee Receipt', textStartX, doc.y + 3, {
+    //      width: availableWidth,
+    //      align: logoImage ? 'left' : 'center'
+    //    });
 
     // Reset position after header
     doc.y = headerHeight + 20;
@@ -661,9 +661,9 @@ const generateFeeSlip = async (student, payment, fees, schoolId, monthYear) => {
 
     // Add security watermark
     doc.save()
-       .font('Helvetica-Bold')
+       .font('Helvetica')
        .fontSize(50)
-       .fillColor('rgba(30, 58, 138, 0.03)')
+       .fillColor('rgba(30, 58, 138, 0.015)')
        .rotate(-45, { origin: [pageWidth/2, pageHeight/2] })
        .text('OFFICIAL RECEIPT', pageWidth/2 - 120, pageHeight/2 - 25)
        .restore();
