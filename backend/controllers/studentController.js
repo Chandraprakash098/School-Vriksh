@@ -198,40 +198,75 @@ const studentController = {
     }
   },
 
+  // getPaymentMethods: async (req, res) => {
+  //   try {
+  //     const schoolId = req.school._id.toString();
+  //     const ownerConnection = await getOwnerConnection();
+  //     const School = require("../models/School")(ownerConnection);
+
+  //     const school = await School.findById(schoolId).lean();
+  //     if (!school) {
+  //       return res.status(404).json({ message: "School not found" });
+  //     }
+
+  //     const paymentMethods = school.paymentConfig
+  //       .filter(config => config.isActive)
+  //       .map(config => ({
+  //         paymentType: config.paymentType,
+  //         details: {
+  //           bankName: config.details.bankName,
+  //           accountNumber: config.details.accountNumber,
+  //           ifscCode: config.details.ifscCode,
+  //           accountHolderName: config.details.accountHolderName,
+  //           upiId: config.details.upiId,
+  //           // Avoid exposing sensitive keys
+  //           razorpayKeyId: config.paymentType === 'razorpay' ? decrypt(config.details.razorpayKeyId) : undefined,
+  //           stripePublishableKey: config.paymentType === 'stripe' ? decrypt(config.details.stripePublishableKey) : undefined,
+  //           paytmMid: config.paymentType === 'paytm' ? decrypt(config.details.paytmMid) : undefined
+  //         }
+  //       }));
+
+  //     res.json({ paymentMethods });
+  //   } catch (error) {
+  //     logger.error(`Error fetching payment methods: ${error.message}`, { error });
+  //     res.status(500).json({ error: error.message });
+  //   }
+  // },
+
   getPaymentMethods: async (req, res) => {
     try {
-      const schoolId = req.school._id.toString();
-      const ownerConnection = await getOwnerConnection();
-      const School = require("../models/School")(ownerConnection);
+        const schoolId = req.school._id.toString();
+        const ownerConnection = await getOwnerConnection();
+        const School = require("../models/School")(ownerConnection);
 
-      const school = await School.findById(schoolId).lean();
-      if (!school) {
-        return res.status(404).json({ message: "School not found" });
-      }
+        const school = await School.findById(schoolId).lean();
+        if (!school) {
+            return res.status(404).json({ message: "School not found" });
+        }
 
-      const paymentMethods = school.paymentConfig
-        .filter(config => config.isActive)
-        .map(config => ({
-          paymentType: config.paymentType,
-          details: {
-            bankName: config.details.bankName,
-            accountNumber: config.details.accountNumber,
-            ifscCode: config.details.ifscCode,
-            accountHolderName: config.details.accountHolderName,
-            upiId: config.details.upiId,
-            // Avoid exposing sensitive keys
-            razorpayKeyId: config.paymentType === 'razorpay' ? decrypt(config.details.razorpayKeyId) : undefined,
-            stripePublishableKey: config.paymentType === 'stripe' ? decrypt(config.details.stripePublishableKey) : undefined,
-            paytmMid: config.paymentType === 'paytm' ? decrypt(config.details.paytmMid) : undefined
-          }
-        }));
+        const paymentMethods = school.paymentConfig
+            .filter(config => config.isActive)
+            .map(config => ({
+                paymentType: config.paymentType,
+                isActive: config.isActive, // Add isActive field
+                details: {
+                    bankName: config.details?.bankName,
+                    accountNumber: config.details?.accountNumber,
+                    ifscCode: config.details?.ifscCode,
+                    accountHolderName: config.details?.accountHolderName,
+                    upiId: config.details?.upiId,
+                    razorpayKeyId: config.paymentType === 'razorpay' ? decrypt(config.details?.razorpayKeyId) : undefined,
+                    stripePublishableKey: config.paymentType === 'stripe' ? decrypt(config.details?.stripePublishableKey) : undefined,
+                    paytmMid: config.paymentType === 'paytm' ? decrypt(config.details?.paytmMid) : undefined
+                }
+            }));
 
-      res.json({ paymentMethods });
+        res.json({ paymentMethods });
     } catch (error) {
-      logger.error(`Error fetching payment methods: ${error.message}`, { error });
-      res.status(500).json({ error: error.message });
+        logger.error(`Error fetching payment methods: ${error.message}`, { error });
+        res.status(500).json({ error: error.message });
     }
-  },
+},
 
   // payFeesByType: async (req, res) => {
   //   try {
