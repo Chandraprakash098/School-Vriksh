@@ -4739,6 +4739,8 @@ publishIndividualMarksheet: async (req, res) => {
   }
 },
 
+
+
   trackPerformanceMetrics: async (req, res) => {
     try {
       const { classId, examId } = req.params;
@@ -4932,58 +4934,71 @@ const uploadExcelResults = (req, res, next) => {
 
 
 
+// const generateMarksheetPDF = async ({ student, classInfo, examEvent, subjects, exams, schoolInfo }) => {
+//   const doc = new PDFDocument({ size: "A4", margin: 50 });
+//   const buffers = [];
 
-// const generateMarksheetPDF = async ({ student, classInfo, examEvent, subjects, exams }) => {
-//   return new Promise((resolve, reject) => {
-//     const doc = new PDFDocument({ size: "A4", margin: 50 });
-//     const buffers = [];
+//   doc.on("data", buffers.push.bind(buffers));
 
-//     doc.on("data", buffers.push.bind(buffers));
-//     doc.on("end", () => {
-//       const pdfData = Buffer.concat(buffers);
-//       resolve(pdfData);
-//     });
+//   const endPromise = new Promise((resolve, reject) => {
+//     doc.on("end", () => resolve(Buffer.concat(buffers)));
 //     doc.on("error", reject);
+//   });
 
-//     // Header
-//     doc.fontSize(20).text("Marksheet", { align: "center" });
-//     doc.moveDown();
-//     doc.fontSize(12).text(`Student: ${student.name}`, { align: "left" });
-//     doc.text(`GR Number: ${student.studentDetails?.grNumber || "N/A"}`);
-//     doc.text(`Class: ${classInfo.name} - ${classInfo.division}`);
-//     doc.text(`Exam: ${examEvent.examType === "Other" ? examEvent.customExamType : examEvent.examType}`);
-//     doc.moveDown();
+//   // Header with school details
+//   doc.fontSize(16).font("Helvetica-Bold");
+//   doc.text(schoolInfo?.name || "SCHOOL NAME", { align: "center" });
+//   doc.fontSize(10).font("Helvetica");
+//   doc.text(schoolInfo?.address || "School Address", { align: "center" });
+//   doc.moveDown();
 
-//     // Table Header
-//     doc.fontSize(10).font("Helvetica-Bold");
-//     const tableTop = doc.y;
-//     const col1 = 50,
-//           col2 = 200,
-//           col3 = 300,
-//           col4 = 400;
-//     doc.text("Subject", col1, tableTop);
-//     doc.text("Marks Obtained", col2, tableTop);
-//     doc.text("Total Marks", col3, tableTop);
-//     doc.text("Percentage", col4, tableTop);
+//   // Add logo if available
+//   if (schoolInfo?.logo?.url) {
+//     try {
+//       const response = await axios.get(schoolInfo.logo.url, { responseType: 'arraybuffer' });
+//       const logoBuffer = Buffer.from(response.data);
+//       doc.image(logoBuffer, 50, 30, { width: 100, align: 'left' });
+//     } catch (error) {
+//       console.error('Error fetching logo for PDF:', error.message);
+//     }
+//   }
+
+//   doc.moveDown(2);
+//   doc.fontSize(20).font("Helvetica-Bold").text("Marksheet", { align: "center" });
+//   doc.moveDown();
+//   doc.fontSize(12).font("Helvetica");
+//   doc.text(`Student: ${student.name}`, { align: "left" });
+//   doc.text(`GR Number: ${student.studentDetails?.grNumber || "N/A"}`);
+//   doc.text(`Class: ${classInfo.name} - ${classInfo.division || ''}`);
+//   doc.text(`Exam: ${examEvent.examType === "Other" ? examEvent.customExamType : examEvent.examType}`);
+//   doc.moveDown();
+
+//   // Table Header
+//   doc.fontSize(10).font("Helvetica-Bold");
+//   const tableTop = doc.y;
+//   const col1 = 50, col2 = 200, col3 = 300, col4 = 400;
+//   doc.text("Subject", col1, tableTop);
+//   doc.text("Marks Obtained", col2, tableTop);
+//   doc.text("Total Marks", col3, tableTop);
+//   doc.text("Percentage", col4, tableTop);
+//   doc.moveDown(0.5);
+
+//   // Table Rows
+//   doc.font("Helvetica");
+//   let totalObtained = 0, totalPossible = 0;
+//   subjects.forEach((subject) => {
+//     const y = doc.y;
+//     doc.text(subject.name, col1, y);
+//     doc.text(subject.marksObtained.toString(), col2, y);
+//     doc.text(subject.totalMarks.toString(), col3, y);
+//     const percentage = (subject.marksObtained / subject.totalMarks) * 100;
+//     doc.text(`${percentage.toFixed(2)}%`, col4, y);
+//     totalObtained += subject.marksObtained;
+//     totalPossible += subject.totalMarks;
 //     doc.moveDown(0.5);
+//   });
 
-//     // Table Rows
-//     doc.font("Helvetica");
-//     let totalObtained = 0,
-//         totalPossible = 0;
-//     subjects.forEach((subject, index) => {
-//       const y = doc.y;
-//       doc.text(subject.name, col1, y);
-//       doc.text(subject.marksObtained.toString(), col2, y);
-//       doc.text(subject.totalMarks.toString(), col3, y);
-//       const percentage = (subject.marksObtained / subject.totalMarks) * 100;
-//       doc.text(`${percentage.toFixed(2)}%`, col4, y);
-//       totalObtained += subject.marksObtained;
-//       totalPossible += subject.totalMarks;
-//       doc.moveDown(0.5);
-//     });
-
-//     // Summary
+ 
 //     doc.moveDown();
 //     doc.font("Helvetica-Bold");
 //     doc.text(`Total Marks: ${totalObtained} / ${totalPossible}`);
@@ -4991,93 +5006,239 @@ const uploadExcelResults = (req, res, next) => {
 //     doc.text(`Overall Percentage: ${overallPercentage.toFixed(2)}%`);
 //     doc.text(`Grade: ${calculateGrade([{ percentage: overallPercentage }])}`);
 
-//     doc.end();
-//   });
+//   doc.end();
+//   return endPromise;
 // };
 
+
 const generateMarksheetPDF = async ({ student, classInfo, examEvent, subjects, exams, schoolInfo }) => {
-  const doc = new PDFDocument({ size: "A4", margin: 50 });
+  const doc = new PDFDocument({ 
+    size: "A4", 
+    margin: 40,
+    info: {
+      Title: `Marksheet - ${student.name}`,
+      Author: schoolInfo?.name || "School Management System",
+      Subject: `${examEvent.examType === "Other" ? examEvent.customExamType : examEvent.examType} Examination Results`,
+      Keywords: "marksheet, results, examination, academic"
+    }
+  });
+  
   const buffers = [];
-
   doc.on("data", buffers.push.bind(buffers));
-
+  
   const endPromise = new Promise((resolve, reject) => {
     doc.on("end", () => resolve(Buffer.concat(buffers)));
     doc.on("error", reject);
   });
 
-  // Header with school details
-  doc.fontSize(16).font("Helvetica-Bold");
-  doc.text(schoolInfo?.name || "SCHOOL NAME", { align: "center" });
-  doc.fontSize(10).font("Helvetica");
-  doc.text(schoolInfo?.address || "School Address", { align: "center" });
-  doc.moveDown();
-
-  // Add logo if available
-  if (schoolInfo?.logo?.url) {
-    try {
-      const response = await axios.get(schoolInfo.logo.url, { responseType: 'arraybuffer' });
-      const logoBuffer = Buffer.from(response.data);
-      doc.image(logoBuffer, 50, 30, { width: 100, align: 'left' });
-    } catch (error) {
-      console.error('Error fetching logo for PDF:', error.message);
+  // Define colors and styling
+  const primaryColor = "#1a237e"; // Dark blue
+  const secondaryColor = "#311b92"; // Deep purple
+  const accentColor = "#0d47a1"; // Blue
+  const borderColor = "#c5cae9"; // Light blue-gray
+  
+  // Define reusable drawing functions
+  const drawLine = (y, fromX = 40, toX = 555) => {
+    doc.strokeColor(borderColor).lineWidth(1)
+      .moveTo(fromX, y).lineTo(toX, y).stroke();
+  };
+  
+  const drawRect = (x, y, width, height, color = borderColor, fill = false) => {
+    if (fill) {
+      doc.fillColor(color).rect(x, y, width, height).fill();
+    } else {
+      doc.strokeColor(color).lineWidth(1).rect(x, y, width, height).stroke();
     }
+  };
+
+  // Create a header with school logo and details
+  try {
+    if (schoolInfo?.logo?.url) {
+      try {
+        const response = await axios.get(schoolInfo.logo.url, { responseType: 'arraybuffer' });
+        const logoBuffer = Buffer.from(response.data);
+        doc.image(logoBuffer, 40, 40, { width: 70, height: 70 });
+      } catch (error) {
+        console.error('Error fetching school logo:', error.message);
+      }
+    }
+  } catch (error) {
+    console.error('Error processing school logo:', error.message);
   }
 
-  doc.moveDown(2);
-  doc.fontSize(20).font("Helvetica-Bold").text("Marksheet", { align: "center" });
-  doc.moveDown();
+  // School header
+  doc.fontSize(20).font("Helvetica-Bold").fillColor(primaryColor);
+  doc.text(schoolInfo?.name?.toUpperCase() || "SCHOOL NAME", 120, 45, { width: 400, align: "center" });
+  
   doc.fontSize(12).font("Helvetica");
-  doc.text(`Student: ${student.name}`, { align: "left" });
-  doc.text(`GR Number: ${student.studentDetails?.grNumber || "N/A"}`);
-  doc.text(`Class: ${classInfo.name} - ${classInfo.division || ''}`);
-  doc.text(`Exam: ${examEvent.examType === "Other" ? examEvent.customExamType : examEvent.examType}`);
-  doc.moveDown();
-
-  // Table Header
+  doc.text(schoolInfo?.address || "School Address", 120, 70, { width: 400, align: "center" });
+  
+  doc.fontSize(9).font("Helvetica-Oblique").fillColor("#666666");
+  doc.text("Excellence in Education", 120, 85, { width: 400, align: "center" });
+  
+  // Draw horizontal line below header
+  drawLine(110);
+  
+  // Marksheet title
+  doc.fontSize(16).font("Helvetica-Bold").fillColor(secondaryColor);
+  doc.text("STATEMENT OF MARKS", 40, 125, { width: 515, align: "center" });
+  
+  doc.fontSize(12).font("Helvetica-Bold").fillColor(accentColor);
+  doc.text(`${examEvent.examType === "Other" ? examEvent.customExamType : examEvent.examType} EXAMINATION ${new Date().getFullYear()}`, 40, 145, { width: 515, align: "center" });
+  
+  // Student and exam information box
+  drawRect(40, 170, 515, 95, primaryColor);
+  
+  // Left column - Student info
+  doc.fontSize(10).font("Helvetica-Bold").fillColor("#000000");
+  doc.text("Student Name:", 50, 180);
+  doc.text("GR Number:", 50, 200);
+  doc.text("Class & Division:", 50, 220);
+  doc.text("Academic Year:", 50, 240);
+  
+  doc.fontSize(10).font("Helvetica");
+  doc.text(student.name, 150, 180, { width: 150 });
+  doc.text(student.studentDetails?.grNumber || "N/A", 150, 200);
+  doc.text(`${classInfo.name}${classInfo.division ? ' - ' + classInfo.division : ''}`, 150, 220);
+  doc.text(`${new Date().getFullYear() - 1}-${new Date().getFullYear()}`, 150, 240);
+  
+  // Right column - Exam info
   doc.fontSize(10).font("Helvetica-Bold");
-  const tableTop = doc.y;
-  const col1 = 50, col2 = 200, col3 = 300, col4 = 400;
-  doc.text("Subject", col1, tableTop);
-  doc.text("Marks Obtained", col2, tableTop);
-  doc.text("Total Marks", col3, tableTop);
-  doc.text("Percentage", col4, tableTop);
-  doc.moveDown(0.5);
-
-  // Table Rows
-  doc.font("Helvetica");
-  let totalObtained = 0, totalPossible = 0;
-  subjects.forEach((subject) => {
-    const y = doc.y;
-    doc.text(subject.name, col1, y);
-    doc.text(subject.marksObtained.toString(), col2, y);
-    doc.text(subject.totalMarks.toString(), col3, y);
+  doc.text("Exam:", 320, 180);
+  doc.text("Exam Date:", 320, 200);
+  doc.text("Roll Number:", 320, 220);
+  doc.text("Date of Birth:", 320, 240);
+  
+  doc.fontSize(10).font("Helvetica");
+  doc.text(examEvent.examType === "Other" ? examEvent.customExamType : examEvent.examType, 410, 180);
+  doc.text(examEvent.startDate ? new Date(examEvent.startDate).toLocaleDateString() : "N/A", 410, 200);
+  doc.text(student.studentDetails?.rollNumber || "N/A", 410, 220);
+  doc.text(student.studentDetails?.dateOfBirth ? new Date(student.studentDetails.dateOfBirth).toLocaleDateString() : "N/A", 410, 240);
+  
+  // Results table
+  const tableTop = 290;
+  const tableWidth = 515;
+  const colWidths = [200, 100, 100, 115];
+  const rowHeight = 25;
+  
+  // Table header
+  drawRect(40, tableTop, tableWidth, rowHeight, primaryColor);
+  doc.fillColor("#FFFFFF").fontSize(10).font("Helvetica-Bold");
+  
+  let currentX = 50;
+  ["SUBJECT", "MARKS OBTAINED", "TOTAL MARKS", "PERCENTAGE"].forEach((header, i) => {
+    doc.text(header, currentX, tableTop + 8, { width: colWidths[i], align: "center" });
+    currentX += colWidths[i];
+  });
+  
+  // Table rows
+  let currentY = tableTop + rowHeight;
+  let totalObtained = 0;
+  let totalPossible = 0;
+  
+  subjects.forEach((subject, index) => {
+    const isAlternateRow = index % 2 === 0;
+    
+    if (isAlternateRow) {
+      drawRect(40, currentY, tableWidth, rowHeight, borderColor, true);
+      doc.fillColor("#FFFFFF");
+    } else {
+      drawRect(40, currentY, tableWidth, rowHeight, borderColor);
+      doc.fillColor("#000000");
+    }
+    
     const percentage = (subject.marksObtained / subject.totalMarks) * 100;
-    doc.text(`${percentage.toFixed(2)}%`, col4, y);
+    doc.fontSize(9).font("Helvetica");
+    
+    // Subject name
+    doc.text(subject.name, 50, currentY + 8, { width: colWidths[0] - 10 });
+    
+    // Marks obtained - right aligned
+    doc.text(subject.marksObtained.toString(), 240, currentY + 8, { width: colWidths[1] - 10, align: "center" });
+    
+    // Total marks - right aligned
+    doc.text(subject.totalMarks.toString(), 340, currentY + 8, { width: colWidths[2] - 10, align: "center" });
+    
+    // Percentage - right aligned
+    doc.text(`${percentage.toFixed(2)}%`, 440, currentY + 8, { width: colWidths[3] - 10, align: "center" });
+    
     totalObtained += subject.marksObtained;
     totalPossible += subject.totalMarks;
-    doc.moveDown(0.5);
+    currentY += rowHeight;
   });
-
-  // Summary
-  // doc.moveDown();
-  // doc.font("Helvetica-Bold");
-  // doc.text(`Total Marks: ${totalObtained} / ${totalPossible}`);
-  // const overallPercentage = totalPossible ? (totalObtained / totalPossible) * 100 : 0;
-  // doc.text(`Overall Percentage: ${overallPercentage.toFixed(2)}%`);
-  // doc.text(`Grade: ${calculateGrade(overallPercentage)}`);
-
-  //     // Summary
-    doc.moveDown();
-    doc.font("Helvetica-Bold");
-    doc.text(`Total Marks: ${totalObtained} / ${totalPossible}`);
-    const overallPercentage = totalPossible ? (totalObtained / totalPossible) * 100 : 0;
-    doc.text(`Overall Percentage: ${overallPercentage.toFixed(2)}%`);
-    doc.text(`Grade: ${calculateGrade([{ percentage: overallPercentage }])}`);
-
+  
+  // Results summary
+  drawRect(40, currentY, tableWidth, rowHeight, primaryColor);
+  doc.fillColor("#FFFFFF").fontSize(10).font("Helvetica-Bold");
+  doc.text("TOTAL", 50, currentY + 8);
+  doc.text(totalObtained.toString(), 240, currentY + 8, { width: colWidths[1] - 10, align: "center" });
+  doc.text(totalPossible.toString(), 340, currentY + 8, { width: colWidths[2] - 10, align: "center" });
+  
+  const overallPercentage = totalPossible ? (totalObtained / totalPossible) * 100 : 0;
+  doc.text(`${overallPercentage.toFixed(2)}%`, 440, currentY + 8, { width: colWidths[3] - 10, align: "center" });
+  
+  currentY += rowHeight + 20;
+  
+  // Final results
+  const grade = calculateGrade(overallPercentage);
+  const result = overallPercentage >= 40 ? "PASS" : "FAIL";
+  
+  doc.fontSize(12).font("Helvetica-Bold").fillColor(primaryColor);
+  doc.text("FINAL RESULT", 40, currentY, { underline: true });
+  
+  currentY += 20;
+  doc.fontSize(10).font("Helvetica-Bold").fillColor("#000000");
+  
+  // Create a 3-column layout for the summary
+  doc.text("Percentage:", 40, currentY);
+  doc.text(`${overallPercentage.toFixed(2)}%`, 140, currentY);
+  
+  doc.text("Grade:", 220, currentY);
+  doc.text(grade, 320, currentY);
+  
+  doc.text("Result:", 400, currentY);
+  doc.fillColor(result === "PASS" ? "#006400" : "#8B0000");
+  doc.text(result, 460, currentY);
+  
+  currentY += 50;
+  
+  // Signature section
+  doc.fontSize(9).font("Helvetica").fillColor("#000000");
+  doc.text("Class Teacher", 50, currentY, { width: 100, align: "center" });
+  doc.text("Examination Controller", 230, currentY, { width: 130, align: "center" });
+  doc.text("Principal", 440, currentY, { width: 100, align: "center" });
+  
+  currentY -= 5;
+  drawLine(currentY, 50, 150);
+  drawLine(currentY, 230, 360);
+  drawLine(currentY, 440, 540);
+  
+  // Footer
+  doc.fontSize(8).font("Helvetica-Oblique").fillColor("#666666");
+  const footerText = `This marksheet is electronically generated on ${new Date().toLocaleDateString()} and requires no signature.`;
+  doc.text(footerText, 40, 780, { width: 515, align: "center" });
+  
+  doc.fontSize(7).font("Helvetica");
+  doc.text(`School Management System | ${schoolInfo?.name || "School Name"}`, 40, 795, { width: 515, align: "center" });
+  
+  // Add watermark
+  doc.saveGraphicsState()
+    .translate(doc.page.width / 2, doc.page.height / 2)
+    .rotate(-Math.PI / 4)
+    .fontSize(60)
+    .fillColor("rgba(200, 200, 200, 0.3)")
+    .text(schoolInfo?.name || "SCHOOL NAME", 0, 0, { 
+      origin: [0, 0],
+      align: "center"
+    })
+    .restoreGraphicsState();
+  
   doc.end();
   return endPromise;
 };
+
+
+
 
 
 const getDefaultPermissions = (role) => {
@@ -5388,8 +5549,8 @@ const calculateGrade = (results) => {
   if (percentage >= 80) return "A";
   if (percentage >= 70) return "B+";
   if (percentage >= 60) return "B";
-  if (percentage >= 50) return "C+";
-  if (percentage >= 40) return "C";
+  if (percentage >= 50) return "C";
+  if (percentage >= 40) return "D";
   return "F";
 };
 

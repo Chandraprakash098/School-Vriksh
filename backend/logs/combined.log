@@ -1072,3 +1072,18 @@
 {"level":"info","message":"Audit log created: PAY_FEES - Processed payment for student whose grNumber is 1 of amount ₹400 via cash","timestamp":"2025-05-17T10:44:12.166Z"}
 {"level":"info","message":"Payment confirmation email sent to chandra.ece89@gmail.com","timestamp":"2025-05-17T10:44:17.649Z"}
 {"level":"info","message":"Payment processed for student 1: 400 via cash","timestamp":"2025-05-17T10:44:17.651Z"}
+{"count":27,"level":"info","message":"Retrieved pending payments","schoolId":"6822d8d81267a79341641261","timestamp":"2025-05-20T11:04:23.137Z"}
+{"level":"info","message":"getFeeTypes called for parent 6822dd97f0aacc87bdd67cc5, childId: 6822dd97f0aacc87bdd67cc2, month: undefined, year: undefined","timestamp":"2025-05-21T04:54:16.258Z"}
+{"level":"info","message":"getFeeTypes called for parent 6822dd97f0aacc87bdd67cc5, childId: 6822dd97f0aacc87bdd67cc2, month: 5, year: 2025","timestamp":"2025-05-21T04:54:34.244Z"}
+{"level":"info","message":"Fee receipts fetched for child 6822dd97f0aacc87bdd67cc2","timestamp":"2025-05-21T04:55:33.098Z"}
+{"level":"info","message":"RTE check for student 6822dd97f0aacc87bdd67cc2: false","timestamp":"2025-05-21T04:56:03.467Z"}
+{"level":"info","message":"Fee status fetched for child 6822dd97f0aacc87bdd67cc2","timestamp":"2025-05-21T04:56:03.796Z"}
+{"error":{},"level":"error","message":"Error fetching study materials: connection.model is not a function","timestamp":"2025-05-21T04:56:46.021Z"}
+{"level":"info","message":"Homework fetched for child 6822dd97f0aacc87bdd67cc2","timestamp":"2025-05-21T04:57:57.932Z"}
+{"error":{},"level":"error","message":"Error fetching syllabus: connection.model is not a function","timestamp":"2025-05-21T05:00:04.622Z"}
+{"error":{},"level":"error","message":"Error fetching marksheets: User.findById is not a function","timestamp":"2025-05-21T05:00:21.924Z"}
+{"level":"info","message":"Marksheets fetched for child 6822dd97f0aacc87bdd67cc2","timestamp":"2025-05-21T05:01:55.327Z"}
+{"level":"info","message":"Certificates fetched for child 6822dd97f0aacc87bdd67cc2","timestamp":"2025-05-21T05:02:47.839Z"}
+{"level":"warn","message":"S3 upload attempt 1 failed for signatures/6822d8d81267a79341641261/users/6822d8da1267a7934164126a_1747810551489.jpeg: Cannot read properties of undefined (reading 'stream')","timestamp":"2025-05-21T06:55:51.491Z"}
+{"level":"warn","message":"S3 upload attempt 2 failed for signatures/6822d8d81267a79341641261/users/6822d8da1267a7934164126a_1747810551489.jpeg: Cannot read properties of undefined (reading 'stream')","timestamp":"2025-05-21T06:55:52.500Z"}
+{"level":"warn","message":"S3 upload attempt 3 failed for signatures/6822d8d81267a79341641261/users/6822d8da1267a7934164126a_1747810551489.jpeg: Cannot read properties of undefined (reading 'stream')","timestamp":"2025-05-21T06:55:54.502Z"}

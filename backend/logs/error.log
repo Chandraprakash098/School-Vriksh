@@ -190,3 +190,6 @@
 {"error":{},"level":"error","message":"Error fetching fee slip data: generateFeeSlip is not defined","timestamp":"2025-05-17T05:07:17.582Z"}
 {"error":{},"level":"error","message":"Error fetching fee slip data: Schema hasn't been registered for model \"Class\".\nUse mongoose.model(name, schema)","timestamp":"2025-05-17T06:50:46.896Z"}
 {"error":{},"level":"error","message":"Error fetching fee slip data: Schema hasn't been registered for model \"Class\".\nUse mongoose.model(name, schema)","timestamp":"2025-05-17T06:53:47.202Z"}
+{"error":{},"level":"error","message":"Error fetching study materials: connection.model is not a function","timestamp":"2025-05-21T04:56:46.021Z"}
+{"error":{},"level":"error","message":"Error fetching syllabus: connection.model is not a function","timestamp":"2025-05-21T05:00:04.622Z"}
+{"error":{},"level":"error","message":"Error fetching marksheets: User.findById is not a function","timestamp":"2025-05-21T05:00:21.924Z"}

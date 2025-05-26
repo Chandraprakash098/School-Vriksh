@@ -99,6 +99,7 @@ const userSchema = new mongoose.Schema(
       address: String,
       photo: String,
     },
+    
     permissions: {
       canTakeAttendance: [
         { type: mongoose.Schema.Types.ObjectId, ref: "Class" },
