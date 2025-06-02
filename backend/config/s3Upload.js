@@ -33,7 +33,24 @@ const upload = multer({
   },
 });
 
-
+// Book cover upload configuration (using memory storage for direct S3 upload)
+const uploadBookCover = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+  fileFilter: (req, file, cb) => {
+    logger.info('Processing book cover upload', {
+      fieldname: file.fieldname,
+      originalname: file.originalname,
+      mimetype: file.mimetype,
+    });
+    const allowedTypes = ["image/jpeg", "image/png", "image/jpg"];
+    if (allowedTypes.includes(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error("Only JPEG, PNG, and JPG files are allowed for book covers"), false);
+    }
+  },
+}).single('cover');
 
 
 const admissionStorage = multerS3({
@@ -319,6 +336,6 @@ const streamS3Object = async (key, res) => {
   }
 };
 
-module.exports = { uploadDocuments, certificateUpload, uploadToS3, deleteFromS3, streamS3Object, s3: s3Client,uploadStudyMaterial,getPublicFileUrl,uploadSyllabus,uploadExcelResults};
+module.exports = { upload,uploadBookCover,uploadDocuments, certificateUpload, uploadToS3, deleteFromS3, streamS3Object, s3: s3Client,uploadStudyMaterial,getPublicFileUrl,uploadSyllabus,uploadExcelResults};
 
 

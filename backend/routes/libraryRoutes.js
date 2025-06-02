@@ -1,26 +1,47 @@
+// const express = require('express');
+// const router = express.Router();
+// const libraryController = require('../controllers/libraryController');
+// const auth = require('../middleware/auth');
+// const roleCheck = require('../middleware/roleCheck');
+// const schoolCheck = require('../middleware/schoolCheck');
+
+// router.post(
+//   '/:schoolId/books',
+//   [auth, roleCheck(['librarian', 'admin']), schoolCheck],
+//   libraryController.addBook
+// );
+
+// router.post(
+//   '/:schoolId/books/:bookId/issue/:userId',
+//   [auth, roleCheck(['librarian']), schoolCheck],
+//   libraryController.issueBook
+// );
+
+// router.put(
+//   '/issue/:issueId/return',
+//   [auth, roleCheck(['librarian']), schoolCheck],
+//   libraryController.returnBook
+// );
+
+// module.exports = router;
+
+
 const express = require('express');
 const router = express.Router();
 const libraryController = require('../controllers/libraryController');
-const auth = require('../middleware/auth');
-const roleCheck = require('../middleware/roleCheck');
-const schoolCheck = require('../middleware/schoolCheck');
+const authMiddleware = require("../middleware/auth");
+const { uploadBookCover } = require('../config/s3Upload'); // Use the upload middleware from s3Upload
 
-router.post(
-  '/:schoolId/books',
-  [auth, roleCheck(['librarian', 'admin']), schoolCheck],
-  libraryController.addBook
-);
-
-router.post(
-  '/:schoolId/books/:bookId/issue/:userId',
-  [auth, roleCheck(['librarian']), schoolCheck],
-  libraryController.issueBook
-);
-
-router.put(
-  '/issue/:issueId/return',
-  [auth, roleCheck(['librarian']), schoolCheck],
-  libraryController.returnBook
-);
-
+// Library routes (accessible to librarians with canManageLibrary permission)
+router.post('/books', authMiddleware, libraryController.addBook);
+router.put('/books/:bookId', authMiddleware, libraryController.updateBook);
+router.delete('/books/:bookId', authMiddleware, libraryController.deleteBook);
+router.get('/requests', authMiddleware, libraryController.getBookIssueRequests);
+router.post('/books/:bookId/issue/:studentId', authMiddleware, libraryController.issueBook);
+router.post('/books/return/:issueId', authMiddleware, libraryController.returnBook);
+router.get('/stats', authMiddleware, libraryController.getLibraryStats);
+router.get('/search', authMiddleware, libraryController.searchBooks);
+router.get('/overdue', authMiddleware, libraryController.getOverdueBooks);
+router.post('/books/:bookId/cover', authMiddleware, uploadBookCover , libraryController.uploadBookCover);
+router.post('/update-overdue', authMiddleware, libraryController.updateOverdueStatus);
 module.exports = router;

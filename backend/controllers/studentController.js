@@ -2,6 +2,7 @@ const mongoose = require("mongoose");
 const Razorpay = require("razorpay");
 const PaytmChecksum = require('paytmchecksum');
 const Stripe = require('stripe');
+const { calculateFine } = require('../utils/fineCalculator');
 const Crypto= require('crypto');
 const axios= require('axios');
 const Fee = require("../models/Fee");
@@ -2375,55 +2376,136 @@ else if (selectedPaymentType === 'paytm') {
     }
   },
 
-  getLibraryServices: async (req, res) => {
-    try {
-      const { studentId } = req.params;
-      const schoolId = req.school._id.toString();
-      const connection = req.connection;
-      const Library = require("../models/Library")(connection).Library;
-      const BookIssue = require("../models/Library")(connection).BookIssue;
+  // getLibraryServices: async (req, res) => {
+  //   try {
+  //     const { studentId } = req.params;
+  //     const schoolId = req.school._id.toString();
+  //     const connection = req.connection;
+  //     const Library = require("../models/Library")(connection).Library;
+  //     const BookIssue = require("../models/Library")(connection).BookIssue;
 
-      if (!mongoose.Types.ObjectId.isValid(studentId)) {
-        return res.status(400).json({ message: "Invalid student ID" });
-      }
+  //     if (!mongoose.Types.ObjectId.isValid(studentId)) {
+  //       return res.status(400).json({ message: "Invalid student ID" });
+  //     }
 
-      const issuedBooks = await BookIssue.find({
-        user: studentId,
-        school: schoolId,
-        status: { $in: ["issued", "overdue"] },
-      }).populate("book", "", Library);
+  //     const issuedBooks = await BookIssue.find({
+  //       user: studentId,
+  //       school: schoolId,
+  //       status: { $in: ["issued", "overdue"] },
+  //     }).populate("book", "", Library);
 
-      const availableBooks = await Library.find({
-        school: schoolId,
-        status: "available",
-      }).select("bookTitle author category");
+  //     const availableBooks = await Library.find({
+  //       school: schoolId,
+  //       status: "available",
+  //     }).select("bookTitle author category");
 
-      const booksWithFine = issuedBooks.map((issue) => {
-        const dueDate = new Date(issue.dueDate);
-        const today = new Date();
-        let fine = 0;
-        let daysOverdue = 0;
-        if (dueDate < today) {
-          daysOverdue = Math.ceil((today - dueDate) / (1000 * 60 * 60 * 24));
-          fine = daysOverdue * 5; // ₹5 per day
-        }
-        return { ...issue.toObject(), fine, daysOverdue };
-      });
+  //     const booksWithFine = issuedBooks.map((issue) => {
+  //       const dueDate = new Date(issue.dueDate);
+  //       const today = new Date();
+  //       let fine = 0;
+  //       let daysOverdue = 0;
+  //       if (dueDate < today) {
+  //         daysOverdue = Math.ceil((today - dueDate) / (1000 * 60 * 60 * 24));
+  //         fine = daysOverdue * 5; // ₹5 per day
+  //       }
+  //       return { ...issue.toObject(), fine, daysOverdue };
+  //     });
 
-      logger.info(`Library services fetched for student ${studentId}`);
-      res.json({
-        issuedBooks: booksWithFine,
-        availableBooks,
-        totalFine: booksWithFine.reduce((sum, book) => sum + book.fine, 0),
-      });
-    } catch (error) {
-      logger.error(`Error fetching library services: ${error.message}`, {
-        error,
-      });
-      res.status(500).json({ error: error.message });
+  //     logger.info(`Library services fetched for student ${studentId}`);
+  //     res.json({
+  //       issuedBooks: booksWithFine,
+  //       availableBooks,
+  //       totalFine: booksWithFine.reduce((sum, book) => sum + book.fine, 0),
+  //     });
+  //   } catch (error) {
+  //     logger.error(`Error fetching library services: ${error.message}`, {
+  //       error,
+  //     });
+  //     res.status(500).json({ error: error.message });
+  //   }
+  // },
+
+
+
+getLibraryServices : async (req, res) => {
+  try {
+    const { studentId } = req.params;
+    const schoolId = req.school._id.toString();
+    const connection = req.connection;
+    const Library = require("../models/Library")(connection).Library;
+    const BookIssue = require("../models/Library")(connection).BookIssue;
+    const User = require("../models/User")(connection);
+
+    // Validate student ID
+    if (!mongoose.Types.ObjectId.isValid(studentId)) {
+      logger.error(`Invalid student ID: ${studentId}`);
+      return res.status(400).json({ message: `Invalid student ID: ${studentId}` });
     }
-  },
 
+    // Ensure student is authorized
+    if (studentId !== req.user._id.toString()) {
+      logger.warn(`Unauthorized access attempt for student ${studentId} by user ${req.user._id}`);
+      return res.status(403).json({
+        message: "Unauthorized: You can only access your own library services",
+      });
+    }
+
+    // Verify student exists
+    const student = await User.findById(studentId).select('role school');
+    if (!student || student.role !== 'student' || student.school.toString() !== schoolId) {
+      logger.error(`Student not found or invalid: ${studentId}`);
+      return res.status(404).json({ message: `Student with ID ${studentId} not found` });
+    }
+
+    // Fetch issued books for the student
+    const issuedBooks = await BookIssue.find({
+      user: studentId,
+      school: schoolId,
+      status: { $in: ["issued", "overdue"] },
+    }).populate("book", "bookTitle author category isbn");
+
+    // Fetch available books
+    const availableBooks = await Library.find({
+      school: schoolId,
+      status: "available",
+    }).select("bookTitle author category isbn");
+
+    // Calculate fines for issued books
+    const booksWithFine = issuedBooks.map((issue) => {
+      const fine = issue.fine || calculateFine(issue.dueDate); // Use stored fine or calculate
+      const daysOverdue = issue.dueDate < new Date()
+        ? Math.ceil((new Date() - issue.dueDate) / (1000 * 60 * 60 * 24))
+        : 0;
+      return {
+        ...issue.toObject(),
+        fine,
+        daysOverdue,
+      };
+    });
+
+    // Calculate total fine
+    const totalFine = booksWithFine.reduce((sum, book) => sum + book.fine, 0);
+
+    logger.info(`Library services fetched successfully for student ${studentId}`, {
+      issuedBooksCount: booksWithFine.length,
+      availableBooksCount: availableBooks.length,
+      totalFine,
+    });
+
+    res.json({
+      issuedBooks: booksWithFine,
+      availableBooks,
+      totalFine,
+    });
+  } catch (error) {
+    const errorStudentId = req.params.studentId || 'unknown'; // Fallback if studentId is undefined
+    logger.error(`Error fetching library services for student ${errorStudentId}: ${error.message}`, {
+      error: error.stack,
+    });
+    res.status(500).json({ error: `Failed to fetch library services: ${error.message}` });
+  }
+},
+  
   getTransportationDetails: async (req, res) => {
     try {
       const { studentId } = req.params;

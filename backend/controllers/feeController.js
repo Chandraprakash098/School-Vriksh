@@ -3124,218 +3124,435 @@ verifyPayment : async (req, res) => {
     }
   },
 
+  // getStudentFeeHistory: async (req, res) => {
+  //   try {
+  //     const { grNumber } = req.params;
+  //     const schoolId = req.school._id.toString();
+  //     const connection = req.connection;
+  //     const UserModel = require("../models/User")(connection);
+  //     const FeeModel = require("../models/Fee")(connection);
+  //     const PaymentModel = require("../models/Payment")(connection);
+  //     const ClassModel = require("../models/Class")(connection);
+
+  //     const student = await UserModel.findOne({
+  //       "studentDetails.grNumber": grNumber,
+  //       school: schoolId,
+  //     })
+  //       .select(
+  //         "_id name studentDetails.grNumber studentDetails.class studentDetails.transportDetails studentDetails.isRTE"
+  //       )
+  //       .populate("studentDetails.class", "name division");
+
+  //     if (!student) {
+  //       return res.status(404).json({ message: "Student not found" });
+  //     }
+
+  //     const feeDefinitions = await FeeModel.find({
+  //       school: schoolId,
+  //       classes: student.studentDetails.class._id,
+  //       $or: [{ student: null }, { student: student._id }],
+  //     }).lean();
+
+  //     const payments = await PaymentModel.find({
+  //       school: schoolId,
+  //       student: student._id,
+  //       status: "completed",
+  //     }).lean();
+
+  //     // Create a map to store fees by month-year, ensuring no duplicate fee types per month
+  //     const feeMap = new Map();
+  //     const feeTypesByMonth = new Map();
+
+  //     feeDefinitions.forEach((fee) => {
+  //       // Skip fees for other students
+  //       if (fee.student && fee.student.toString() !== student._id.toString())
+  //         return;
+
+  //       // Skip transportation fees that don't apply to this student
+  //       if (
+  //         fee.type === "transportation" &&
+  //         (!student.studentDetails.transportDetails?.isApplicable ||
+  //           (fee.transportationDetails?.distanceSlab &&
+  //             fee.transportationDetails.distanceSlab !==
+  //               student.studentDetails.transportDetails?.distanceSlab))
+  //       ) {
+  //         return;
+  //       }
+
+  //       const key = `${fee.month}-${fee.year}`;
+  //       const typeKey = `${key}_${fee.type}_${
+  //         fee.transportationDetails?.distanceSlab || ""
+  //       }`;
+
+  //       // Check if we already have this fee type for this month
+  //       if (feeTypesByMonth.has(typeKey)) {
+  //         const existingFee = feeTypesByMonth.get(typeKey);
+
+  //         // Prioritize student-specific fees over general class fees
+  //         if (!fee.student && existingFee.student) {
+  //           // Skip this fee - keep existing student-specific fee
+  //           return;
+  //         }
+
+  //         // If current fee is student-specific and existing is general, replace it
+  //         if (fee.student && !existingFee.student) {
+  //           // Remove existing fee from the month's array
+  //           const monthFees = feeMap.get(key);
+  //           const updatedFees = monthFees.filter((f) => f !== existingFee);
+  //           feeMap.set(key, updatedFees);
+  //         } else {
+  //           // Both fees are the same type (both general or both specific) - skip duplicate
+  //           return;
+  //         }
+  //       }
+
+  //       // Initialize the month's fee array if needed
+  //       if (!feeMap.has(key)) feeMap.set(key, []);
+
+  //       // Add this fee to the month and record it in our type tracker
+  //       feeMap.get(key).push(fee);
+  //       feeTypesByMonth.set(typeKey, fee);
+  //     });
+
+  //     // Create a map to store payment information by fee type, month, and year
+  //     const paymentMap = new Map();
+  //     payments.forEach((payment) => {
+  //       payment.feesPaid.forEach((feePaid) => {
+  //         const key = `${feePaid.type}_${feePaid.month}_${feePaid.year}_${
+  //           feePaid.transportationSlab || ""
+  //         }`;
+  //         // Ensure no duplicate counting by overwriting with the latest payment
+  //         paymentMap.set(key, {
+  //           amount: feePaid.amount,
+  //           date: payment.paymentDate,
+  //           transactionId:
+  //             payment.transactionId || `CASH-${payment.receiptNumber}`,
+  //           paymentMethod: payment.paymentMethod,
+  //           receiptNumber: payment.receiptNumber,
+  //         });
+  //       });
+  //     });
+
+  //     // Process fees and generate the response structure
+  //     const feeData = {};
+  //     for (const [monthYear, fees] of feeMap.entries()) {
+  //       const [month, year] = monthYear.split("-").map(Number);
+
+  //       // Initialize the month's total counters
+  //       feeData[monthYear] = {
+  //         total: 0,
+  //         totalPaid: 0,
+  //         totalPending: 0,
+  //         fees: {},
+  //       };
+
+  //       // Process each fee for this month
+  //       fees.forEach((fee) => {
+  //         const paymentKey = `${fee.type}_${fee.month}_${fee.year}_${
+  //           fee.transportationDetails?.distanceSlab || ""
+  //         }`;
+  //         const paymentInfo = paymentMap.get(paymentKey) || {
+  //           amount: 0,
+  //           date: null,
+  //           transactionId: null,
+  //           paymentMethod: null,
+  //           receiptNumber: null,
+  //         };
+
+  //         const paidAmount = paymentInfo.amount;
+  //         const remainingAmount = Math.max(0, fee.amount - paidAmount);
+  //         let status = "pending";
+
+  //         // Determine payment status
+  //         if (paidAmount >= fee.amount) {
+  //           status = "paid";
+  //         } else if (paidAmount > 0) {
+  //           status = "partially_paid";
+  //         }
+
+  //         // Add this fee to the month's data
+  //         feeData[monthYear].fees[fee.type] = {
+  //           amount: fee.amount,
+  //           paidAmount: paidAmount,
+  //           remainingAmount: remainingAmount,
+  //           dueDate: fee.dueDate,
+  //           description: fee.description,
+  //           status: status,
+  //           ...(paymentInfo.amount > 0 && {
+  //             paymentDetails: {
+  //               transactionId: paymentInfo.transactionId,
+  //               paymentDate: paymentInfo.date,
+  //               paymentMethod: paymentInfo.paymentMethod,
+  //               receiptNumber: paymentInfo.receiptNumber,
+  //               amount: paymentInfo.amount,
+  //             },
+  //           }),
+  //           ...(fee.transportationDetails?.distanceSlab && {
+  //             transportationSlab: fee.transportationDetails.distanceSlab,
+  //           }),
+  //         };
+
+  //         // Update the month's totals
+  //         feeData[monthYear].total += fee.amount;
+  //         feeData[monthYear].totalPaid += paidAmount;
+  //         feeData[monthYear].totalPending += remainingAmount;
+  //       });
+  //     }
+
+  //     // Prepare the final response object
+  //     const response = {
+  //       student: {
+  //         _id: student._id,
+  //         name: student.name,
+  //         grNumber: student.studentDetails.grNumber,
+  //         class: student.studentDetails.class
+  //           ? {
+  //               _id: student.studentDetails.class._id,
+  //               name: student.studentDetails.class.name,
+  //               division: student.studentDetails.class.division,
+  //             }
+  //           : null,
+  //         transportDetails: student.studentDetails.transportDetails || null,
+  //         isRTE: student.studentDetails.isRTE || false,
+  //       },
+  //       feeData,
+  //     };
+
+  //     // Log this action
+  //     await logFeeAction(
+  //       connection,
+  //       schoolId,
+  //       req.user._id,
+  //       "VIEW_STUDENT_FEE_HISTORY",
+  //       `Viewed fee history for student with grNumber ${grNumber}`,
+  //       { grNumber }
+  //     );
+
+  //     res.json(response);
+  //   } catch (error) {
+  //     logger.error(`Error fetching student fee history: ${error.message}`, {
+  //       error,
+  //     });
+  //     res.status(500).json({ error: error.message });
+  //   }
+  // },
+
+
   getStudentFeeHistory: async (req, res) => {
-    try {
-      const { grNumber } = req.params;
-      const schoolId = req.school._id.toString();
-      const connection = req.connection;
-      const UserModel = require("../models/User")(connection);
-      const FeeModel = require("../models/Fee")(connection);
-      const PaymentModel = require("../models/Payment")(connection);
-      const ClassModel = require("../models/Class")(connection);
+  try {
+    const { grNumber } = req.params;
+    const schoolId = req.school._id.toString();
+    const connection = req.connection;
+    const UserModel = require("../models/User")(connection);
+    const FeeModel = require("../models/Fee")(connection);
+    const PaymentModel = require("../models/Payment")(connection);
+    const ClassModel = require("../models/Class")(connection);
 
-      const student = await UserModel.findOne({
-        "studentDetails.grNumber": grNumber,
-        school: schoolId,
-      })
-        .select(
-          "_id name studentDetails.grNumber studentDetails.class studentDetails.transportDetails studentDetails.isRTE"
-        )
-        .populate("studentDetails.class", "name division");
+    const student = await UserModel.findOne({
+      "studentDetails.grNumber": grNumber,
+      school: schoolId,
+    })
+      .select(
+        "_id name studentDetails.grNumber studentDetails.class studentDetails.transportDetails studentDetails.isRTE"
+      )
+      .populate("studentDetails.class", "name division");
 
-      if (!student) {
-        return res.status(404).json({ message: "Student not found" });
+    if (!student) {
+      return res.status(404).json({ message: "Student not found" });
+    }
+
+    const feeDefinitions = await FeeModel.find({
+      school: schoolId,
+      classes: student.studentDetails.class._id,
+      $or: [{ student: null }, { student: student._id }],
+    }).lean();
+
+    const payments = await PaymentModel.find({
+      school: schoolId,
+      student: student._id,
+      status: "completed",
+    }).lean();
+
+    // Create a map to store fees by month-year, ensuring no duplicate fee types per month
+    const feeMap = new Map();
+    const feeTypesByMonth = new Map();
+
+    feeDefinitions.forEach((fee) => {
+      // Skip fees for other students
+      if (fee.student && fee.student.toString() !== student._id.toString())
+        return;
+
+      // Skip transportation fees that don't apply to this student
+      if (
+        fee.type === "transportation" &&
+        (!student.studentDetails.transportDetails?.isApplicable ||
+          (fee.transportationDetails?.distanceSlab &&
+            fee.transportationDetails.distanceSlab !==
+              student.studentDetails.transportDetails?.distanceSlab))
+      ) {
+        return;
       }
 
-      const feeDefinitions = await FeeModel.find({
-        school: schoolId,
-        classes: student.studentDetails.class._id,
-        $or: [{ student: null }, { student: student._id }],
-      }).lean();
+      const key = `${fee.month}-${fee.year}`;
+      const typeKey = `${key}_${fee.type}_${
+        fee.transportationDetails?.distanceSlab || ""
+      }`;
 
-      const payments = await PaymentModel.find({
-        school: schoolId,
-        student: student._id,
-        status: "completed",
-      }).lean();
+      // Check if we already have this fee type for this month
+      if (feeTypesByMonth.has(typeKey)) {
+        const existingFee = feeTypesByMonth.get(typeKey);
 
-      // Create a map to store fees by month-year, ensuring no duplicate fee types per month
-      const feeMap = new Map();
-      const feeTypesByMonth = new Map();
-
-      feeDefinitions.forEach((fee) => {
-        // Skip fees for other students
-        if (fee.student && fee.student.toString() !== student._id.toString())
-          return;
-
-        // Skip transportation fees that don't apply to this student
-        if (
-          fee.type === "transportation" &&
-          (!student.studentDetails.transportDetails?.isApplicable ||
-            (fee.transportationDetails?.distanceSlab &&
-              fee.transportationDetails.distanceSlab !==
-                student.studentDetails.transportDetails?.distanceSlab))
-        ) {
+        // Prioritize student-specific fees over general class fees
+        if (!fee.student && existingFee.student) {
+          // Skip this fee - keep existing student-specific fee
           return;
         }
 
-        const key = `${fee.month}-${fee.year}`;
-        const typeKey = `${key}_${fee.type}_${
-          fee.transportationDetails?.distanceSlab || ""
+        // If current fee is student-specific and existing is general, replace it
+        if (fee.student && !existingFee.student) {
+          // Remove existing fee from the month's array
+          const monthFees = feeMap.get(key);
+          const updatedFees = monthFees.filter((f) => f !== existingFee);
+          feeMap.set(key, updatedFees);
+        } else {
+          // Both fees are the same type (both general or both specific) - skip duplicate
+          return;
+        }
+      }
+
+      // Initialize the month's fee array if needed
+      if (!feeMap.has(key)) feeMap.set(key, []);
+
+      // Add this fee to the month and record it in our type tracker
+      feeMap.get(key).push(fee);
+      feeTypesByMonth.set(typeKey, fee);
+    });
+
+    // Create a map to store payment information by fee type, month, and year
+    const paymentMap = new Map();
+    payments.forEach((payment) => {
+      payment.feesPaid.forEach((feePaid) => {
+        const key = `${feePaid.type}_${feePaid.month}_${feePaid.year}_${
+          feePaid.transportationSlab || ""
         }`;
-
-        // Check if we already have this fee type for this month
-        if (feeTypesByMonth.has(typeKey)) {
-          const existingFee = feeTypesByMonth.get(typeKey);
-
-          // Prioritize student-specific fees over general class fees
-          if (!fee.student && existingFee.student) {
-            // Skip this fee - keep existing student-specific fee
-            return;
-          }
-
-          // If current fee is student-specific and existing is general, replace it
-          if (fee.student && !existingFee.student) {
-            // Remove existing fee from the month's array
-            const monthFees = feeMap.get(key);
-            const updatedFees = monthFees.filter((f) => f !== existingFee);
-            feeMap.set(key, updatedFees);
-          } else {
-            // Both fees are the same type (both general or both specific) - skip duplicate
-            return;
-          }
-        }
-
-        // Initialize the month's fee array if needed
-        if (!feeMap.has(key)) feeMap.set(key, []);
-
-        // Add this fee to the month and record it in our type tracker
-        feeMap.get(key).push(fee);
-        feeTypesByMonth.set(typeKey, fee);
-      });
-
-      // Create a map to store payment information by fee type, month, and year
-      const paymentMap = new Map();
-      payments.forEach((payment) => {
-        payment.feesPaid.forEach((feePaid) => {
-          const key = `${feePaid.type}_${feePaid.month}_${feePaid.year}_${
-            feePaid.transportationSlab || ""
-          }`;
-          // Ensure no duplicate counting by overwriting with the latest payment
-          paymentMap.set(key, {
-            amount: feePaid.amount,
-            date: payment.paymentDate,
-            transactionId:
-              payment.transactionId || `CASH-${payment.receiptNumber}`,
-            paymentMethod: payment.paymentMethod,
-            receiptNumber: payment.receiptNumber,
-          });
+        // Ensure no duplicate counting by overwriting with the latest payment
+        paymentMap.set(key, {
+          amount: feePaid.amount,
+          date: payment.paymentDate,
+          transactionId:
+            payment.transactionId || `CASH-${payment.receiptNumber}`,
+          paymentMethod: payment.paymentMethod,
+          receiptNumber: payment.receiptNumber,
+          receiptUrl: payment.receiptUrls?.[`${feePaid.month}-${feePaid.year}`] || payment.receiptUrl,
         });
       });
+    });
 
-      // Process fees and generate the response structure
-      const feeData = {};
-      for (const [monthYear, fees] of feeMap.entries()) {
-        const [month, year] = monthYear.split("-").map(Number);
+    // Process fees and generate the response structure
+    const feeData = {};
+    for (const [monthYear, fees] of feeMap.entries()) {
+      const [month, year] = monthYear.split("-").map(Number);
 
-        // Initialize the month's total counters
-        feeData[monthYear] = {
-          total: 0,
-          totalPaid: 0,
-          totalPending: 0,
-          fees: {},
-        };
-
-        // Process each fee for this month
-        fees.forEach((fee) => {
-          const paymentKey = `${fee.type}_${fee.month}_${fee.year}_${
-            fee.transportationDetails?.distanceSlab || ""
-          }`;
-          const paymentInfo = paymentMap.get(paymentKey) || {
-            amount: 0,
-            date: null,
-            transactionId: null,
-            paymentMethod: null,
-            receiptNumber: null,
-          };
-
-          const paidAmount = paymentInfo.amount;
-          const remainingAmount = Math.max(0, fee.amount - paidAmount);
-          let status = "pending";
-
-          // Determine payment status
-          if (paidAmount >= fee.amount) {
-            status = "paid";
-          } else if (paidAmount > 0) {
-            status = "partially_paid";
-          }
-
-          // Add this fee to the month's data
-          feeData[monthYear].fees[fee.type] = {
-            amount: fee.amount,
-            paidAmount: paidAmount,
-            remainingAmount: remainingAmount,
-            dueDate: fee.dueDate,
-            description: fee.description,
-            status: status,
-            ...(paymentInfo.amount > 0 && {
-              paymentDetails: {
-                transactionId: paymentInfo.transactionId,
-                paymentDate: paymentInfo.date,
-                paymentMethod: paymentInfo.paymentMethod,
-                receiptNumber: paymentInfo.receiptNumber,
-                amount: paymentInfo.amount,
-              },
-            }),
-            ...(fee.transportationDetails?.distanceSlab && {
-              transportationSlab: fee.transportationDetails.distanceSlab,
-            }),
-          };
-
-          // Update the month's totals
-          feeData[monthYear].total += fee.amount;
-          feeData[monthYear].totalPaid += paidAmount;
-          feeData[monthYear].totalPending += remainingAmount;
-        });
-      }
-
-      // Prepare the final response object
-      const response = {
-        student: {
-          _id: student._id,
-          name: student.name,
-          grNumber: student.studentDetails.grNumber,
-          class: student.studentDetails.class
-            ? {
-                _id: student.studentDetails.class._id,
-                name: student.studentDetails.class.name,
-                division: student.studentDetails.class.division,
-              }
-            : null,
-          transportDetails: student.studentDetails.transportDetails || null,
-          isRTE: student.studentDetails.isRTE || false,
-        },
-        feeData,
+      // Initialize the month's total counters
+      feeData[monthYear] = {
+        total: 0,
+        totalPaid: 0,
+        totalPending: 0,
+        fees: {},
       };
 
-      // Log this action
-      await logFeeAction(
-        connection,
-        schoolId,
-        req.user._id,
-        "VIEW_STUDENT_FEE_HISTORY",
-        `Viewed fee history for student with grNumber ${grNumber}`,
-        { grNumber }
-      );
+      // Process each fee for this month
+      fees.forEach((fee) => {
+        const paymentKey = `${fee.type}_${fee.month}_${fee.year}_${
+          fee.transportationDetails?.distanceSlab || ""
+        }`;
+        const paymentInfo = paymentMap.get(paymentKey) || {
+          amount: 0,
+          date: null,
+          transactionId: null,
+          paymentMethod: null,
+          receiptNumber: null,
+          receiptUrl: null,
+        };
 
-      res.json(response);
-    } catch (error) {
-      logger.error(`Error fetching student fee history: ${error.message}`, {
-        error,
+        const paidAmount = paymentInfo.amount;
+        const remainingAmount = Math.max(0, fee.amount - paidAmount);
+        let status = "pending";
+
+        // Determine payment status
+        if (paidAmount >= fee.amount) {
+          status = "paid";
+        } else if (paidAmount > 0) {
+          status = "partially_paid";
+        }
+
+        // Add this fee to the month's data
+        feeData[monthYear].fees[fee.type] = {
+          amount: fee.amount,
+          paidAmount: paidAmount,
+          remainingAmount: remainingAmount,
+          dueDate: fee.dueDate,
+          description: fee.description,
+          status: status,
+          ...(paymentInfo.amount > 0 && {
+            paymentDetails: {
+              transactionId: paymentInfo.transactionId,
+              paymentDate: paymentInfo.date,
+              paymentMethod: paymentInfo.paymentMethod,
+              receiptNumber: paymentInfo.receiptNumber,
+              amount: paymentInfo.amount,
+              receiptUrl: paymentInfo.receiptUrl,
+            },
+          }),
+          ...(fee.transportationDetails?.distanceSlab && {
+            transportationSlab: fee.transportationDetails.distanceSlab,
+          }),
+        };
+
+        // Update the month's totals
+        feeData[monthYear].total += fee.amount;
+        feeData[monthYear].totalPaid += paidAmount;
+        feeData[monthYear].totalPending += remainingAmount;
       });
-      res.status(500).json({ error: error.message });
     }
-  },
+
+    // Prepare the final response object
+    const response = {
+      student: {
+        _id: student._id,
+        name: student.name,
+        grNumber: student.studentDetails.grNumber,
+        class: student.studentDetails.class
+          ? {
+              _id: student.studentDetails.class._id,
+              name: student.studentDetails.class.name,
+              division: student.studentDetails.class.division,
+            }
+          : null,
+        transportDetails: student.studentDetails.transportDetails || null,
+        isRTE: student.studentDetails.isRTE || false,
+      },
+      feeData,
+    };
+
+    // Log this action
+    await logFeeAction(
+      connection,
+      schoolId,
+      req.user._id,
+      "VIEW_STUDENT_FEE_HISTORY",
+      `Viewed fee history for student with grNumber ${grNumber}`,
+      { grNumber }
+    );
+
+    res.json(response);
+  } catch (error) {
+    logger.error(`Error fetching student fee history: ${error.message}`, {
+      error,
+    });
+    res.status(500).json({ error: error.message });
+  }
+},
 
   refundPayment: async (req, res) => {
     const session = await mongoose.startSession();
