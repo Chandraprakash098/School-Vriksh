@@ -74,6 +74,8 @@
 
 
 // models/Library.js
+
+
 const mongoose = require('mongoose');
 
 const librarySchema = new mongoose.Schema({
@@ -100,7 +102,7 @@ const bookIssueSchema = new mongoose.Schema({
   fine: { type: Number, default: 0 },
   status: {
     type: String,
-    enum: ['requested', 'issued', 'returned', 'overdue'],
+    enum: ['requested', 'issued', 'returned', 'overdue','rejected'],
     default: 'requested',
   },
 }, { timestamps: true });

@@ -414,13 +414,65 @@ router.get(
 );
 
 
+// router.post('/:studentId/library/request-book/:bookId', authMiddleware, async (req, res) => {
+//   try {
+//     const { studentId, bookId } = req.params;
+//     const schoolId = req.school._id.toString();
+//     const connection = req.connection;
+
+//     // Initialize models with the connection
+//     const { Library: LibraryModel, BookIssue: BookIssueModel } = libraryModelFactory(connection);
+//     const UserModel = User(connection);
+
+//     if (studentId !== req.user._id.toString()) {
+//       return res.status(403).json({ message: 'Unauthorized: You can only request books for yourself' });
+//     }
+
+//     if (!mongoose.Types.ObjectId.isValid(bookId)) {
+//       return res.status(400).json({ message: 'Invalid book ID' });
+//     }
+
+//     const book = await LibraryModel.findOne({ _id: bookId, school: schoolId });
+//     if (!book) {
+//       return res.status(404).json({ message: 'Book not found' });
+//     }
+//     if (book.availableCopies === 0) {
+//       return res.status(400).json({ message: 'No copies available' });
+//     }
+
+//     const existingRequest = await BookIssueModel.findOne({
+//       book: bookId,
+//       user: studentId,
+//       school: schoolId,
+//       status: 'requested',
+//     });
+//     if (existingRequest) {
+//       return res.status(400).json({ message: 'Book request already pending' });
+//     }
+
+//     const request = new BookIssueModel({
+//       school: schoolId,
+//       book: bookId,
+//       user: studentId,
+//       issueDate: new Date(), // Changed from requestDate to issueDate to match schema
+//       status: 'requested',
+//     });
+
+//     await request.save();
+//     logger.info(`Book requested: ${book.bookTitle} by student ${studentId}`, { schoolId });
+//     res.status(201).json({ message: 'Book request submitted successfully', request });
+//   } catch (error) {
+//     logger.error(`Error requesting book: ${error.message}`, { error });
+//     res.status(500).json({ error: error.message });
+//   }
+// });
+
 router.post('/:studentId/library/request-book/:bookId', authMiddleware, async (req, res) => {
   try {
     const { studentId, bookId } = req.params;
     const schoolId = req.school._id.toString();
     const connection = req.connection;
 
-    // Initialize models with the connection
     const { Library: LibraryModel, BookIssue: BookIssueModel } = libraryModelFactory(connection);
     const UserModel = User(connection);
 
@@ -440,21 +492,24 @@ router.post('/:studentId/library/request-book/:bookId', authMiddleware, async (r
       return res.status(400).json({ message: 'No copies available' });
     }
 
-    const existingRequest = await BookIssueModel.findOne({
+    // Check for any existing request or issued book
+    const existingRecord = await BookIssueModel.findOne({
       book: bookId,
       user: studentId,
       school: schoolId,
-      status: 'requested',
+      status: { $in: ['requested', 'issued', 'overdue'] },
     });
-    if (existingRequest) {
-      return res.status(400).json({ message: 'Book request already pending' });
+    if (existingRecord) {
+      return res.status(400).json({
+        message: `Cannot request book: already ${existingRecord.status === 'requested' ? 'requested' : 'issued or overdue'}`,
+      });
     }
 
     const request = new BookIssueModel({
       school: schoolId,
       book: bookId,
       user: studentId,
-      issueDate: new Date(), // Changed from requestDate to issueDate to match schema
+      issueDate: new Date(),
       status: 'requested',
     });
 

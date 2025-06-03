@@ -1481,303 +1481,7 @@ const adminController = {
     }
   },
 
-  // reviewClassResults: async (req, res) => {
-  //   try {
-  //     const { examId, classId } = req.params;
-  //     const schoolId = req.school._id.toString();
-  //     const connection = req.connection;
-  //     const Exam = getModel("Exam", connection);
-  //     const Class = getModel("Class", connection);
-  //     const User = getModel("User", connection);
-  //     const Subject = getModel("Subject", connection);
-  
-  //     // Validate class
-  //     const classInfo = await Class.findOne({
-  //       _id: classId,
-  //       school: schoolId,
-  //     }).lean();
-  //     if (!classInfo) {
-  //       return res.status(404).json({ message: "Class not found" });
-  //     }
-  
-  //     // Build query for exams
-  //     const query = {
-  //       school: schoolId,
-  //       class: classId,
-  //       status: "submittedToAdmin",
-  //     };
-  //     if (examId) {
-  //       query._id = examId; // Use examId as the _id of the Exam document
-  //     }
-  
-  //     // Fetch exams with populated data
-  //     const exams = await Exam.find(query)
-  //       .populate("class", "name division")
-  //       .populate("subject", "name")
-  //       .populate("results.student", "name rollNumber")
-  //       .populate("marksEnteredBy", "name")
-  //       .lean();
-  
-  //     if (!exams.length) {
-  //       return res
-  //         .status(404)
-  //         .json({ message: "No submitted results found for review" });
-  //     }
-  
-  //     // Fetch all subjects for the class to ensure completeness
-  //     const subjects = await Subject.find({
-  //       class: classId,
-  //       school: schoolId,
-  //     }).lean();
-  //     const subjectMap = subjects.reduce((acc, subj) => {
-  //       acc[subj._id.toString()] = subj.name;
-  //       return acc;
-  //     }, {});
-  
-  //     // Aggregate results by student
-  //     const studentResults = new Map();
-  //     const examMetadata = [];
-  //     exams.forEach((exam) => {
-  //       exam.results.forEach((result) => {
-  //         const studentId = result.student._id.toString();
-  //         if (!studentResults.has(studentId)) {
-  //           studentResults.set(studentId, {
-  //             student: {
-  //               id: studentId,
-  //               name: result.student.name,
-  //               rollNumber: result.student.rollNumber,
-  //             },
-  //             subjects: {},
-  //             totalMarks: 0,
-  //             percentage: 0,
-  //           });
-  //         }
-  //         const studentData = studentResults.get(studentId);
-  //         studentData.subjects[exam.subject._id.toString()] = {
-  //           subjectName: exam.subject.name,
-  //           marksObtained: result.marksObtained,
-  //           totalMarks: exam.totalMarks,
-  //           remarks: result.remarks || "",
-  //         };
-  //         studentData.totalMarks += result.marksObtained;
-  //       });
-  
-  //       examMetadata.push({
-  //         examId: exam._id,
-  //         examType:
-  //           exam.examType === "Other" ? exam.customExamType : exam.examType,
-  //         subject: exam.subject.name,
-  //         examDate: exam.examDate,
-  //         totalMarks: exam.totalMarks,
-  //         submittedBy: exam.marksEnteredBy?.name || "Unknown",
-  //         submittedAt: exam.submittedToAdminAt,
-  //       });
-  //     });
-  
-  //     // Calculate percentages and statistics
-  //     const resultsArray = Array.from(studentResults.values()).map((result) => {
-  //       const maxTotalMarks = Object.values(result.subjects).reduce(
-  //         (sum, subj) => sum + subj.totalMarks,
-  //         0
-  //       );
-  //       result.percentage = maxTotalMarks
-  //         ? (result.totalMarks / maxTotalMarks) * 100
-  //         : 0;
-  //       result.grade = calculateGrade([result]);
-  //       return result;
-  //     });
-  
-  //     // Calculate class statistics
-  //     const classStats = calculateClassStatistics(resultsArray, subjects.length);
-  
-  //     // Format response
-  //     const response = {
-  //       success: true,
-  //       class: {
-  //         id: classInfo._id,
-  //         name: classInfo.name,
-  //         division: classInfo.division,
-  //       },
-  //       examMetadata,
-  //       results: resultsArray,
-  //       statistics: classStats,
-  //       subjects: subjects.map((s) => ({ id: s._id, name: s.name })),
-  //       totalStudents: resultsArray.length,
-  //       totalSubjects: subjects.length,
-  //       message: "Results retrieved successfully for review",
-  //     };
-  
-  //     res.json(response);
-  //   } catch (error) {
-  //     console.error("Error in reviewClassResults:", error);
-  //     res.status(500).json({
-  //       success: false,
-  //       error: error.message,
-  //       message: "Failed to retrieve results for review",
-  //     });
-  //   }
-  // },
 
-  // reviewClassResults: async (req, res) => {
-  //   try {
-  //     const { examId, classId } = req.params;
-  //     const { status = "submittedToAdmin", page = 1, limit = 20 } = req.query;
-  //     const schoolId = req.school._id.toString();
-  //     const connection = req.connection;
-  //     const Exam = getModel("Exam", connection);
-  //     const Class = getModel("Class", connection);
-  //     const User = getModel("User", connection);
-  //     const Subject = getModel("Subject", connection);
-
-  //     // Validate class
-  //     const classInfo = await Class.findOne({
-  //       _id: classId,
-  //       school: schoolId,
-  //     }).lean();
-  //     if (!classInfo) {
-  //       return res.status(404).json({ message: "Class not found" });
-  //     }
-
-  //     // Validate status
-  //     const validStatuses = ["submittedToAdmin", "published", "all"];
-  //     const queryStatus = status === "all" ? ["submittedToAdmin", "published"] : [status];
-  //     if (!validStatuses.includes(status) && status !== "all") {
-  //       return res.status(400).json({ message: "Invalid status filter" });
-  //     }
-
-  //     // Build query for exams
-  //     const query = {
-  //       school: schoolId,
-  //       class: classId,
-  //       status: { $in: queryStatus },
-  //     };
-  //     if (examId) {
-  //       query._id = examId;
-  //     }
-
-  //     // Fetch exams with populated data and pagination
-  //     const exams = await Exam.find(query)
-  //       .populate("class", "name division")
-  //       .populate("subject", "name")
-  //       .populate("results.student", "name  studentDetails.grNumber") // Include grNumber
-  //       .populate("marksEnteredBy", "name")
-  //       .populate("publishedBy", "name")
-  //       .skip((page - 1) * limit)
-  //       .limit(Number(limit))
-  //       .lean();
-
-  //     if (!exams.length) {
-  //       return res
-  //         .status(404)
-  //         .json({ message: "No results found for the specified criteria" });
-  //     }
-
-  //     // Fetch total count for pagination
-  //     const totalExams = await Exam.countDocuments(query);
-
-  //     // Fetch all subjects for the class
-  //     const subjects = await Subject.find({
-  //       class: classId,
-  //       school: schoolId,
-  //     }).lean();
-  //     const subjectMap = subjects.reduce((acc, subj) => {
-  //       acc[subj._id.toString()] = subj.name;
-  //       return acc;
-  //     }, {});
-
-  //     // Aggregate results by student
-  //     const studentResults = new Map();
-  //     const examMetadata = [];
-  //     exams.forEach((exam) => {
-  //       exam.results.forEach((result) => {
-  //         const studentId = result.student._id.toString();
-  //         if (!studentResults.has(studentId)) {
-  //           studentResults.set(studentId, {
-  //             student: {
-  //               id: studentId,
-  //               name: result.student.name,
-  //               // rollNumber: result.student.rollNumber || "N/A",
-  //               grNumber: result.student.studentDetails?.grNumber || "N/A", // Include grNumber
-  //             },
-  //             subjects: {},
-  //             totalMarks: 0,
-  //             percentage: 0,
-  //           });
-  //         }
-  //         const studentData = studentResults.get(studentId);
-  //         studentData.subjects[exam.subject._id.toString()] = {
-  //           subjectName: exam.subject.name,
-  //           marksObtained: result.marksObtained,
-  //           totalMarks: exam.totalMarks,
-  //           remarks: result.remarks || "",
-  //         };
-  //         studentData.totalMarks += result.marksObtained;
-  //       });
-
-  //       examMetadata.push({
-  //         examId: exam._id,
-  //         examType:
-  //           exam.examType === "Other" ? exam.customExamType : exam.examType,
-  //         subject: exam.subject.name,
-  //         examDate: exam.examDate,
-  //         totalMarks: exam.totalMarks,
-  //         status: exam.status,
-  //         submittedBy: exam.marksEnteredBy?.name || "Unknown",
-  //         submittedAt: exam.submittedToAdminAt,
-  //         publishedBy: exam.publishedBy?.name || "N/A",
-  //         publishedAt: exam.publishedAt || null,
-  //       });
-  //     });
-
-  //     // Calculate percentages and statistics
-  //     const resultsArray = Array.from(studentResults.values()).map((result) => {
-  //       const maxTotalMarks = Object.values(result.subjects).reduce(
-  //         (sum, subj) => sum + subj.totalMarks,
-  //         0
-  //       );
-  //       result.percentage = maxTotalMarks
-  //         ? (result.totalMarks / maxTotalMarks) * 100
-  //         : 0;
-  //       result.grade = calculateGrade([result]);
-  //       return result;
-  //     });
-
-  //     // Calculate class statistics
-  //     const classStats = calculateClassStatistics(resultsArray, subjects.length);
-
-  //     // Format response
-  //     const response = {
-  //       success: true,
-  //       class: {
-  //         id: classInfo._id,
-  //         name: classInfo.name,
-  //         division: classInfo.division,
-  //       },
-  //       examMetadata,
-  //       results: resultsArray,
-  //       statistics: classStats,
-  //       subjects: subjects.map((s) => ({ id: s._id, name: s.name })),
-  //       totalStudents: resultsArray.length,
-  //       totalSubjects: subjects.length,
-  //       pagination: {
-  //         page: Number(page),
-  //         limit: Number(limit),
-  //         totalExams,
-  //         totalPages: Math.ceil(totalExams / limit),
-  //       },
-  //       message: "Results retrieved successfully",
-  //     };
-
-  //     res.json(response);
-  //   } catch (error) {
-  //     console.error("Error in reviewClassResults:", error);
-  //     res.status(500).json({
-  //       success: false,
-  //       error: error.message,
-  //       message: "Failed to retrieve results",
-  //     });
-  //   }
-  // },
 
   reviewClassResults: async (req, res) => {
     try {
@@ -2049,317 +1753,6 @@ getSubmittedExcelResults: async (req, res) => {
 },
 
 
-
-
-// uploadExcelResultsOfStudent: async (req, res) => {
-//     try {
-//       const { examEventId, classId } = req.params;
-//       const schoolId = req.school._id.toString();
-//       const adminId = req.user._id;
-//       const connection = req.connection;
-//       const Exam = getModel("Exam", connection);
-//       const ExamEvent = getModel("ExamEvent", connection);
-//       const Class = getModel("Class", connection);
-//       const User = getModel("User", connection);
-//       const Subject = getModel("Subject", connection);
-//       const Result = getModel("Result", connection);
-
-//       const session = await connection.startSession();
-//       session.startTransaction();
-
-//       try {
-//         // Validate exam event and class
-//         const examEvent = await ExamEvent.findOne({ _id: examEventId, school: schoolId }).lean();
-//         if (!examEvent) throw new Error("Exam event not found");
-
-//         const classInfo = await Class.findOne({ _id: classId, school: schoolId }).lean();
-//         if (!classInfo) throw new Error("Class not found");
-//         if (!examEvent.classes.map(id => id.toString()).includes(classId)) {
-//           throw new Error("Class is not associated with this exam event");
-//         }
-
-//         // Get exams and subjects
-//         const exams = await Exam.find({ examEvent: examEventId, class: classId, school: schoolId })
-//           .populate("subject", "name")
-//           .lean();
-//         if (!exams.length) throw new Error("No exams found for this event and class");
-
-//         const subjects = await Subject.find({ class: classId, school: schoolId }).lean();
-//         const subjectMap = subjects.reduce((acc, subj) => {
-//           acc[subj.name.toLowerCase()] = subj._id;
-//           return acc;
-//         }, {});
-
-//         // Ensure examMap has one exam per subject
-//         const examMap = exams.reduce((acc, exam) => {
-//           const subjectId = exam.subject._id.toString();
-//           // Only keep the first exam for each subject to avoid duplicates
-//           if (!acc[subjectId]) {
-//             acc[subjectId] = exam;
-//           }
-//           return acc;
-//         }, {});
-
-//         // Get all students in the class
-//         const students = await User.find({
-//           role: "student",
-//           "studentDetails.class": classId,
-//           school: schoolId,
-//         }).lean();
-
-//         // Validate uploaded file
-//         if (!req.file || !req.file.buffer) {
-//           throw new Error("No valid Excel file uploaded");
-//         }
-
-//         // Process Excel file
-//         const workbook = new ExcelJS.Workbook();
-//         try {
-//           await workbook.xlsx.load(req.file.buffer);
-//         } catch (error) {
-//           throw new Error("Invalid or corrupted Excel file. Please upload a valid XLSX file.");
-//         }
-
-//         const worksheet = workbook.worksheets[0];
-//         if (!worksheet) {
-//           throw new Error("No worksheet found in the Excel file");
-//         }
-
-//         // --- IMPROVED DYNAMIC HEADER DETECTION ---
-//         let headerRowNumber = -1;
-//         let headerRow = null;
-//         let headerColStart = 1;
-
-//         // Scan first 20 rows and all columns for a cell containing 'gr no' or 'gr number'
-//         worksheet.eachRow({ includeEmpty: false }, (row, rowNumber) => {
-//           for (let col = 1; col <= row.cellCount; col++) {
-//             const cellValue = row.getCell(col).value?.toString().trim().toLowerCase();
-//             if (cellValue && (cellValue === 'gr no.' || cellValue === 'gr no' || cellValue === 'gr number')) {
-//               headerRowNumber = rowNumber;
-//               headerRow = row;
-//               headerColStart = col;
-//               break;
-//             }
-//           }
-//           if (headerRowNumber !== -1) return false; // Stop iteration if found
-//         });
-
-//         if (headerRowNumber === -1) {
-//           throw new Error("Could not find header row with 'GR No.' or similar in any column");
-//         }
-
-//         // Build column map from the detected header row, starting from headerColStart
-//         const columnMap = {};
-//         headerRow.eachCell({ includeEmpty: false }, (cell, colNumber) => {
-//           const headerName = cell.value?.toString().trim().toLowerCase();
-//           if (headerName) {
-//             columnMap[headerName] = colNumber;
-//           }
-//         });
-
-//         // Validate required columns
-//         const requiredColumns = ['gr no', 'student name'];
-//         for (const col of requiredColumns) {
-//           if (!Object.keys(columnMap).some(header => header.startsWith(col))) {
-//             throw new Error(`Required column '${col}' not found in header row`);
-//           }
-//         }
-
-//         // Identify subject columns
-//         const validSubjectNames = subjects.map(s => s.name.trim().toLowerCase());
-//         const subjectColumns = Object.entries(columnMap)
-//           .filter(([name]) => validSubjectNames.includes(name))
-//           .map(([name, colNumber]) => ({ name, colNumber }));
-
-//         if (subjectColumns.length === 0) {
-//           throw new Error("No subject columns found in the Excel file. Found columns: " + Object.keys(columnMap).join(", "));
-//         }
-
-//         // Process student rows
-//         const rowsToProcess = [];
-//         const errors = [];
-//         const marksheets = [];
-//         const results = [];
-
-//         // Start from row after headers, skip empty rows
-//         for (let rowNumber = headerRowNumber + 1; rowNumber <= worksheet.rowCount; rowNumber++) {
-//           const row = worksheet.getRow(rowNumber);
-
-//           // Find the actual column for 'gr no'
-//           let grNoCol = Object.entries(columnMap).find(([header]) => header.startsWith('gr no') || header.startsWith('gr number'));
-//           if (!grNoCol) continue;
-//           const grNumber = row.getCell(grNoCol[1]).value?.toString().trim();
-//           if (!grNumber) continue;
-
-//           // Skip summary rows or other non-student rows
-//           if (grNumber.toLowerCase().includes('generated on') ||
-//               grNumber.toLowerCase().includes('passing criteria') ||
-//               grNumber.toLowerCase().includes('class teacher') ||
-//               grNumber.toLowerCase().includes('principal')) {
-//             continue;
-//           }
-
-//           const student = students.find(s => s.studentDetails?.grNumber === grNumber);
-//           if (!student) {
-//             errors.push(`Student with GR Number ${grNumber} not found in row ${rowNumber}`);
-//             continue;
-//           }
-
-//           // Process subject marks
-//           const studentResults = [];
-//           const subjectResultsMap = new Map(); // Use Map to prevent duplicate subjects
-
-//           for (const { name: subjectName, colNumber } of subjectColumns) {
-//             const subjectId = subjectMap[subjectName];
-//             if (!subjectId) {
-//               errors.push(`Subject '${subjectName}' not found in system for row ${rowNumber}`);
-//               continue;
-//             }
-
-//             const exam = examMap[subjectId];
-//             if (!exam) {
-//               errors.push(`No exam found for subject ${subjectName} in row ${rowNumber}`);
-//               continue;
-//             }
-
-//             const marksValue = row.getCell(colNumber).value;
-//             const marks = parseFloat(marksValue);
-//             if (isNaN(marks)) {
-//               errors.push(`Invalid marks '${marksValue}' for ${subjectName} in row ${rowNumber}`);
-//               continue;
-//             }
-
-//             if (marks < 0 || marks > exam.totalMarks) {
-//               errors.push(`Marks ${marks} out of range for ${subjectName} in row ${rowNumber}`);
-//               continue;
-//             }
-
-//             // Add to studentResults
-//             studentResults.push({
-//               exam: exam._id,
-//               subject: subjectId,
-//               marksObtained: marks,
-//               totalMarks: exam.totalMarks,
-//             });
-
-//             // Add to subjectResultsMap to ensure uniqueness
-//             subjectResultsMap.set(subjectId.toString(), {
-//               name: subjects.find(s => s._id.toString() === subjectId.toString()).name,
-//               marksObtained: marks,
-//               totalMarks: exam.totalMarks,
-//             });
-//           }
-
-//           if (studentResults.length === 0) {
-//             errors.push(`No valid subject marks found for student ${grNumber} in row ${rowNumber}`);
-//             continue;
-//           }
-
-//           // Add to processing queue
-//           studentResults.forEach(result => {
-//             rowsToProcess.push({
-//               student,
-//               resultEntry: {
-//                 school: schoolId,
-//                 student: student._id,
-//                 examEvent: examEventId,
-//                 exam: result.exam,
-//                 class: classId,
-//                 subject: result.subject,
-//                 marksObtained: result.marksObtained,
-//                 totalMarks: result.totalMarks,
-//                 excelFile: {
-//                   key: `results/${schoolId}/${classId}/results_${classId}_${examEventId}_${Date.now()}.xlsx`,
-//                   url: getPublicFileUrl(`results/${schoolId}/${classId}/results_${classId}_${examEventId}_${Date.now()}.xlsx`),
-//                   originalName: req.file.originalname,
-//                 },
-//                 status: "submittedToAdmin",
-//                 submittedBy: adminId,
-//                 submittedToAdminAt: new Date(),
-//               },
-//             });
-//           });
-
-//           // Prepare marksheet data with unique subjects
-//           marksheets.push({
-//             student,
-//             subjectResults: Array.from(subjectResultsMap.values()),
-//             exams,
-//             examEvent,
-//             classInfo,
-//           });
-//         }
-
-//         if (errors.length > 0) {
-//           throw new Error(`Excel processing errors: ${errors.join("; ")}`);
-//         }
-
-//         if (rowsToProcess.length === 0) {
-//           throw new Error("No valid student records found in the Excel file");
-//         }
-
-//         // Upload Excel file to S3
-//         const excelFileKey = `results/${schoolId}/${classId}/results_${classId}_${examEventId}_${Date.now()}.xlsx`;
-//         await uploadToS3(req.file.buffer, excelFileKey, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
-
-//         // Update excelFile URLs in result entries
-//         rowsToProcess.forEach(row => {
-//           row.resultEntry.excelFile.key = excelFileKey;
-//           row.resultEntry.excelFile.url = getPublicFileUrl(excelFileKey);
-//           results.push(row.resultEntry);
-//         });
-
-//         // Generate marksheets
-//         for (const marksheet of marksheets) {
-//           const { student, subjectResults, exams, examEvent, classInfo } = marksheet;
-//           const marksheetKey = `marksheets/${schoolId}/${classId}/${examEventId}/${student._id}_${Date.now()}.pdf`;
-
-//           const pdfBuffer = await generateMarksheetPDF({
-//             student,
-//             classInfo,
-//             examEvent,
-//             subjects: subjectResults,
-//             exams,
-//           });
-
-//           await uploadToS3(pdfBuffer, marksheetKey, "application/pdf");
-
-//           // Update all results for this student with marksheet info
-//           await Result.updateMany(
-//             { student: student._id, exam: { $in: exams.map(e => e._id) }, class: classId },
-//             {
-//               $set: {
-//                 marksheet: {
-//                   key: marksheetKey,
-//                   url: getPublicFileUrl(marksheetKey),
-//                 },
-//               },
-//             },
-//             { session }
-//           );
-//         }
-
-//         // Insert all results
-//         await Result.insertMany(results, { session });
-
-//         await session.commitTransaction();
-//         res.status(201).json({
-//           success: true,
-//           resultsCount: results.length,
-//           marksheetsGenerated: marksheets.length,
-//           message: "Excel results processed and marksheets generated successfully",
-//         });
-//       } catch (error) {
-//         await session.abortTransaction();
-//         throw error;
-//       } finally {
-//         session.endSession();
-//       }
-//     } catch (error) {
-//       console.error("Error in uploadExcelResultsOfStudent:", error);
-//       res.status(500).json({ success: false, error: error.message });
-//     }
-//   },
 
 uploadExcelResultsOfStudent: async (req, res) => {
     try {
@@ -2689,90 +2082,7 @@ uploadExcelResultsOfStudent: async (req, res) => {
     }
   },
 
-// getAllMarksheets: async (req, res) => {
-//   try {
-//     const { examEventId, classId } = req.params;
-//     const schoolId = req.school._id.toString();
-//     const connection = req.connection;
-//     const Result = getModel("Result", connection);
-//     const Exam = getModel("Exam", connection);
-//     const ExamEvent = getModel("ExamEvent", connection);
-//     const Class = getModel("Class", connection);
-//     const User = getModel("User", connection);
 
-//     const examEvent = await ExamEvent.findOne({ _id: examEventId, school: schoolId }).lean();
-//     if (!examEvent) return res.status(404).json({ message: "Exam event not found" });
-
-//     const classInfo = await Class.findOne({ _id: classId, school: schoolId }).lean();
-//     if (!classInfo) return res.status(404).json({ message: "Class not found" });
-
-//     if (!examEvent.classes.map(id => id.toString()).includes(classId)) {
-//       return res.status(400).json({ message: "Class is not associated with this exam event" });
-//     }
-
-//     const exams = await Exam.find({ examEvent: examEventId, class: classId, school: schoolId }).lean();
-//     if (!exams.length) return res.status(404).json({ message: "No exams found for this event and class" });
-
-//     const results = await Result.find({
-//       school: schoolId,
-//       exam: { $in: exams.map(e => e._id) },
-//       class: classId,
-//     })
-//       .populate("student", "name studentDetails.grNumber")
-//       .populate("subject", "name")
-//       .lean();
-
-//     const students = await User.find({
-//       role: "student",
-//       "studentDetails.class": classId,
-//       school: schoolId,
-//     }).lean();
-//     const validStudentIds = students.map(s => s._id.toString());
-
-//     const marksheets = results.reduce((acc, result) => {
-//       const studentId = result.student._id.toString();
-//       if (!validStudentIds.includes(studentId)) {
-//         return acc;
-//       }
-//       if (!acc[studentId] && result.marksheet) {
-//         acc[studentId] = {
-//           student: {
-//             id: studentId,
-//             name: result.student.name,
-//             grNumber: result.student.studentDetails?.grNumber || "N/A",
-//           },
-//           marksheet: result.marksheet,
-//           status: result.status,
-//           subjects: [],
-//         };
-//       }
-//       if (acc[studentId]) {
-//         acc[studentId].subjects.push({
-//           subjectId: result.subject._id,
-//           subjectName: result.subject.name,
-//           marksObtained: result.marksObtained,
-//           totalMarks: result.totalMarks,
-//         });
-//       }
-//       return acc;
-//     }, {});
-
-//     res.json({
-//       success: true,
-//       class: { id: classInfo._id, name: classInfo.name, division: classInfo.division },
-//       examEvent: {
-//         id: examEvent._id,
-//         name: examEvent.name,
-//         type: examEvent.examType === "Other" ? examEvent.customExamType : examEvent.examType,
-//       },
-//       marksheets: Object.values(marksheets),
-//       message: "Marksheets retrieved successfully",
-//     });
-//   } catch (error) {
-//     console.error("Error in getAllMarksheets:", error);
-//     res.status(500).json({ success: false, error: error.message });
-//   }
-// },
 
 
 
@@ -3586,504 +2896,6 @@ publishIndividualMarksheet: async (req, res) => {
     }
   },
 
-  // createExamSchedule: async (req, res) => {
-  //   const {
-  //     examType,
-  //     customExamType,
-  //     startDate,
-  //     endDate,
-  //     classId,
-  //     subjects,
-  //     maxExamsPerDay = 2,
-  //     availableRooms,
-  //   } = req.body;
-  //   const schoolId = req.school._id;
-  //   const connection = req.connection;
-  //   const Exam = getModel("Exam", connection);
-  //   const Class = getModel("Class", connection);
-  //   const Subject = getModel("Subject", connection);
-  //   const User = getModel("User", connection);
-
-  //   const session = await connection.startSession();
-  //   let transactionCommitted = false;
-
-  //   try {
-  //     session.startTransaction();
-
-  //     // Validate inputs
-  //     const classData = await Class.findById(classId).lean();
-  //     if (!classData) throw new Error("Class not found");
-
-  //     // Validate exam type
-  //     if (
-  //       !["Unit Test", "Midterm", "Final", "Practical", "Other"].includes(
-  //         examType
-  //       )
-  //     ) {
-  //       throw new Error("Invalid exam type");
-  //     }
-  //     if (
-  //       examType === "Other" &&
-  //       (!customExamType || customExamType.trim() === "")
-  //     ) {
-  //       throw new Error('Custom exam type is required when selecting "Other"');
-  //     }
-
-  //     // Validate subjects
-  //     const subjectIds = subjects.map((s) => s.subjectId);
-  //     const validSubjects = await Subject.find({
-  //       _id: { $in: subjectIds },
-  //       class: classId,
-  //       school: schoolId,
-  //     }).lean();
-
-  //     if (validSubjects.length !== subjects.length) {
-  //       const invalidSubjects = subjectIds.filter(
-  //         (id) => !validSubjects.some((s) => s._id.toString() === id)
-  //       );
-  //       throw new Error(
-  //         `Invalid subjects for class ${classData.name}: ${invalidSubjects.join(
-  //           ", "
-  //         )}`
-  //       );
-  //     }
-
-  //     const subjectMap = validSubjects.reduce((acc, subj) => {
-  //       acc[subj._id.toString()] = subj.name;
-  //       return acc;
-  //     }, {});
-
-  //     // Calculate available days and slots
-  //     const start = new Date(startDate);
-  //     const end = new Date(endDate);
-  //     const daysAvailable =
-  //       Math.ceil((end - start) / (1000 * 60 * 60 * 24)) + 1;
-  //     const totalSlots = daysAvailable * maxExamsPerDay;
-
-  //     if (subjects.length > totalSlots) {
-  //       throw new Error(
-  //         `Not enough days to schedule ${subjects.length} exams with max ${maxExamsPerDay} per day`
-  //       );
-  //     }
-
-  //     const defaultDurations = {
-  //       Midterm: 2,
-  //       Final: 3,
-  //       "Unit Test": 1,
-  //       Practical: 2,
-  //       Other: 2,
-  //     };
-
-  //     // Default time slots
-  //     const defaultTimeSlots = [
-  //       { start: "09:00", end: "11:00" },
-  //       { start: "13:00", end: "15:00" },
-  //     ];
-
-  //     // Fetch students
-  //     const students = await User.find({
-  //       role: "student",
-  //       "studentDetails.class": classId,
-  //       school: schoolId,
-  //     }).lean();
-
-  //     const examSchedule = [];
-  //     let currentDate = new Date(start);
-  //     const schedulePlan = distributeExams(
-  //       subjects,
-  //       daysAvailable,
-  //       maxExamsPerDay
-  //     );
-
-  //     for (const day of schedulePlan) {
-  //       for (const subject of day) {
-  //         const defaultDuration = defaultDurations[examType] || 2;
-  //         const durationHours = subject.durationHours || defaultDuration;
-  //         const durationMinutes = durationHours * 60;
-
-  //         const slotIndex = examSchedule.filter(
-  //           (e) =>
-  //             e.examDate.toISOString().split("T")[0] ===
-  //             currentDate.toISOString().split("T")[0]
-  //         ).length;
-  //         const defaultSlot = defaultTimeSlots[slotIndex % maxExamsPerDay];
-
-  //         let startTime = subject.startTime || defaultSlot.start;
-  //         let endTime =
-  //           subject.endTime || calculateEndTime(startTime, durationMinutes);
-
-  //         if (subject.endTime) {
-  //           const actualDuration = calculateDuration(startTime, endTime);
-  //           if (Math.abs(actualDuration - durationMinutes) > 5) {
-  //             throw new Error(
-  //               `Duration mismatch for subject ${
-  //                 subjectMap[subject.subjectId]
-  //               }: specified ${durationHours} hours, but ${startTime}-${endTime} is ${
-  //                 actualDuration / 60
-  //               } hours`
-  //             );
-  //           }
-  //         }
-
-  //         if (!isValidTimeFormat(startTime) || !isValidTimeFormat(endTime)) {
-  //           throw new Error(
-  //             `Invalid time format for subject ${
-  //               subjectMap[subject.subjectId]
-  //             }: ${startTime}-${endTime}`
-  //           );
-  //         }
-
-  //         const seating = adminController.generateSeatingArrangement(
-  //           students,
-  //           availableRooms,
-  //           students.length
-  //         );
-
-  //         const exam = new Exam({
-  //           school: schoolId,
-  //           examType,
-  //           customExamType: examType === "Other" ? customExamType : undefined,
-  //           startDate,
-  //           endDate,
-  //           class: classId,
-  //           subject: subject.subjectId,
-  //           examDate: new Date(currentDate),
-  //           startTime,
-  //           endTime,
-  //           duration: durationMinutes,
-  //           totalMarks: subject.totalMarks,
-  //           seatingArrangement: seating,
-  //         });
-
-  //         await exam.save({ session });
-  //         examSchedule.push(exam);
-  //       }
-  //       currentDate.setDate(currentDate.getDate() + 1);
-  //     }
-
-  //     await session.commitTransaction();
-  //     transactionCommitted = true;
-
-  //     const populatedSchedule = await Exam.find({
-  //       _id: { $in: examSchedule.map((e) => e._id) },
-  //     })
-  //       .populate("subject", "name")
-  //       .populate("class", "name division")
-  //       .lean();
-
-  //     res.status(201).json({
-  //       success: true,
-  //       schedule: populatedSchedule,
-  //       message: "Exam schedule created successfully",
-  //     });
-  //   } catch (error) {
-  //     if (!transactionCommitted) {
-  //       await session.abortTransaction();
-  //     }
-  //     console.error("Error in createExamSchedule:", error);
-  //     res.status(500).json({
-  //       success: false,
-  //       error: error.message,
-  //       message: "Failed to create exam schedule",
-  //     });
-  //   } finally {
-  //     session.endSession();
-  //   }
-  // },
-
-
-  // createExamSchedule: async (req, res) => {
-  //   const {
-  //     examName,
-  //     examType,
-  //     customExamType,
-  //     startDate,
-  //     endDate,
-  //     classIds, // Now supports multiple classes
-  //     subjects, // Array of { classId, subjectId, totalMarks, durationHours, startTime, endTime }
-  //     maxExamsPerDay = 2,
-  //     availableRooms,
-  //     roomCapacities, // Object mapping room names to capacities
-  //     nonWorkingDays = [],
-  //   } = req.body;
-  //   const schoolId = req.school._id;
-  //   const connection = req.connection;
-  //   const ExamEvent = getModel("ExamEvent", connection);
-  //   const Exam = getModel("Exam", connection);
-  //   const Class = getModel("Class", connection);
-  //   const Subject = getModel("Subject", connection);
-  //   const User = getModel("User", connection);
-
-  //   const session = await connection.startSession();
-  //   let transactionCommitted = false;
-
-  //   try {
-  //     session.startTransaction();
-
-  //     // Validate inputs
-  //     if (!examName) throw new Error("Exam name is required");
-  //     if (!Array.isArray(classIds) || classIds.length === 0) {
-  //       throw new Error("At least one class ID is required");
-  //     }
-
-  //     const classes = await Class.find({ _id: { $in: classIds } }).lean();
-  //     if (classes.length !== classIds.length) {
-  //       throw new Error("One or more classes not found");
-  //     }
-
-  //     // Validate exam type
-  //     if (!["Unit Test", "Midterm", "Final", "Practical", "Other"].includes(examType)) {
-  //       throw new Error("Invalid exam type");
-  //     }
-  //     if (examType === "Other" && (!customExamType || customExamType.trim() === "")) {
-  //       throw new Error('Custom exam type is required when selecting "Other"');
-  //     }
-
-  //     // Validate startDate
-  //     if (!startDate || isNaN(new Date(startDate))) {
-  //       throw new Error("Invalid start date");
-  //     }
-
-  //     // Validate endDate
-  //     if (!endDate || isNaN(new Date(endDate))) {
-  //       throw new Error("Invalid end date");
-  //     }
-
-  //     // Validate and convert nonWorkingDays
-  //     const validatedNonWorkingDays = nonWorkingDays
-  //       .map(d => new Date(d))
-  //       .filter(d => d instanceof Date && !isNaN(d));
-  //     if (nonWorkingDays.length > 0 && validatedNonWorkingDays.length === 0) {
-  //       throw new Error("All nonWorkingDays are invalid");
-  //     }
-
-  //     // Validate subjects
-  //     const subjectMap = {};
-  //     for (const sub of subjects) {
-  //       const classData = classes.find(c => c._id.toString() === sub.classId);
-  //       if (!classData) throw new Error(`Class ${sub.classId} not found for subject ${sub.subjectId}`);
-
-  //       const subject = await Subject.findOne({
-  //         _id: sub.subjectId,
-  //         class: sub.classId,
-  //         school: schoolId,
-  //       }).lean();
-  //       if (!subject) {
-  //         throw new Error(`Invalid subject ${sub.subjectId} for class ${classData.name}`);
-  //       }
-  //       subjectMap[sub.subjectId] = { ...subject, classId: sub.classId };
-  //     }
-
-  //     // Calculate available days
-  //     const start = new Date(startDate);
-  //     const end = new Date(endDate);
-  //     const daysAvailable = Math.ceil((end - start) / (1000 * 60 * 60 * 24)) + 1;
-  //     const totalSlots = daysAvailable * maxExamsPerDay;
-
-  //     if (subjects.length > totalSlots) {
-  //       throw new Error(
-  //         `Not enough days to schedule ${subjects.length} exams with max ${maxExamsPerDay} per day`
-  //       );
-  //     }
-
-  //     // Create ExamEvent
-  //     const examEvent = new ExamEvent({
-  //       school: schoolId,
-  //       name: examName,
-  //       examType,
-  //       customExamType: examType === "Other" ? customExamType : undefined,
-  //       startDate,
-  //       endDate,
-  //       classes: classIds,
-  //       nonWorkingDays: validatedNonWorkingDays,
-  //       createdBy: req.user._id,
-  //     });
-  //     await examEvent.save({ session });
-
-  //     const defaultDurations = {
-  //       Midterm: 2,
-  //       Final: 3,
-  //       "Unit Test": 1,
-  //       Practical: 2,
-  //       Other: 2,
-  //     };
-  //     const defaultTimeSlots = [
-  //       { start: "09:00", end: "11:00" },
-  //       { start: "13:00", end: "15:00" },
-  //     ];
-
-  //     // Fetch students for all classes
-  //     const studentsByClass = {};
-  //     for (const classId of classIds) {
-  //       const students = await User.find({
-  //         role: "student",
-  //         "studentDetails.class": classId,
-  //         school: schoolId,
-  //       }).lean();
-  //       studentsByClass[classId] = students;
-  //     }
-
-  //     // Prepare schedule plan
-  //     const schedulePlan = [];
-  //     for (const classId of classIds) {
-  //       const classSubjects = subjects.filter(s => s.classId === classId).map(s => ({
-  //         ...s,
-  //         weight: subjectMap[s.subjectId].weight,
-  //       }));
-  //       const classPlan = distributeExams(classSubjects, daysAvailable, maxExamsPerDay, validatedNonWorkingDays, startDate);
-  //       schedulePlan.push({ classId, plan: classPlan });
-  //     }
-
-  //     // Check for conflicts
-  //     const scheduleForConflicts = [];
-  //     for (const { classId, plan } of schedulePlan) {
-  //       let currentDate = new Date(startDate);
-  //       for (const day of plan) {
-  //         for (const subject of day) {
-  //           const slotIndex = scheduleForConflicts.filter(
-  //             s => s.examDate.toISOString().split("T")[0] === currentDate.toISOString().split("T")[0]
-  //           ).length;
-  //           const defaultSlot = defaultTimeSlots[slotIndex % maxExamsPerDay];
-  //           const startTime = subject.startTime || defaultSlot.start;
-  //           scheduleForConflicts.push({
-  //             classId,
-  //             subjectId: subject.subjectId,
-  //             examDate: new Date(currentDate),
-  //             startTime,
-  //             rooms: availableRooms,
-  //           });
-  //         }
-  //         currentDate.setDate(currentDate.getDate() + 1);
-  //       }
-  //     }
-
-  //     const teacherConflicts = await checkTeacherConflicts(scheduleForConflicts, connection);
-  //     if (teacherConflicts.length > 0) {
-  //       throw new Error(`Teacher conflicts detected: ${JSON.stringify(teacherConflicts)}`);
-  //     }
-
-  //     const roomConflicts = await checkRoomConflicts(scheduleForConflicts, connection, schoolId);
-  //     if (roomConflicts.length > 0) {
-  //       throw new Error(`Room conflicts detected: ${JSON.stringify(roomConflicts)}`);
-  //     }
-
-  //     // Create exams
-  //     const exams = [];
-  //     for (const { classId, plan } of schedulePlan) {
-  //       let currentDate = new Date(startDate);
-  //       for (const day of plan) {
-  //         if (validatedNonWorkingDays.some(d => d.toISOString().split("T")[0] === currentDate.toISOString().split("T")[0])) {
-  //           currentDate.setDate(currentDate.getDate() + 1);
-  //           continue;
-  //         }
-
-  //         for (const subject of day) {
-  //           const defaultDuration = defaultDurations[examType] || 2;
-  //           const durationHours = subject.durationHours || defaultDuration;
-  //           const durationMinutes = durationHours * 60;
-
-  //           const slotIndex = exams.filter(
-  //             e => e.examDate.toISOString().split("T")[0] === currentDate.toISOString().split("T")[0]
-  //           ).length;
-  //           const defaultSlot = defaultTimeSlots[slotIndex % maxExamsPerDay];
-
-  //           let startTime = subject.startTime || defaultSlot.start;
-  //           let endTime = subject.endTime || calculateEndTime(startTime, durationMinutes);
-
-  //           if (subject.endTime) {
-  //             const actualDuration = calculateDuration(startTime, endTime);
-  //             if (Math.abs(actualDuration - durationMinutes) > 5) {
-  //               throw new Error(
-  //                 `Duration mismatch for subject ${
-  //                   subjectMap[subject.subjectId].name
-  //                 }: specified ${durationHours} hours, but ${startTime}-${endTime} is ${
-  //                   actualDuration / 60
-  //                 } hours`
-  //               );
-  //             }
-  //           }
-
-  //           if (!isValidTimeFormat(startTime) || !isValidTimeFormat(endTime)) {
-  //             throw new Error(
-  //               `Invalid time format for subject ${
-  //                 subjectMap[subject.subjectId].name
-  //               }: ${startTime}-${endTime}`
-  //             );
-  //           }
-
-  //           const students = studentsByClass[classId];
-  //           const seating = generateSeatingArrangement(
-  //             students,
-  //             availableRooms,
-  //             students.length,
-  //             roomCapacities
-  //           );
-
-  //           const exam = new Exam({
-  //             school: schoolId,
-  //             examEvent: examEvent._id,
-  //             examType,
-  //             customExamType: examType === "Other" ? customExamType : undefined,
-  //             class: classId,
-  //             subject: subject.subjectId,
-  //             examDate: new Date(currentDate),
-  //             startTime,
-  //             endTime,
-  //             duration: durationMinutes,
-  //             totalMarks: subject.totalMarks,
-  //             seatingArrangement: seating,
-  //           });
-
-  //           exams.push(exam);
-  //         }
-  //         currentDate.setDate(currentDate.getDate() + 1);
-  //       }
-  //     }
-
-  //     // Bulk save exams
-  //     await Exam.insertMany(exams, { session });
-
-  //     // Update ExamEvent status
-  //     await ExamEvent.updateOne(
-  //       { _id: examEvent._id },
-  //       { status: "scheduled" },
-  //       { session }
-  //     );
-
-  //     await session.commitTransaction();
-  //     transactionCommitted = true;
-
-  //     const populatedSchedule = await Exam.find({
-  //       _id: { $in: exams.map(e => e._id) },
-  //     })
-  //       .populate("subject", "name")
-  //       .populate("class", "name division")
-  //       .lean();
-
-  //     res.status(201).json({
-  //       success: true,
-  //       examEvent: {
-  //         id: examEvent._id,
-  //         name: examEvent.name,
-  //         status: examEvent.status,
-  //       },
-  //       schedule: populatedSchedule,
-  //       message: "Exam schedule created successfully",
-  //     });
-  //   } catch (error) {
-  //     if (!transactionCommitted) {
-  //       await session.abortTransaction();
-  //     }
-  //     console.error("Error in createExamSchedule:", error);
-  //     res.status(500).json({
-  //       success: false,
-  //       error: error.message,
-  //       message: "Failed to create exam schedule",
-  //     });
-  //   } finally {
-  //     session.endSession();
-  //   }
-  // },
 
 
   createExamSchedule: async (req, res) => {
@@ -4386,70 +3198,45 @@ publishIndividualMarksheet: async (req, res) => {
     }
   },
 
-  // getExamSchedules: async (req, res) => {
-  //   try {
-  //     const schoolId = req.school._id;
-  //     const connection = req.connection;
-  //     const Exam = getModel("Exam", connection);
-  //     const Class = getModel("Class", connection);
-  //     const Subject = getModel("Subject", connection);
-  //     const User = getModel("User", connection);
+ 
 
+  // getExamSchedules: async (req, res) => {
+  //   const schoolId = req.school._id;
+  //   const connection = req.connection;
+  //   const Exam = getModel("Exam", connection);
+
+  //   try {
   //     const exams = await Exam.find({ school: schoolId })
-  //       .populate("class", "name division", Class)
-  //       .populate("subject", "name", Subject)
-  //       .populate({
-  //         path: "seatingArrangement.arrangement.students.student",
-  //         model: User,
-  //         select: "name",
-  //       })
-  //       .sort({ examDate: 1, startTime: 1 })
+  //       .populate("subject", "name")
+  //       .populate("class", "name division")
+  //       .populate("examEvent", "name examType customExamType")
   //       .lean();
 
   //     if (!exams.length) {
   //       return res.status(404).json({ message: "No exam schedules found" });
   //     }
 
-  //     const scheduleByDate = exams.reduce((acc, exam) => {
-  //       if (
-  //         !exam.examDate ||
-  //         !(exam.examDate instanceof Date) ||
-  //         isNaN(exam.examDate.getTime())
-  //       ) {
-  //         console.warn(
-  //           `Invalid examDate for exam ${exam._id}: ${exam.examDate}`
-  //         );
-  //         const fallbackDate = new Date().toISOString().split("T")[0];
-  //         acc[fallbackDate] = acc[fallbackDate] || [];
-  //         acc[fallbackDate].push({
-  //           ...exam,
-  //           examDate: new Date(fallbackDate),
-  //           displayExamType:
-  //             exam.examType === "Other" ? exam.customExamType : exam.examType,
-  //         });
-  //         return acc;
-  //       }
-
+  //     const schedule = {};
+  //     exams.forEach((exam) => {
   //       const dateKey = exam.examDate.toISOString().split("T")[0];
-  //       acc[dateKey] = acc[dateKey] || [];
-  //       acc[dateKey].push({
+  //       if (!schedule[dateKey]) {
+  //         schedule[dateKey] = [];
+  //       }
+  //       schedule[dateKey].push({
   //         ...exam,
-  //         displayExamType:
-  //           exam.examType === "Other" ? exam.customExamType : exam.examType,
+  //         examType: exam.examType === "Other" ? exam.examEvent.customExamType : exam.examType,
+  //         displayExamType: exam.examType === "Other" ? exam.examEvent.customExamType : exam.examType,
   //       });
-  //       return acc;
-  //     }, {});
+  //     });
 
-  //     Object.keys(scheduleByDate).forEach((date) => {
-  //       scheduleByDate[date].sort((a, b) => {
-  //         if (!a.startTime || !b.startTime) return 0;
-  //         return a.startTime.localeCompare(b.startTime);
-  //       });
+  //     // Sort exams by startTime within each date
+  //     Object.keys(schedule).forEach((date) => {
+  //       schedule[date].sort((a, b) => a.startTime.localeCompare(b.startTime));
   //     });
 
   //     res.status(200).json({
   //       success: true,
-  //       schedule: scheduleByDate,
+  //       schedule,
   //       totalExams: exams.length,
   //       message: "Exam schedules retrieved successfully",
   //     });
@@ -4464,54 +3251,69 @@ publishIndividualMarksheet: async (req, res) => {
   // },
 
   getExamSchedules: async (req, res) => {
-    const schoolId = req.school._id;
-    const connection = req.connection;
-    const Exam = getModel("Exam", connection);
+  const schoolId = req.school._id;
+  const connection = req.connection;
+  const Exam = getModel("Exam", connection);
+  const User = getModel("User", connection);
+  const Subject= getModel("Subject",connection);
+  const Class=getModel("Class",connection)
+  const ExamEvent=getModel("ExamEvent",connection)
 
-    try {
-      const exams = await Exam.find({ school: schoolId })
-        .populate("subject", "name")
-        .populate("class", "name division")
-        .populate("examEvent", "name examType customExamType")
-        .lean();
+  try {
+    const exams = await Exam.find({ school: schoolId })
+      .populate("subject", "name")
+      .populate("class", "name division")
+      .populate("examEvent", "name examType customExamType")
+      .populate({
+        path: "seatingArrangement.arrangement.students.student",
+        model: User,
+        select: "name studentDetails.grNumber",
+      })
+      .lean();
 
-      if (!exams.length) {
-        return res.status(404).json({ message: "No exam schedules found" });
-      }
-
-      const schedule = {};
-      exams.forEach((exam) => {
-        const dateKey = exam.examDate.toISOString().split("T")[0];
-        if (!schedule[dateKey]) {
-          schedule[dateKey] = [];
-        }
-        schedule[dateKey].push({
-          ...exam,
-          examType: exam.examType === "Other" ? exam.examEvent.customExamType : exam.examType,
-          displayExamType: exam.examType === "Other" ? exam.examEvent.customExamType : exam.examType,
-        });
-      });
-
-      // Sort exams by startTime within each date
-      Object.keys(schedule).forEach((date) => {
-        schedule[date].sort((a, b) => a.startTime.localeCompare(b.startTime));
-      });
-
-      res.status(200).json({
-        success: true,
-        schedule,
-        totalExams: exams.length,
-        message: "Exam schedules retrieved successfully",
-      });
-    } catch (error) {
-      console.error("Error in getExamSchedules:", error);
-      res.status(500).json({
-        success: false,
-        error: error.message,
-        message: "Failed to retrieve exam schedules",
-      });
+    if (!exams.length) {
+      return res.status(404).json({ message: "No exam schedules found" });
     }
-  },
+
+    const schedule = {};
+    exams.forEach((exam) => {
+      const dateKey = exam.examDate.toISOString().split("T")[0];
+      if (!schedule[dateKey]) {
+        schedule[dateKey] = [];
+      }
+      schedule[dateKey].push({
+        ...exam,
+        examType:
+          exam.examType === "Other"
+            ? exam.examEvent.customExamType
+            : exam.examType,
+        displayExamType:
+          exam.examType === "Other"
+            ? exam.examEvent.customExamType
+            : exam.examType,
+      });
+    });
+
+    // Sort exams by startTime within each date
+    Object.keys(schedule).forEach((date) => {
+      schedule[date].sort((a, b) => a.startTime.localeCompare(b.startTime));
+    });
+
+    res.status(200).json({
+      success: true,
+      schedule,
+      totalExams: exams.length,
+      message: "Exam schedules retrieved successfully",
+    });
+  } catch (error) {
+    console.error("Error in getExamSchedules:", error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      message: "Failed to retrieve exam schedules",
+    });
+  }
+},
   
 
   enterResults: async (req, res) => {
@@ -5269,26 +4071,7 @@ const getDefaultPermissions = (role) => {
   return permissions;
 };
 
-// const checkTeacherConflicts = async (schedule) => {
-//   const conflicts = [];
-//   const teacherSchedule = {};
 
-//   schedule.forEach((slot) => {
-//     const key = `${slot.day}-${slot.period}`;
-//     if (teacherSchedule[key]?.includes(slot.teacher)) {
-//       conflicts.push({
-//         teacher: slot.teacher,
-//         day: slot.day,
-//         period: slot.period,
-//       });
-//     } else {
-//       teacherSchedule[key] = teacherSchedule[key] || [];
-//       teacherSchedule[key].push(slot.teacher);
-//     }
-//   });
-
-//   return conflicts;
-// };
 
 const checkTeacherConflicts = async (schedule, connection) => {
   const Subject = getModel("Subject", connection);
@@ -5532,16 +4315,7 @@ const generateAttendanceCharts = (attendanceData) => {
   };
 };
 
-// const calculateGrade = (subjects) => {
-//   const percentage = calculatePercentage(subjects);
-//   if (percentage >= 90) return "A+";
-//   if (percentage >= 80) return "A";
-//   if (percentage >= 70) return "B+";
-//   if (percentage >= 60) return "B";
-//   if (percentage >= 50) return "C+";
-//   if (percentage >= 40) return "C";
-//   return "F";
-// };
+
 
 const calculateGrade = (results) => {
   const percentage = results[0].percentage || 0;
@@ -5663,74 +4437,7 @@ const determineStatus = (subjects) => {
   return allMarked ? "completed" : "pending";
 };
 
-// const distributeExams = (subjects, daysAvailable, maxExamsPerDay) => {
-//   const schedule = Array(daysAvailable)
-//     .fill()
-//     .map(() => []);
-//   let dayIndex = 0;
 
-//   for (const subject of subjects) {
-//     schedule[dayIndex].push(subject);
-//     dayIndex = (dayIndex + 1) % daysAvailable;
-//     // Ensure we don't exceed maxExamsPerDay
-//     while (schedule[dayIndex].length >= maxExamsPerDay) {
-//       dayIndex = (dayIndex + 1) % daysAvailable;
-//     }
-//   }
-
-//   // Filter out empty days
-//   return schedule.filter((day) => day.length > 0);
-// };
-
-// const distributeExams = (exams, daysAvailable, maxExamsPerDay) => {
-//   const schedule = Array.from({ length: daysAvailable }, () => []);
-//   let examIndex = 0;
-
-//   for (let day = 0; day < daysAvailable && examIndex < exams.length; day++) {
-//     for (let slot = 0; slot < maxExamsPerDay && examIndex < exams.length; slot++) {
-//       schedule[day].push(exams[examIndex]);
-//       examIndex++;
-//     }
-//   }
-
-//   return schedule.filter((day) => day.length > 0);
-// };
-
-
-// const distributeExams = (subjects, daysAvailable, maxExamsPerDay, nonWorkingDays, startDate) => {
-//   const schedule = [];
-//   let currentDay = 0;
-//   const heavySubjects = subjects.filter(s => s.weight === "heavy");
-//   const lightSubjects = subjects.filter(s => s.weight !== "heavy");
-//   const shuffledSubjects = [...heavySubjects, ...lightSubjects].sort(() => Math.random() - 0.5);
-
-//   for (const subject of shuffledSubjects) {
-//     while (currentDay < daysAvailable) {
-//       const currentDate = new Date(startDate);
-//       currentDate.setDate(currentDate.getDate() + currentDay);
-//       if (nonWorkingDays.some(d => d instanceof Date && !isNaN(d) && d.toISOString().split("T")[0] === currentDate.toISOString().split("T")[0])) {
-//         currentDay++;
-//         continue;
-//       }
-
-//       if (!schedule[currentDay]) schedule[currentDay] = [];
-//       if (schedule[currentDay].length < maxExamsPerDay) {
-//         if (subject.weight === "heavy" && schedule[currentDay].some(s => s.weight === "heavy")) {
-//           currentDay++;
-//           continue;
-//         }
-//         schedule[currentDay].push(subject);
-//         break;
-//       }
-//       currentDay++;
-//     }
-//     if (currentDay >= daysAvailable) {
-//       throw new Error("Not enough days to schedule all exams");
-//     }
-//   }
-
-//   return schedule;
-// };
 
 
 const distributeExams = (subjects, daysAvailable, maxExamsPerDay, nonWorkingDays, startDate) => {
@@ -5774,105 +4481,7 @@ const distributeExams = (subjects, daysAvailable, maxExamsPerDay, nonWorkingDays
   return schedule;
 };
 
-// const calculateEndTime = (startTime, durationMinutes) => {
-//   const [hours, minutes] = startTime.split(":").map(Number);
-//   const startMinutes = hours * 60 + minutes;
-//   const endMinutes = startMinutes + durationMinutes;
 
-//   const endHours = Math.floor(endMinutes / 60) % 24;
-//   const endMins = endMinutes % 60;
-
-//   return `${String(endHours).padStart(2, "0")}:${String(endMins).padStart(
-//     2,
-//     "0"
-//   )}`;
-// };
-
-// const calculateDuration = (startTime, endTime) => {
-//   const [startHours, startMinutes] = startTime.split(":").map(Number);
-//   const [endHours, endMinutes] = endTime.split(":").map(Number);
-
-//   const startTotal = startHours * 60 + startMinutes;
-//   let endTotal = endHours * 60 + endMinutes;
-
-//   // Handle case where end time crosses midnight
-//   if (endTotal < startTotal) {
-//     endTotal += 24 * 60;
-//   }
-
-//   return endTotal - startTotal;
-// };
-
-// const checkRoomConflicts = async (exams, availableRooms, schoolId, connection) => {
-//   const Exam = connection.model("Exam");
-//   const conflicts = [];
-
-//   // Get existing exams for the same dates
-//   const examDates = [...new Set(exams.map((e) => new Date(e.examDate).toISOString().split("T")[0]))];
-//   const existingExams = await Exam.find({
-//     school: schoolId,
-//     examDate: {
-//       $gte: new Date(examDates[0]),
-//       $lte: new Date(examDates[examDates.length - 1]),
-//     },
-//   }).lean();
-
-//   const roomSchedules = {};
-
-//   // Add existing exams to room schedules
-//   existingExams.forEach((exam) => {
-//     const dateKey = exam.examDate.toISOString().split("T")[0];
-//     const timeKey = `${exam.startTime}-${exam.endTime}`;
-//     exam.seatingArrangement.forEach((room) => {
-//       roomSchedules[room.classroom] = roomSchedules[room.classroom] || {};
-//       roomSchedules[room.classroom][dateKey] = roomSchedules[room.classroom][dateKey] || [];
-//       roomSchedules[room.classroom][dateKey].push({
-//         subject: exam.subjects[0]?.subject?.toString() || "Unknown",
-//         time: timeKey,
-//         classId: exam.class.toString(),
-//       });
-//     });
-//   });
-
-//   // Add new exams to check for conflicts
-//   exams.forEach((exam) => {
-//     const dateKey = new Date(exam.examDate).toISOString().split("T")[0];
-//     const timeKey = `${exam.startTime}-${exam.endTime}`;
-//     availableRooms.forEach((room) => {
-//       roomSchedules[room] = roomSchedules[room] || {};
-//       roomSchedules[room][dateKey] = roomSchedules[room][dateKey] || [];
-//       roomSchedules[room][dateKey].push({
-//         subject: exam.subjectId,
-//         time: timeKey,
-//         classId,
-//       });
-//     });
-//   });
-
-//   // Check for conflicts
-//   for (const room in roomSchedules) {
-//     for (const date in roomSchedules[room]) {
-//       const schedules = roomSchedules[room][date];
-//       if (schedules.length > 1) {
-//         schedules.sort((a, b) => a.time.localeCompare(b.time));
-//         for (let i = 1; i < schedules.length; i++) {
-//           const prevEnd = calculateDuration("00:00", schedules[i - 1].time.split("-")[1]);
-//           const currStart = calculateDuration("00:00", schedules[i].time.split("-")[0]);
-//           if (currStart < prevEnd) {
-//             conflicts.push({
-//               room,
-//               date,
-//               time: schedules[i].time,
-//               subjects: [schedules[i - 1].subject, schedules[i].subject],
-//             });
-//           }
-//         }
-//       }
-//     }
-//   }
-
-//   return conflicts;
-// };
 
 
 const checkRoomConflicts = async (schedule, connection, schoolId) => {

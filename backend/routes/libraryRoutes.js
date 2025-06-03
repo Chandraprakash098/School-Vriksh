@@ -38,10 +38,36 @@ router.put('/books/:bookId', authMiddleware, libraryController.updateBook);
 router.delete('/books/:bookId', authMiddleware, libraryController.deleteBook);
 router.get('/requests', authMiddleware, libraryController.getBookIssueRequests);
 router.post('/books/:bookId/issue/:studentId', authMiddleware, libraryController.issueBook);
+router.post('/requests/reject/:requestId', authMiddleware, libraryController.rejectBookRequest);
 router.post('/books/return/:issueId', authMiddleware, libraryController.returnBook);
 router.get('/stats', authMiddleware, libraryController.getLibraryStats);
 router.get('/search', authMiddleware, libraryController.searchBooks);
 router.get('/overdue', authMiddleware, libraryController.getOverdueBooks);
-router.post('/books/:bookId/cover', authMiddleware, uploadBookCover , libraryController.uploadBookCover);
+// router.post('/books/:bookId/cover', authMiddleware, libraryController.uploadBookCover);
+router.post(
+  '/books/:bookId/cover',
+  authMiddleware,
+  (req, res, next) => {
+    // Handle Multer upload
+    uploadBookCover(req, res, (err) => {
+      if (err instanceof multer.MulterError) {
+        // A Multer error occurred during upload
+        return res.status(400).json({ 
+          success: false,
+          error: err.message 
+        });
+      } else if (err) {
+        // An unknown error occurred
+        return res.status(500).json({ 
+          success: false,
+          error: err.message 
+        });
+      }
+      // Everything went fine, proceed to controller
+      next();
+    });
+  },
+  libraryController.uploadBookCover
+);
 router.post('/update-overdue', authMiddleware, libraryController.updateOverdueStatus);
 module.exports = router;

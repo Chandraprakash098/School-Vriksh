@@ -33,16 +33,12 @@ const upload = multer({
   },
 });
 
-// Book cover upload configuration (using memory storage for direct S3 upload)
+
+
 const uploadBookCover = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
   fileFilter: (req, file, cb) => {
-    logger.info('Processing book cover upload', {
-      fieldname: file.fieldname,
-      originalname: file.originalname,
-      mimetype: file.mimetype,
-    });
     const allowedTypes = ["image/jpeg", "image/png", "image/jpg"];
     if (allowedTypes.includes(file.mimetype)) {
       cb(null, true);
