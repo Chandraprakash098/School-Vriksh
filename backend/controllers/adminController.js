@@ -1120,6 +1120,7 @@ const adminController = {
       const connection = req.connection;
       const Class = getModel("Class", connection);
       const User = getModel("User", connection);
+      const Subject= getModel("Subject",connection)
 
       const classes = await Class.find({ school: schoolId })
         .populate("classTeacher", "name email profile", User)

@@ -3428,14 +3428,14 @@ verifyPayment : async (req, res) => {
       feeTypesByMonth.set(typeKey, fee);
     });
 
-    // Create a map to store payment information by fee type, month, and year
+    
     const paymentMap = new Map();
     payments.forEach((payment) => {
       payment.feesPaid.forEach((feePaid) => {
         const key = `${feePaid.type}_${feePaid.month}_${feePaid.year}_${
           feePaid.transportationSlab || ""
         }`;
-        // Ensure no duplicate counting by overwriting with the latest payment
+        
         paymentMap.set(key, {
           amount: feePaid.amount,
           date: payment.paymentDate,
@@ -3448,12 +3448,12 @@ verifyPayment : async (req, res) => {
       });
     });
 
-    // Process fees and generate the response structure
+    
     const feeData = {};
     for (const [monthYear, fees] of feeMap.entries()) {
       const [month, year] = monthYear.split("-").map(Number);
 
-      // Initialize the month's total counters
+      
       feeData[monthYear] = {
         total: 0,
         totalPaid: 0,
@@ -3461,7 +3461,7 @@ verifyPayment : async (req, res) => {
         fees: {},
       };
 
-      // Process each fee for this month
+      
       fees.forEach((fee) => {
         const paymentKey = `${fee.type}_${fee.month}_${fee.year}_${
           fee.transportationDetails?.distanceSlab || ""
@@ -3479,14 +3479,14 @@ verifyPayment : async (req, res) => {
         const remainingAmount = Math.max(0, fee.amount - paidAmount);
         let status = "pending";
 
-        // Determine payment status
+        
         if (paidAmount >= fee.amount) {
           status = "paid";
         } else if (paidAmount > 0) {
           status = "partially_paid";
         }
 
-        // Add this fee to the month's data
+        
         feeData[monthYear].fees[fee.type] = {
           amount: fee.amount,
           paidAmount: paidAmount,
