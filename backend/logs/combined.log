@@ -1125,3 +1125,39 @@
 {"level":"error","message":"No database connection provided","timestamp":"2025-06-02T09:31:35.251Z"}
 {"error":{},"level":"error","message":"Error uploading book cover: Cannot read properties of undefined (reading 'model')","timestamp":"2025-06-02T09:37:00.005Z"}
 {"level":"info","message":"Fetched 1 pending book issue requests","schoolId":"6822d8d81267a79341641261","timestamp":"2025-06-02T09:38:25.684Z"}
+{"error":{},"level":"error","message":"Error requesting book: sendEmail is not a function","timestamp":"2025-06-16T02:47:23.206Z"}
+{"level":"info","message":"Book requested: To Kill a Mockingbird (Updated Edition) by student 6822dd97f0aacc87bdd67cc2","schoolId":"6822d8d81267a79341641261","timestamp":"2025-06-16T02:49:18.096Z"}
+{"error":{"_message":"Library validation failed","errors":{"isGeneral":{"kind":"Boolean","message":"Cast to Boolean failed for value \"True\" (type string) at path \"isGeneral\" because of \"CastError\"","name":"CastError","path":"isGeneral","reason":{"kind":"boolean","message":"Cast to boolean failed for value \"True\" (type string) at path \"undefined\"","name":"CastError","stringValue":"\"True\"","value":"True","valueType":"string"},"stringValue":"\"True\"","value":"True","valueType":"string"}},"message":"Library validation failed: isGeneral: Cast to Boolean failed for value \"True\" (type string) at path \"isGeneral\" because of \"CastError\"","name":"ValidationError"},"level":"error","message":"Error adding book: Library validation failed: isGeneral: Cast to Boolean failed for value \"True\" (type string) at path \"isGeneral\" because of \"CastError\"","timestamp":"2025-06-16T02:58:35.934Z"}
+{"isbn":"2923","level":"info","message":"Book added: Nodejs by CP","schoolId":"6822d8d81267a79341641261","timestamp":"2025-06-16T03:00:33.757Z"}
+{"errors":["Invalid category Technology for ISBN 1234567890","Invalid category Database for ISBN 9876543210"],"level":"info","message":"Bulk import completed: 0 books imported","schoolId":"6822d8d81267a79341641261","timestamp":"2025-06-16T03:03:28.942Z"}
+{"errors":[],"level":"info","message":"Bulk import completed: 2 books imported","schoolId":"6822d8d81267a79341641261","timestamp":"2025-06-16T03:04:43.914Z"}
+{"level":"info","message":"Fetched 1 pending book issue/reservation requests","schoolId":"6822d8d81267a79341641261","timestamp":"2025-06-16T03:08:33.651Z"}
+{"error":{},"level":"error","message":"Error issuing book: sendEmail is not a function","timestamp":"2025-06-16T03:10:30.901Z"}
+{"level":"info","message":"Book issued: To Kill a Mockingbird (Updated Edition) to student 6822dd97f0aacc87bdd67cc2","requestId":"direct","schoolId":"6822d8d81267a79341641261","timestamp":"2025-06-16T03:15:05.428Z"}
+{"level":"info","message":"Fetched 1 pending book issue/reservation requests","schoolId":"6822d8d81267a79341641261","timestamp":"2025-06-16T03:15:32.406Z"}
+{"level":"info","message":"Book issued: Nodejs to student 6822dd97f0aacc87bdd67cc2","requestId":"direct","schoolId":"6822d8d81267a79341641261","timestamp":"2025-06-16T03:18:20.436Z"}
+{"error":{},"level":"error","message":"Error returning book: sendEmail is not a function","timestamp":"2025-06-16T03:19:20.481Z"}
+{"level":"info","message":"Library stats fetched","schoolId":"6822d8d81267a79341641261","timestamp":"2025-06-16T03:19:53.027Z"}
+{"level":"info","message":"Category added: Technology","schoolId":"6822d8d81267a79341641261","timestamp":"2025-06-16T03:21:22.681Z"}
+{"level":"info","message":"Category added: Database","schoolId":"6822d8d81267a79341641261","timestamp":"2025-06-16T03:21:35.034Z"}
+{"level":"info","message":"Fetched book history for student 6822dd97f0aacc87bdd67cc2","schoolId":"6822d8d81267a79341641261","timestamp":"2025-06-16T03:23:50.732Z"}
+{"level":"info","message":"Fetched book history for student 6822dd97f0aacc87bdd67cc2","schoolId":"6822d8d81267a79341641261","timestamp":"2025-06-16T03:24:22.490Z"}
+{"error":{"code":"LIMIT_UNEXPECTED_FILE","field":"file","message":"Unexpected field","name":"MulterError","storageErrors":[]},"level":"error","message":"Multer error: Unexpected field","timestamp":"2025-06-16T03:29:53.039Z"}
+{"error":{"code":"LIMIT_UNEXPECTED_FILE","field":"file","message":"Unexpected field","name":"MulterError","storageErrors":[]},"level":"error","message":"Multer error: Unexpected field","timestamp":"2025-06-16T03:30:47.366Z"}
+{"error":{"code":"LIMIT_UNEXPECTED_FILE","field":"file","message":"Unexpected field","name":"MulterError","storageErrors":[]},"level":"error","message":"Multer error: Unexpected field","timestamp":"2025-06-16T03:32:07.094Z"}
+{"error":{"code":"LIMIT_UNEXPECTED_FILE","field":"file","message":"Unexpected field","name":"MulterError","storageErrors":[]},"level":"error","message":"Multer error: Unexpected field","timestamp":"2025-06-16T03:40:23.020Z"}
+{"fieldname":"cover","level":"info","message":"Processing book cover upload","mimetype":"image/jpeg","originalname":"book-cover-page-design.jpg","timestamp":"2025-06-16T03:40:30.882Z"}
+{"level":"warn","message":"S3 upload attempt 1 failed for library/6822d8d81267a79341641261/684f88d1a7e92932fa02fa4b/cover_684f88d1a7e92932fa02fa4b_1750045231029.jpg: The AWS Access Key Id you provided does not exist in our records.","timestamp":"2025-06-16T03:40:31.525Z"}
+{"level":"warn","message":"S3 upload attempt 2 failed for library/6822d8d81267a79341641261/684f88d1a7e92932fa02fa4b/cover_684f88d1a7e92932fa02fa4b_1750045231029.jpg: The AWS Access Key Id you provided does not exist in our records.","timestamp":"2025-06-16T03:40:32.803Z"}
+{"level":"warn","message":"S3 upload attempt 3 failed for library/6822d8d81267a79341641261/684f88d1a7e92932fa02fa4b/cover_684f88d1a7e92932fa02fa4b_1750045231029.jpg: The AWS Access Key Id you provided does not exist in our records.","timestamp":"2025-06-16T03:40:35.202Z"}
+{"isbn":"9780743273565","level":"info","message":"Book added: The Great Gatsby by F. Scott Fitzgerald","schoolId":"6822d8d81267a79341641261","timestamp":"2025-06-17T04:17:41.269Z"}
+{"bookId":"6850ec65507f6bba84a35c22","level":"info","message":"Book updated: The Great Gatsby (Updated Edition)","schoolId":"6822d8d81267a79341641261","timestamp":"2025-06-17T04:19:42.066Z"}
+{"bookId":"684f89cb0108b5af7baca9c3","level":"info","message":"Book deleted: MongoDB Mastery","schoolId":"6822d8d81267a79341641261","timestamp":"2025-06-17T04:20:15.788Z"}
+{"level":"info","message":"Book requested: The Great Gatsby (Updated Edition) by student 6822dd97f0aacc87bdd67cc2","schoolId":"6822d8d81267a79341641261","timestamp":"2025-06-17T04:23:41.876Z"}
+{"finePerDay":5,"level":"info","loanPeriodDays":14,"message":"Book issued: The Great Gatsby (Updated Edition) to student 6822dd97f0aacc87bdd67cc2","requestId":"6850edcd507f6bba84a35c5f","schoolId":"6822d8d81267a79341641261","timestamp":"2025-06-17T04:27:26.884Z"}
+{"error":{},"level":"error","message":"Error returning book: sendEmail is not a function","timestamp":"2025-06-17T04:28:42.294Z"}
+{"level":"info","message":"Library stats fetched","schoolId":"6822d8d81267a79341641261","timestamp":"2025-06-17T04:30:20.280Z"}
+{"level":"info","message":"Fetched book history for student 6822dd97f0aacc87bdd67cc2","schoolId":"6822d8d81267a79341641261","timestamp":"2025-06-17T04:34:59.756Z"}
+{"level":"info","message":"Category added: Science Fiction","schoolId":"6822d8d81267a79341641261","timestamp":"2025-06-17T04:46:45.261Z"}
+{"level":"info","message":"Overdue books fetched","schoolId":"6822d8d81267a79341641261","timestamp":"2025-06-17T04:47:13.252Z"}
+{"level":"info","message":"Books searched: Gatsby","schoolId":"6822d8d81267a79341641261","timestamp":"2025-06-17T04:47:57.164Z"}

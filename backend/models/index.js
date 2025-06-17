@@ -1,3 +1,4 @@
+const Library = require('./Library');
 
 
 console.log('Loading models/index.js');
@@ -27,6 +28,7 @@ const models = {
   DailyWork: require('../models/DailyWork'),
   AuditLog:require('../models/AuditLog'),
   Marks: require("../models/marks"),
+  Library:require("../models/Library")
 };
 
 console.log('Loaded models:', Object.keys(models).map(name => ({
