@@ -1161,3 +1161,15 @@
 {"level":"info","message":"Category added: Science Fiction","schoolId":"6822d8d81267a79341641261","timestamp":"2025-06-17T04:46:45.261Z"}
 {"level":"info","message":"Overdue books fetched","schoolId":"6822d8d81267a79341641261","timestamp":"2025-06-17T04:47:13.252Z"}
 {"level":"info","message":"Books searched: Gatsby","schoolId":"6822d8d81267a79341641261","timestamp":"2025-06-17T04:47:57.164Z"}
+{"level":"info","message":"Fetched book history for student 6822dd09f0aacc87bdd67cb1","schoolId":"6822d8d81267a79341641261","timestamp":"2025-06-17T06:22:35.413Z"}
+{"level":"info","message":"Fetched book history for student 6822dd97f0aacc87bdd67cc2","schoolId":"6822d8d81267a79341641261","timestamp":"2025-06-17T06:22:48.626Z"}
+{"error":{},"level":"error","message":"Error fetching books for student: libraryModelFactory is not defined","timestamp":"2025-06-18T04:36:30.986Z"}
+{"error":{},"level":"error","message":"Error fetching books for student: Schema hasn't been registered for model \"Class\".\nUse mongoose.model(name, schema)","timestamp":"2025-06-18T04:37:02.388Z"}
+{"error":{},"level":"error","message":"Error fetching books for student: Schema hasn't been registered for model \"Class\".\nUse mongoose.model(name, schema)","timestamp":"2025-06-18T04:38:29.370Z"}
+{"error":{},"level":"error","message":"Error fetching books for student: Schema hasn't been registered for model \"Class\".\nUse mongoose.model(name, schema)","timestamp":"2025-06-18T04:39:19.574Z"}
+{"error":{},"level":"error","message":"Error fetching books for student: Schema hasn't been registered for model \"Class\".\nUse mongoose.model(name, schema)","timestamp":"2025-06-18T04:40:52.199Z"}
+{"level":"info","message":"Books fetched for student: undefined","schoolId":"6822d8d81267a79341641261","timestamp":"2025-06-18T04:42:26.855Z"}
+{"level":"info","message":"All books fetched for librarian: undefined","schoolId":"6822d8d81267a79341641261","timestamp":"2025-06-18T04:44:46.204Z"}
+{"level":"info","message":"Fetched pending requests for student 6822dd97f0aacc87bdd67cc2","schoolId":"6822d8d81267a79341641261","timestamp":"2025-06-18T04:49:43.361Z"}
+{"level":"info","message":"Fetched audit logs","schoolId":"6822d8d81267a79341641261","timestamp":"2025-06-18T04:50:29.078Z"}
+{"level":"info","message":"Book requested: The Great Gatsby (Updated Edition) by student 6822dd97f0aacc87bdd67cc2","schoolId":"6822d8d81267a79341641261","timestamp":"2025-06-18T04:58:57.956Z"}

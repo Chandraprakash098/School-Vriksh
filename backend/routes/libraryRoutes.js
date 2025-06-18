@@ -142,6 +142,7 @@ const csvUpload = multer({
 }).single('csvFile');
 
 router.post('/books', authMiddleware, libraryController.addBook);
+router.get('/all-books', authMiddleware, libraryController.getAllBooks);
 router.post('/bulk-import', authMiddleware, csvUpload, libraryController.bulkImportBooks);
 router.put('/books/:bookId', authMiddleware, libraryController.updateBook);
 router.delete('/books/:bookId', authMiddleware, libraryController.deleteBook);

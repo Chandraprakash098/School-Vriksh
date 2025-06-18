@@ -222,3 +222,8 @@
 {"error":{"code":"LIMIT_UNEXPECTED_FILE","field":"file","message":"Unexpected field","name":"MulterError","storageErrors":[]},"level":"error","message":"Multer error: Unexpected field","timestamp":"2025-06-16T03:32:07.094Z"}
 {"error":{"code":"LIMIT_UNEXPECTED_FILE","field":"file","message":"Unexpected field","name":"MulterError","storageErrors":[]},"level":"error","message":"Multer error: Unexpected field","timestamp":"2025-06-16T03:40:23.020Z"}
 {"error":{},"level":"error","message":"Error returning book: sendEmail is not a function","timestamp":"2025-06-17T04:28:42.294Z"}
+{"error":{},"level":"error","message":"Error fetching books for student: libraryModelFactory is not defined","timestamp":"2025-06-18T04:36:30.986Z"}
+{"error":{},"level":"error","message":"Error fetching books for student: Schema hasn't been registered for model \"Class\".\nUse mongoose.model(name, schema)","timestamp":"2025-06-18T04:37:02.388Z"}
+{"error":{},"level":"error","message":"Error fetching books for student: Schema hasn't been registered for model \"Class\".\nUse mongoose.model(name, schema)","timestamp":"2025-06-18T04:38:29.370Z"}
+{"error":{},"level":"error","message":"Error fetching books for student: Schema hasn't been registered for model \"Class\".\nUse mongoose.model(name, schema)","timestamp":"2025-06-18T04:39:19.574Z"}
+{"error":{},"level":"error","message":"Error fetching books for student: Schema hasn't been registered for model \"Class\".\nUse mongoose.model(name, schema)","timestamp":"2025-06-18T04:40:52.199Z"}

@@ -2958,6 +2958,57 @@ const libraryController = {
     }
   },
 
+  getAllBooks: async (req, res) => {
+  try {
+    const { query, category, classId, isGeneral } = req.query;
+    const schoolId = req.school._id.toString();
+    const connection = req.connection;
+    const { Library: LibraryModel, Category: CategoryModel } = libraryModelFactory(connection);
+    const UserModel = User(connection);
+
+    const user = await UserModel.findById(req.user._id);
+    if (!user.permissions.canManageLibrary) {
+      return res.status(403).json({ message: 'Unauthorized: You do not have permission to manage library' });
+    }
+
+    const searchCriteria = { school: schoolId };
+    if (query) {
+      searchCriteria.$or = [
+        { bookTitle: { $regex: query, $options: 'i' } },
+        { author: { $regex: query, $options: 'i' } },
+        { isbn: { $regex: query, $options: 'i' } },
+      ];
+    }
+    if (category) {
+      const categoryExists = await CategoryModel.findOne({ name: category, school: schoolId });
+      if (!categoryExists) {
+        return res.status(400).json({ message: 'Invalid category' });
+      }
+      searchCriteria.category = category;
+    }
+    if (classId) {
+      if (!mongoose.Types.ObjectId.isValid(classId)) {
+        return res.status(400).json({ message: 'Invalid class ID' });
+      }
+      searchCriteria.class = classId;
+    }
+    if (isGeneral !== undefined) {
+      searchCriteria.isGeneral = isGeneral === 'true';
+    }
+
+    const books = await LibraryModel.find(searchCriteria)
+      .select('bookTitle author isbn category class isGeneral totalCopies availableCopies status coverImage publisher publicationYear language')
+      .populate('class', 'name')
+      .sort({ createdAt: -1 }); // Sort by newest first
+
+    logger.info(`All books fetched for librarian: ${query || category || classId || isGeneral}`, { schoolId });
+    res.json({ books });
+  } catch (error) {
+    logger.error(`Error fetching all books for librarian: ${error.message}`, { error });
+    res.status(500).json({ error: error.message });
+  }
+},
+
   bulkImportBooks: async (req, res) => {
     try {
       const schoolId = req.school._id.toString();
@@ -3883,6 +3934,9 @@ const libraryController = {
       res.status(500).json({ error: error.message });
     }
   },
+
+
+
 
   getOverdueBooks: async (req, res) => {
     try {
