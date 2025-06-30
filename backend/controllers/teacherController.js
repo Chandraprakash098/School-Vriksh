@@ -571,7 +571,8 @@ const teacherController = {
         });
       }
 
-      const attendanceDate = new Date(year, month - 1, date);
+      // const attendanceDate = new Date(year, month - 1, date);
+      const attendanceDate = new Date(Date.UTC(year, month - 1, date));
 
       // Prepare bulk write operations
       const bulkOps = attendanceData.map((student) => ({
@@ -586,6 +587,7 @@ const teacherController = {
             markedBy: teacherId,
             createdAt: new Date(),
             updatedAt: new Date(),
+            location: null,
           },
         },
       }));

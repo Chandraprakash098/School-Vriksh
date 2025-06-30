@@ -40,7 +40,7 @@
     "stream": "^0.0.3",
     "streamifier": "^0.1.1",
     "stripe": "^18.1.0",
-    "twilio": "^5.4.5",
+    "twilio": "^5.7.1",
     "winston": "^3.17.0"
   }
 }
