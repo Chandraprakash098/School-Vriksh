@@ -19,6 +19,7 @@ const attendanceSchema = new mongoose.Schema({
       required: false,
     },
   },
+  address: { type: String, required: false },
 }, { timestamps: true });
 
 attendanceSchema.index({ location: '2dsphere' });

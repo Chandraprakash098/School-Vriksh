@@ -604,118 +604,253 @@ const teacherController = {
     }
   },
 
-  // Mark teacher's own attendance
+  // // Mark teacher's own attendance
+  // markOwnAttendance: async (req, res) => {
+  //   try {
+  //     const schoolId = req.school._id.toString();
+  //     const teacherId = req.user._id;
+  //     const { latitude, longitude } = req.body;
+  //     const connection = req.connection;
+  //     const Attendance = require("../models/Attendance")(connection);
+
+  //     // Check if location data is provided
+  //     if (!latitude || !longitude) {
+  //       return res
+  //         .status(400)
+  //         .json({ message: "Location data is required to mark attendance" });
+  //     }
+
+  //     // Validate latitude and longitude
+  //     if (
+  //       isNaN(latitude) ||
+  //       isNaN(longitude) ||
+  //       latitude < -90 ||
+  //       latitude > 90 ||
+  //       longitude < -180 ||
+  //       longitude > 180
+  //     ) {
+  //       return res
+  //         .status(400)
+  //         .json({ message: "Invalid latitude or longitude values" });
+  //     }
+
+  //     // Get current date in UTC
+  //     const today = new Date();
+  //     const startOfDay = new Date(
+  //       Date.UTC(
+  //         today.getUTCFullYear(),
+  //         today.getUTCMonth(),
+  //         today.getUTCDate(),
+  //         0,
+  //         0,
+  //         0,
+  //         0
+  //       )
+  //     );
+  //     const endOfDay = new Date(
+  //       Date.UTC(
+  //         today.getUTCFullYear(),
+  //         today.getUTCMonth(),
+  //         today.getUTCDate(),
+  //         23,
+  //         59,
+  //         59,
+  //         999
+  //       )
+  //     );
+
+  //     // Check for existing attendance
+  //     const existingAttendance = await Attendance.findOne({
+  //       school: schoolId,
+  //       user: teacherId,
+  //       date: { $gte: startOfDay, $lte: endOfDay },
+  //       type: "teacher",
+  //     });
+
+  //     if (existingAttendance) {
+  //       return res
+  //         .status(400)
+  //         .json({ message: "Attendance already marked for today" });
+  //     }
+
+  //     // Reverse geocode to get readable address
+  //     let address = "Unknown location";
+  //     try {
+  //       const response = await axios.get(
+  //         `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`
+  //       );
+  //       if (response.data && response.data.display_name) {
+  //         address = response.data.display_name; // e.g., "Mumbai, Maharashtra, India"
+  //       }
+  //     } catch (error) {
+  //       console.error("Geocoding error:", error.message);
+  //       // Fallback to coordinates if geocoding fails
+  //       address = `Lat: ${latitude}, Lon: ${longitude}`;
+  //     }
+
+  //     // Create new attendance record with location and address
+  //     const attendance = new Attendance({
+  //       school: schoolId,
+  //       user: teacherId,
+  //       date: new Date(),
+  //       status: "present",
+  //       type: "teacher",
+  //       markedBy: teacherId,
+  //       location: {
+  //         type: "Point",
+  //         coordinates: [parseFloat(longitude), parseFloat(latitude)],
+  //       },
+  //       address, // Store the readable address
+  //     });
+
+  //     await attendance.save();
+  //     res.status(201).json({
+  //       message: "Attendance marked successfully",
+  //       attendance: {
+  //         ...attendance.toObject(),
+  //         location: { latitude, longitude, address }, // Include address in response
+  //       },
+  //     });
+  //   } catch (error) {
+  //     console.error("Error in markOwnAttendance:", error);
+  //     res.status(500).json({ error: error.message });
+  //   }
+  // },
+
+
   markOwnAttendance: async (req, res) => {
-    try {
-      const schoolId = req.school._id.toString();
-      const teacherId = req.user._id;
-      const { latitude, longitude } = req.body;
-      const connection = req.connection;
-      const Attendance = require("../models/Attendance")(connection);
+  try {
+    const schoolId = req.school._id.toString();
+    const teacherId = req.user._id;
+    const { latitude, longitude } = req.body;
+    const connection = req.connection;
+    const Attendance = require("../models/Attendance")(connection);
 
-      // Check if location data is provided
-      if (!latitude || !longitude) {
-        return res
-          .status(400)
-          .json({ message: "Location data is required to mark attendance" });
-      }
-
-      // Validate latitude and longitude
-      if (
-        isNaN(latitude) ||
-        isNaN(longitude) ||
-        latitude < -90 ||
-        latitude > 90 ||
-        longitude < -180 ||
-        longitude > 180
-      ) {
-        return res
-          .status(400)
-          .json({ message: "Invalid latitude or longitude values" });
-      }
-
-      // Get current date in UTC
-      const today = new Date();
-      const startOfDay = new Date(
-        Date.UTC(
-          today.getUTCFullYear(),
-          today.getUTCMonth(),
-          today.getUTCDate(),
-          0,
-          0,
-          0,
-          0
-        )
-      );
-      const endOfDay = new Date(
-        Date.UTC(
-          today.getUTCFullYear(),
-          today.getUTCMonth(),
-          today.getUTCDate(),
-          23,
-          59,
-          59,
-          999
-        )
-      );
-
-      // Check for existing attendance
-      const existingAttendance = await Attendance.findOne({
-        school: schoolId,
-        user: teacherId,
-        date: { $gte: startOfDay, $lte: endOfDay },
-        type: "teacher",
-      });
-
-      if (existingAttendance) {
-        return res
-          .status(400)
-          .json({ message: "Attendance already marked for today" });
-      }
-
-      // Reverse geocode to get readable address
-      let address = "Unknown location";
-      try {
-        const response = await axios.get(
-          `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json`
-        );
-        if (response.data && response.data.display_name) {
-          address = response.data.display_name; // e.g., "Mumbai, Maharashtra, India"
-        }
-      } catch (error) {
-        console.error("Geocoding error:", error.message);
-        // Fallback to coordinates if geocoding fails
-        address = `Lat: ${latitude}, Lon: ${longitude}`;
-      }
-
-      // Create new attendance record with location and address
-      const attendance = new Attendance({
-        school: schoolId,
-        user: teacherId,
-        date: new Date(),
-        status: "present",
-        type: "teacher",
-        markedBy: teacherId,
-        location: {
-          type: "Point",
-          coordinates: [parseFloat(longitude), parseFloat(latitude)],
-        },
-        address, // Store the readable address
-      });
-
-      await attendance.save();
-      res.status(201).json({
-        message: "Attendance marked successfully",
-        attendance: {
-          ...attendance.toObject(),
-          location: { latitude, longitude, address }, // Include address in response
-        },
-      });
-    } catch (error) {
-      console.error("Error in markOwnAttendance:", error);
-      res.status(500).json({ error: error.message });
+    // Check if location data is provided
+    if (!latitude || !longitude) {
+      return res
+        .status(400)
+        .json({ message: "Location data is required to mark attendance" });
     }
-  },
+
+    // Validate latitude and longitude
+    if (
+      isNaN(latitude) ||
+      isNaN(longitude) ||
+      latitude < -90 ||
+      latitude > 90 ||
+      longitude < -180 ||
+      longitude > 180
+    ) {
+      return res
+        .status(400)
+        .json({ message: "Invalid latitude or longitude values" });
+    }
+
+    // Get current date in UTC
+    const today = new Date();
+    const startOfDay = new Date(
+      Date.UTC(
+        today.getUTCFullYear(),
+        today.getUTCMonth(),
+        today.getUTCDate(),
+        0,
+        0,
+        0,
+        0
+      )
+    );
+    const endOfDay = new Date(
+      Date.UTC(
+        today.getUTCFullYear(),
+        today.getUTCMonth(),
+        today.getUTCDate(),
+        23,
+        59,
+        59,
+        999
+      )
+    );
+
+    // Check for existing attendance
+    const existingAttendance = await Attendance.findOne({
+      school: schoolId,
+      user: teacherId,
+      date: { $gte: startOfDay, $lte: endOfDay },
+      type: "teacher",
+    });
+
+    if (existingAttendance) {
+      return res
+        .status(400)
+        .json({ message: "Attendance already marked for today" });
+    }
+
+    // Reverse geocode to get readable address
+    let address = "Unknown location";
+    try {
+      const response = await axios.get(
+        `https://nominatim.openstreetmap.org/reverse?lat=${latitude}&lon=${longitude}&format=json&addressdetails=1`
+      );
+      if (response.data && response.data.display_name) {
+        // Get more detailed address information
+        const addressComponents = response.data.address || {};
+        const formattedAddress = [
+          addressComponents.house_number,
+          addressComponents.road,
+          addressComponents.neighbourhood || addressComponents.suburb,
+          addressComponents.city || addressComponents.town || addressComponents.village,
+          addressComponents.state,
+          addressComponents.country
+        ].filter(Boolean).join(', ');
+        
+        address = formattedAddress || response.data.display_name;
+      }
+    } catch (error) {
+      console.error("Geocoding error:", error.message);
+      // Fallback to coordinates if geocoding fails
+      address = `Coordinates: ${latitude}, ${longitude}`;
+    }
+
+    // Create new attendance record with location and address
+    const attendance = new Attendance({
+      school: schoolId,
+      user: teacherId,
+      date: new Date(),
+      status: "present",
+      type: "teacher",
+      markedBy: teacherId,
+      location: {
+        type: "Point",
+        coordinates: [parseFloat(longitude), parseFloat(latitude)],
+      },
+      address: address, // This will now be saved to database
+    });
+
+    await attendance.save();
+    
+    res.status(201).json({
+      message: "Attendance marked successfully",
+      attendance: {
+        id: attendance._id,
+        school: attendance.school,
+        user: attendance.user,
+        date: attendance.date,
+        status: attendance.status,
+        type: attendance.type,
+        location: {
+          latitude: parseFloat(latitude),
+          longitude: parseFloat(longitude),
+          address: address
+        },
+        markedAt: attendance.createdAt
+      },
+    });
+  } catch (error) {
+    console.error("Error in markOwnAttendance:", error);
+    res.status(500).json({ error: error.message });
+  }
+},
 
   getAttendanceHistory: async (req, res) => {
     try {
