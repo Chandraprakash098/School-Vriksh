@@ -3,39 +3,39 @@ const axios = require('axios');
 async function getAddressFromCoordinates(latitude, longitude) {
   const services = [
     // Service 1: OpenStreetMap Nominatim (with proper headers)
-    async () => {
-      try {
-        const response = await axios.get(
-          `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&addressdetails=1&zoom=18&extratags=1`,
-          {
-            headers: {
-              'User-Agent': 'SkookVriksh/1.0 (eticketsystem8@gmail.com)', 
-              'Accept': 'application/json',
-              'Accept-Language': 'en'
-            },
-            timeout: 10000
-          }
-        );
+    // async () => {
+    //   try {
+    //     const response = await axios.get(
+    //       `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&addressdetails=1&zoom=18&extratags=1`,
+    //       {
+    //         headers: {
+    //           'User-Agent': 'SkookVriksh/1.0 (eticketsystem8@gmail.com)', 
+    //           'Accept': 'application/json',
+    //           'Accept-Language': 'en'
+    //         },
+    //         timeout: 10000
+    //       }
+    //     );
         
-        if (response.data && response.data.display_name) {
-          const addr = response.data.address || {};
-          const formattedAddress = [
-            addr.house_number,
-            addr.road,
-            addr.neighbourhood || addr.suburb,
-            addr.city || addr.town || addr.village,
-            addr.state_district || addr.state,
-            addr.country
-          ].filter(Boolean).join(', ');
+    //     if (response.data && response.data.display_name) {
+    //       const addr = response.data.address || {};
+    //       const formattedAddress = [
+    //         addr.house_number,
+    //         addr.road,
+    //         addr.neighbourhood || addr.suburb,
+    //         addr.city || addr.town || addr.village,
+    //         addr.state_district || addr.state,
+    //         addr.country
+    //       ].filter(Boolean).join(', ');
           
-          return formattedAddress || response.data.display_name;
-        }
-        return null;
-      } catch (error) {
-        console.error('Nominatim geocoding error:', error.message);
-        return null;
-      }
-    },
+    //       return formattedAddress || response.data.display_name;
+    //     }
+    //     return null;
+    //   } catch (error) {
+    //     console.error('Nominatim geocoding error:', error.message);
+    //     return null;
+    //   }
+    // },
 
     // Service 2: LocationIQ (Free tier: 5000 requests/day)
     async () => {
