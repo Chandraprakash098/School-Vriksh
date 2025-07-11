@@ -878,6 +878,13 @@ markOwnAttendance : async (req, res) => {
 
     // Get connection and model
     const connection = req.db || mongoose.connection;
+
+    // Verify connection state
+    if (connection.readyState !== 1) {
+      console.error("MongoDB connection is not ready:", connection.readyState);
+      return res.status(500).json({ message: "Database connection error" });
+    }
+
     const Attendance = require('../models/Attendance')(connection);
 
     // Calculate date range for today (UTC)
@@ -885,13 +892,13 @@ markOwnAttendance : async (req, res) => {
     const startOfDay = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()));
     const endOfDay = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate(), 23, 59, 59, 999));
 
-    // Check if already marked
+    // Check if already marked with increased timeout
     const existingAttendance = await Attendance.findOne({
       school: schoolId,
       user: teacherId,
       date: { $gte: startOfDay, $lte: endOfDay },
       type: 'teacher',
-    });
+    }).maxTimeMS(30000); // Increase timeout to 30 seconds
 
     if (existingAttendance) {
       return res.status(400).json({ message: "Attendance already marked for today" });
@@ -939,6 +946,7 @@ markOwnAttendance : async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 },
+
 
   getAttendanceHistory: async (req, res) => {
     try {
