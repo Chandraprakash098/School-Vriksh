@@ -937,65 +937,125 @@ markOwnAttendance: async (req, res) => {
   // },
 
 
+  // assignHomework: async (req, res) => {
+  //   try {
+  //     const schoolId = req.school._id.toString();
+  //     const { classId } = req.params;
+  //     const { title, description, dueDate, subjectId } = req.body; // Changed subject to subjectId
+  //     const files = req.files; // Expecting files from multer
+  //     const teacherId = req.user._id;
+  //     const connection = req.connection;
+  //     const Homework = require("../models/Homework")(connection);
+  
+  //     if (!subjectId) {
+  //       return res.status(400).json({ message: "Subject ID is required" });
+  //     }
+  
+  //     // Verify teacher is assigned to the class and subject
+  //     const isAssigned = await verifyTeacherSubjectAssignment(
+  //       teacherId,
+  //       classId,
+  //       subjectId,
+  //       connection
+  //     );
+  //     if (!isAssigned) {
+  //       return res.status(403).json({
+  //         message: "You are not authorized to assign homework for this class and subject",
+  //       });
+  //     }
+  
+  //     const attachments = [];
+  //     if (files && files.length > 0) {
+  //       for (const file of files) {
+  //         const fileKey = `homework/${schoolId}/${classId}/${Date.now()}_${file.originalname}`;
+  //         await uploadToS3(file.buffer, fileKey, file.mimetype);
+  //         attachments.push({
+  //           fileName: file.originalname,
+  //           fileUrl: `https://${process.env.AWS_S3_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${fileKey}`,
+  //           fileType: file.mimetype,
+  //         });
+  //       }
+  //     }
+  
+  //     const homework = new Homework({
+  //       school: schoolId,
+  //       class: classId,
+  //       subject: subjectId, // Use subjectId
+  //       title,
+  //       description,
+  //       assignedBy: teacherId,
+  //       dueDate,
+  //       attachments,
+  //     });
+  
+  //     await homework.save();
+  //     res.status(201).json({ message: "Homework assigned successfully", homework });
+  //   } catch (error) {
+  //     console.error("Error in assignHomework:", error);
+  //     res.status(500).json({ error: error.message });
+  //   }
+  // },
+
+
   assignHomework: async (req, res) => {
-    try {
-      const schoolId = req.school._id.toString();
-      const { classId } = req.params;
-      const { title, description, dueDate, subjectId } = req.body; // Changed subject to subjectId
-      const files = req.files; // Expecting files from multer
-      const teacherId = req.user._id;
-      const connection = req.connection;
-      const Homework = require("../models/Homework")(connection);
-  
-      if (!subjectId) {
-        return res.status(400).json({ message: "Subject ID is required" });
-      }
-  
-      // Verify teacher is assigned to the class and subject
-      const isAssigned = await verifyTeacherSubjectAssignment(
-        teacherId,
-        classId,
-        subjectId,
-        connection
-      );
-      if (!isAssigned) {
-        return res.status(403).json({
-          message: "You are not authorized to assign homework for this class and subject",
+  try {
+    const schoolId = req.school._id.toString();
+    const { classId } = req.params;
+    const { title, description, dueDate, subjectId } = req.body;
+    const files = req.files;
+    const teacherId = req.user._id;
+    const connection = req.dbConnection;
+    const Homework = require("../models/Homework")(connection);
+
+    if (!subjectId) {
+      return res.status(400).json({ message: "Subject ID is required" });
+    }
+
+    // Verify teacher is assigned to the class and subject
+    const isAssigned = await verifyTeacherSubjectAssignment(
+      teacherId,
+      classId,
+      subjectId,
+      connection,
+      schoolId // Pass schoolId
+    );
+    if (!isAssigned) {
+      return res.status(403).json({
+        message: "You are not authorized to assign homework for this class and subject",
+      });
+    }
+
+    const attachments = [];
+    if (files && files.length > 0) {
+      for (const file of files) {
+        const fileKey = `homework/${schoolId}/${classId}/${Date.now()}_${file.originalname}`;
+        await uploadToS3(file.buffer, fileKey, file.mimetype);
+        attachments.push({
+          fileName: file.originalname,
+          fileUrl: `https://${process.env.AWS_S3_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${fileKey}`,
+          fileType: file.mimetype,
         });
       }
-  
-      const attachments = [];
-      if (files && files.length > 0) {
-        for (const file of files) {
-          const fileKey = `homework/${schoolId}/${classId}/${Date.now()}_${file.originalname}`;
-          await uploadToS3(file.buffer, fileKey, file.mimetype);
-          attachments.push({
-            fileName: file.originalname,
-            fileUrl: `https://${process.env.AWS_S3_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${fileKey}`,
-            fileType: file.mimetype,
-          });
-        }
-      }
-  
-      const homework = new Homework({
-        school: schoolId,
-        class: classId,
-        subject: subjectId, // Use subjectId
-        title,
-        description,
-        assignedBy: teacherId,
-        dueDate,
-        attachments,
-      });
-  
-      await homework.save();
-      res.status(201).json({ message: "Homework assigned successfully", homework });
-    } catch (error) {
-      console.error("Error in assignHomework:", error);
-      res.status(500).json({ error: error.message });
     }
-  },
 
+    const homework = new Homework({
+      school: schoolId,
+      class: classId,
+      subject: subjectId,
+      title,
+      description,
+      assignedBy: teacherId,
+      dueDate,
+      attachments,
+    });
+
+    await homework.save();
+    res.status(201).json({ message: "Homework assigned successfully", homework });
+  } catch (error) {
+    console.error("Error in assignHomework:", error);
+    res.status(500).json({ error: error.message });
+  }
+},
 
 
   uploadStudyMaterial: async (req, res) => {
@@ -2615,16 +2675,29 @@ function calculateGrade(percentage) {
   return "F";
 }
 
-const verifyTeacherSubjectAssignment = async (teacherId, classId, subjectId, connection) => {
+// const verifyTeacherSubjectAssignment = async (teacherId, classId, subjectId, connection) => {
+//   const Subject = require("../models/Subject")(connection);
+//   const subject = await Subject.findOne({
+//     _id: subjectId,
+//     class: classId,
+//     school: connection.db.name, // Assuming schoolId is tied to connection
+//     "teachers.teacher": teacherId,
+//   });
+//   return !!subject; // Returns true if the teacher is assigned, false otherwise
+// };
+
+
+const verifyTeacherSubjectAssignment = async (teacherId, classId, subjectId, connection, schoolId) => {
   const Subject = require("../models/Subject")(connection);
   const subject = await Subject.findOne({
     _id: subjectId,
     class: classId,
-    school: connection.db.name, // Assuming schoolId is tied to connection
+    school: schoolId, // Use schoolId instead of connection.db.name
     "teachers.teacher": teacherId,
   });
   return !!subject; // Returns true if the teacher is assigned, false otherwise
 };
+
 
 function getDistanceFromLatLonInKm(lat1, lon1, lat2, lon2) {
   const R = 6371;
