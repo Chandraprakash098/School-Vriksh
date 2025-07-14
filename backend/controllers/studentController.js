@@ -22,6 +22,7 @@ const {
   getPublicFileUrl,
   streamS3Object,
 } = require("../config/s3Upload");
+const Subject = require("../models/Subject");
 
 // Initialize Razorpay
 const razorpay = new Razorpay({
@@ -1545,10 +1546,11 @@ else if (selectedPaymentType === 'paytm') {
     try {
       const { studentId } = req.params;
       const schoolId = req.school._id.toString();
-      const connection = req.connection;
+      const connection = req.dbConnection;
       const UserModel = User(connection);
       const Homework = require("../models/Homework")(connection);
       const ClassModel = Class(connection);
+      const SubjectModel= Subject(connection);
 
       if (!mongoose.Types.ObjectId.isValid(studentId)) {
         return res.status(400).json({ message: "Invalid student ID" });

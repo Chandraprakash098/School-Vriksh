@@ -227,3 +227,4 @@
 {"error":{},"level":"error","message":"Error fetching books for student: Schema hasn't been registered for model \"Class\".\nUse mongoose.model(name, schema)","timestamp":"2025-06-18T04:38:29.370Z"}
 {"error":{},"level":"error","message":"Error fetching books for student: Schema hasn't been registered for model \"Class\".\nUse mongoose.model(name, schema)","timestamp":"2025-06-18T04:39:19.574Z"}
 {"error":{},"level":"error","message":"Error fetching books for student: Schema hasn't been registered for model \"Class\".\nUse mongoose.model(name, schema)","timestamp":"2025-06-18T04:40:52.199Z"}
+{"error":{},"level":"error","message":"Error fetching homework: Schema hasn't been registered for model \"Subject\".\nUse mongoose.model(name, schema)","timestamp":"2025-07-14T07:32:06.261Z"}
