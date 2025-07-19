@@ -685,59 +685,121 @@ const clerkController = {
     }
   },
 
+  // getStudentsByClass: async (req, res) => {
+  //   try {
+  //     const { classId } = req.params;
+  //     const schoolId = req.school._id.toString();
+  //     const connection = req.connection;
+  //     const Class = require("../models/Class")(connection);
+  //     const User = require("../models/User")(connection);
+
+  //     if (!mongoose.Types.ObjectId.isValid(classId)) {
+  //       return res.status(400).json({ message: "Invalid class ID" });
+  //     }
+
+  //     const selectedClass = await Class.findOne({
+  //       _id: classId,
+  //       school: schoolId,
+  //     });
+  //     if (!selectedClass) {
+  //       return res.status(404).json({ message: "Class not found" });
+  //     }
+
+  //     const students = await User.find({
+  //       school: schoolId,
+  //       "studentDetails.class": classId,
+  //       role: "student",
+  //     })
+  //       .select("name email studentDetails")
+  //       .lean();
+
+  //     res.json({
+  //       status: "success",
+  //       class: {
+  //         name: selectedClass.name,
+  //         division: selectedClass.division,
+  //         academicYear: selectedClass.academicYear,
+  //         capacity: selectedClass.capacity,
+  //         enrolledCount: selectedClass.students.length,
+  //       },
+  //       count: students.length,
+  //       students: students.map((student) => ({
+  //         id: student._id,
+  //         name: student.name,
+  //         email: student.email,
+  //         grNumber: student.studentDetails.grNumber,
+  //         admissionType: student.studentDetails.admissionType,
+  //         dob: student.studentDetails.dob,
+  //         gender: student.studentDetails.gender,
+  //         parentDetails: student.studentDetails.parentDetails,
+  //       })),
+  //     });
+  //   } catch (error) {
+  //     res.status(500).json({ error: error.message });
+  //   }
+  // },
+
+
   getStudentsByClass: async (req, res) => {
-    try {
-      const { classId } = req.params;
-      const schoolId = req.school._id.toString();
-      const connection = req.connection;
-      const Class = require("../models/Class")(connection);
-      const User = require("../models/User")(connection);
+  try {
+    const { classId } = req.params;
+    const schoolId = req.school._id.toString();
+    const connection = req.connection;
+    const Class = require("../models/Class")(connection);
+    const User = require("../models/User")(connection);
 
-      if (!mongoose.Types.ObjectId.isValid(classId)) {
-        return res.status(400).json({ message: "Invalid class ID" });
-      }
-
-      const selectedClass = await Class.findOne({
-        _id: classId,
-        school: schoolId,
-      });
-      if (!selectedClass) {
-        return res.status(404).json({ message: "Class not found" });
-      }
-
-      const students = await User.find({
-        school: schoolId,
-        "studentDetails.class": classId,
-        role: "student",
-      })
-        .select("name email studentDetails")
-        .lean();
-
-      res.json({
-        status: "success",
-        class: {
-          name: selectedClass.name,
-          division: selectedClass.division,
-          academicYear: selectedClass.academicYear,
-          capacity: selectedClass.capacity,
-          enrolledCount: selectedClass.students.length,
-        },
-        count: students.length,
-        students: students.map((student) => ({
-          id: student._id,
-          name: student.name,
-          email: student.email,
-          grNumber: student.studentDetails.grNumber,
-          admissionType: student.studentDetails.admissionType,
-          dob: student.studentDetails.dob,
-          gender: student.studentDetails.gender,
-          parentDetails: student.studentDetails.parentDetails,
-        })),
-      });
-    } catch (error) {
-      res.status(500).json({ error: error.message });
+    if (!mongoose.Types.ObjectId.isValid(classId)) {
+      return res.status(400).json({ message: "Invalid class ID" });
     }
-  },
+
+    const selectedClass = await Class.findOne({
+      _id: classId,
+      school: schoolId,
+    });
+    
+    if (!selectedClass) {
+      return res.status(404).json({ message: "Class not found" });
+    }
+
+    const students = await User.find({
+      school: schoolId,
+      "studentDetails.class": classId,
+      role: "student",
+    })
+      .select("name email studentDetails status createdAt updatedAt")
+      .lean();
+
+    res.json({
+      status: "success",
+      class: {
+        name: selectedClass.name,
+        division: selectedClass.division,
+        academicYear: selectedClass.academicYear,
+        capacity: selectedClass.capacity,
+        enrolledCount: selectedClass.students.length,
+      },
+      count: students.length,
+      students: students.map((student) => ({
+        id: student._id,
+        name: student.name,
+        email: student.email,
+        grNumber: student.studentDetails?.grNumber,
+        admissionType: student.studentDetails?.admissionType,
+        dob: student.studentDetails?.dob,
+        gender: student.studentDetails?.gender,
+        mobile: student.studentDetails?.mobile,
+        isRTE: student.studentDetails?.isRTE || false,
+        parentDetails: student.studentDetails?.parentDetails || null,
+        transportDetails: student.studentDetails?.transportDetails || null,
+        status: student.status,
+        createdAt: student.createdAt,
+        updatedAt: student.updatedAt
+      })),
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+},
 
   requestLeave: async (req, res) => {
     try {

@@ -6,7 +6,7 @@ const authController = require('../controllers/authController');
 // Owner registration
 router.post('/register/owner', authController.registerOwner);
 
-// Login for both owner and admin
+
 router.post('/login', authController.login);
 
 // Forget password - Send OTP

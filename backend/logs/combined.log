@@ -1174,3 +1174,4 @@
 {"level":"info","message":"Fetched audit logs","schoolId":"6822d8d81267a79341641261","timestamp":"2025-06-18T04:50:29.078Z"}
 {"level":"info","message":"Book requested: The Great Gatsby (Updated Edition) by student 6822dd97f0aacc87bdd67cc2","schoolId":"6822d8d81267a79341641261","timestamp":"2025-06-18T04:58:57.956Z"}
 {"error":{},"level":"error","message":"Error fetching homework: Schema hasn't been registered for model \"Subject\".\nUse mongoose.model(name, schema)","timestamp":"2025-07-14T07:32:06.261Z"}
+{"level":"info","message":"Homework fetched for student 6843c4332113a4f005c0ab82","timestamp":"2025-07-14T07:32:36.605Z"}
