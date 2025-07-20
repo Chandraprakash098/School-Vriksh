@@ -1003,94 +1003,264 @@ const clerkController = {
     }
   },
 
-  generateCertificate: async (req, res) => {
-    try {
-      const { certificateId } = req.params;
-      const { status, comments, pdfData, certificateType } = req.body;
+  // generateCertificate: async (req, res) => {
+  //   try {
+  //     const { certificateId } = req.params;
+  //     const { status, comments, pdfData, certificateType } = req.body;
 
-      const schoolId = req.school._id.toString();
-      const connection = req.connection;
-      const Certificate = require("../models/Certificate")(connection);
-      const User = require("../models/User")(connection);
+  //     const schoolId = req.school._id.toString();
+  //     const connection = req.connection;
+  //     const Certificate = require("../models/Certificate")(connection);
+  //     const User = require("../models/User")(connection);
 
-      if (!mongoose.Types.ObjectId.isValid(certificateId)) {
-        return res.status(400).json({ message: "Invalid certificate ID" });
-      }
+  //     if (!mongoose.Types.ObjectId.isValid(certificateId)) {
+  //       return res.status(400).json({ message: "Invalid certificate ID" });
+  //     }
 
-      const certificate = await Certificate.findOne({
-        _id: certificateId,
-        school: schoolId,
-      });
-      if (!certificate) {
-        return res
-          .status(404)
-          .json({ message: "Certificate request not found" });
-      }
+  //     const certificate = await Certificate.findOne({
+  //       _id: certificateId,
+  //       school: schoolId,
+  //     });
+  //     if (!certificate) {
+  //       return res
+  //         .status(404)
+  //         .json({ message: "Certificate request not found" });
+  //     }
 
-      if (status === "rejected") {
-        certificate.status = "rejected";
-        certificate.comments = comments;
-        await certificate.save();
-        return res.json({
-          message: "Certificate request rejected",
-          certificate,
-        });
-      }
+  //     if (status === "rejected") {
+  //       certificate.status = "rejected";
+  //       certificate.comments = comments;
+  //       await certificate.save();
+  //       return res.json({
+  //         message: "Certificate request rejected",
+  //         certificate,
+  //       });
+  //     }
 
-      if (status !== "generated") {
-        return res
-          .status(400)
-          .json({ message: "Invalid status for generation" });
-      }
+  //     if (status !== "generated") {
+  //       return res
+  //         .status(400)
+  //         .json({ message: "Invalid status for generation" });
+  //     }
 
-      if (!pdfData || !certificateType) {
-        return res
-          .status(400)
-          .json({ message: "PDF data and certificate type are required" });
-      }
+  //     if (!pdfData || !certificateType) {
+  //       return res
+  //         .status(400)
+  //         .json({ message: "PDF data and certificate type are required" });
+  //     }
 
-      let pdfBuffer;
-      try {
-        pdfBuffer = Buffer.from(pdfData, "base64");
-      } catch (error) {
-        return res
-          .status(400)
-          .json({ message: "Invalid base64 PDF data", error: error.message });
-      }
+  //     let pdfBuffer;
+  //     try {
+  //       pdfBuffer = Buffer.from(pdfData, "base64");
+  //     } catch (error) {
+  //       return res
+  //         .status(400)
+  //         .json({ message: "Invalid base64 PDF data", error: error.message });
+  //     }
 
-      const certificateKey = `certificates/${schoolId}/${certificateId}/${certificateType}.pdf`;
-      let uploadResult;
-      try {
-        uploadResult = await uploadToS3(pdfBuffer, certificateKey);
-      } catch (error) {
-        return res
-          .status(500)
-          .json({ message: "Failed to upload to S3", error: error.message });
-      }
+  //     const certificateKey = `certificates/${schoolId}/${certificateId}/${certificateType}.pdf`;
+  //     let uploadResult;
+  //     try {
+  //       uploadResult = await uploadToS3(pdfBuffer, certificateKey);
+  //     } catch (error) {
+  //       return res
+  //         .status(500)
+  //         .json({ message: "Failed to upload to S3", error: error.message });
+  //     }
 
-      certificate.documentUrl = uploadResult.Location;
-      certificate.documentKey = certificateKey;
-      certificate.status = "generated";
-      certificate.issuedDate = new Date();
-      certificate.generatedBy = req.user._id;
-      certificate.comments = comments;
+  //     certificate.documentUrl = uploadResult.Location;
+  //     certificate.documentKey = certificateKey;
+  //     certificate.status = "generated";
+  //     certificate.issuedDate = new Date();
+  //     certificate.generatedBy = req.user._id;
+  //     certificate.comments = comments;
 
-      await certificate.save();
+  //     await certificate.save();
 
-      res.json({
-        message: "Certificate generated successfully",
-        certificate: {
-          ...certificate.toObject(),
-          documentAccessUrl: `/certificates/${certificateId}/${certificateKey
-            .split("/")
-            .pop()}`,
-        },
-      });
-    } catch (error) {
-      console.error("Error in generateCertificate:", error);
-      res.status(500).json({ error: error.message });
+  //     res.json({
+  //       message: "Certificate generated successfully",
+  //       certificate: {
+  //         ...certificate.toObject(),
+  //         documentAccessUrl: `/certificates/${certificateId}/${certificateKey
+  //           .split("/")
+  //           .pop()}`,
+  //       },
+  //     });
+  //   } catch (error) {
+  //     console.error("Error in generateCertificate:", error);
+  //     res.status(500).json({ error: error.message });
+  //   }
+  // },
+
+
+  generateCertificate : async (req, res) => {
+  try {
+    const { certificateId } = req.params;
+    const { status, comments, pdfData, certificateType, serialNumber, issuedDate } = req.body;
+
+    const schoolId = req.school._id.toString();
+    const connection = req.connection;
+    const Certificate = require("../models/Certificate")(connection);
+    const User = require("../models/User")(connection);
+
+    if (!mongoose.Types.ObjectId.isValid(certificateId)) {
+      return res.status(400).json({ message: "Invalid certificate ID" });
     }
-  },
+
+    const certificate = await Certificate.findOne({
+      _id: certificateId,
+      school: schoolId,
+    });
+    if (!certificate) {
+      return res
+        .status(404)
+        .json({ message: "Certificate request not found" });
+    }
+
+    if (status === "rejected") {
+      certificate.status = "rejected";
+      certificate.comments = comments;
+      await certificate.save();
+      return res.json({
+        message: "Certificate request rejected",
+        certificate,
+      });
+    }
+
+    if (status !== "generated") {
+      return res
+        .status(400)
+        .json({ message: "Invalid status for generation" });
+    }
+
+    if (!pdfData || !certificateType || !serialNumber) {
+      return res
+        .status(400)
+        .json({ message: "PDF data, certificate type, and serial number are required" });
+    }
+
+    let pdfBuffer;
+    try {
+      pdfBuffer = Buffer.from(pdfData, "base64");
+    } catch (error) {
+      return res
+        .status(400)
+        .json({ message: "Invalid base64 PDF data", error: error.message });
+    }
+
+    const certificateKey = `certificates/${schoolId}/${certificateId}/${certificateType}.pdf`;
+    let uploadResult;
+    try {
+      uploadResult = await uploadToS3(pdfBuffer, certificateKey);
+    } catch (error) {
+      return res
+        .status(500)
+        .json({ message: "Failed to upload to S3", error: error.message });
+    }
+
+    certificate.documentUrl = uploadResult.Location;
+    certificate.documentKey = certificateKey;
+    certificate.status = "generated";
+    certificate.issuedDate = new Date(issuedDate);
+    certificate.generatedBy = req.user._id;
+    certificate.comments = comments;
+    certificate.serialNumber = serialNumber;
+
+    await certificate.save();
+
+    res.json({
+      message: "Certificate generated successfully",
+      certificate: {
+        ...certificate.toObject(),
+        documentAccessUrl: `/certificates/${certificateId}/${certificateKey
+          .split("/")
+          .pop()}`,
+      },
+    });
+  } catch (error) {
+    console.error("Error in generateCertificate:", error);
+    res.status(500).json({ error: error.message });
+  }
+},
+
+
+
+verifyCertificateBySerial : async (req, res) => {
+  try {
+    const { serialNumber } = req.params;
+    const schoolId = req.school._id.toString();
+    const connection = req.connection;
+    const Certificate = require("../models/Certificate")(connection);
+    const User = require("../models/User")(connection);
+    const Class = require("../models/Class")(connection);
+
+    const certificate = await Certificate.findOne({
+      serialNumber,
+      school: schoolId,
+    })
+      .populate({
+        path: "student",
+        select: "name email studentDetails",
+        populate: {
+          path: "studentDetails.class",
+          model: Class,
+          select: "name division",
+        },
+      })
+      .populate("generatedBy", "name email", User);
+
+    if (!certificate) {
+      return res.status(404).json({ message: "Certificate not found" });
+    }
+
+    res.json({
+      status: "success",
+      certificate: {
+        id: certificate._id,
+        studentName: certificate.student?.name || "N/A",
+        studentEmail: certificate.student?.email || "N/A",
+        type: certificate.type,
+        purpose: certificate.purpose,
+        urgency: certificate.urgency,
+        requestDate: certificate.requestDate,
+        status: certificate.status,
+        documentUrl: certificate.documentUrl,
+        signedDocumentUrl: certificate.signedDocumentUrl,
+        documentAccessUrl: certificate.documentKey
+          ? `/certificates/${certificate._id}/${certificate.documentKey.split("/").pop()}`
+          : null,
+        signedDocumentAccessUrl: certificate.signedDocumentKey
+          ? `/certificates/${certificate._id}/${certificate.signedDocumentKey.split("/").pop()}`
+          : null,
+        isSentToStudent: certificate.isSentToStudent,
+        issuedDate: certificate.issuedDate || null,
+        generatedBy: certificate.generatedBy ? certificate.generatedBy.name : null,
+        comments: certificate.comments || null,
+        serialNumber: certificate.serialNumber,
+        grNumber: certificate.student?.studentDetails?.grNumber || "N/A",
+        parentName: certificate.student?.studentDetails?.parentDetails?.name || "N/A",
+        admissionDate: certificate.student?.studentDetails?.admissionDate
+          ? new Date(certificate.student.studentDetails.admissionDate).toISOString().split("T")[0]
+          : "N/A",
+        dob: certificate.student?.studentDetails?.dob
+          ? new Date(certificate.student.studentDetails.dob).toISOString().split("T")[0]
+          : "N/A",
+        className: certificate.student?.studentDetails?.class
+          ? `${certificate.student.studentDetails.class.name}${
+              certificate.student.studentDetails.class.division
+                ? " " + certificate.student.studentDetails.class.division
+                : ""
+            }`
+          : "N/A",
+        schoolName: req.school?.name || "N/A",
+        schoolAddress: req.school?.address || "N/A",
+      },
+    });
+  } catch (error) {
+    console.error("Error in verifyCertificateBySerial:", error);
+    res.status(500).json({ error: error.message });
+  }
+},
 
   streamCertificate: async (req, res) => {
     try {

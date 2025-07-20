@@ -32,6 +32,7 @@ const certificateSchema = new mongoose.Schema(
     documentKey: { type: String },
     signedDocumentUrl: { type: String, required: false }, // Optional now
     signedDocumentKey: { type: String },
+    serialNumber: { type: String, required: false },
     isSentToStudent: { type: Boolean, default: false },
     requestDate: { type: Date, default: Date.now },
     issuedDate: { type: Date },

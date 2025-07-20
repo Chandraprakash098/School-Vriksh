@@ -25,6 +25,7 @@ router.get("/leave-status", clerkController.getLeaveStatus);
 
 router.get("/certificates/pending", clerkController.getPendingCertificates);
 router.get("/certificates/history", clerkController.getCertificateHistory);
+router.get("/certificates/verify-serial/:serialNumber", clerkController.verifyCertificateBySerial);
 
 router.post(
   "/certificates/:certificateId/generate",
