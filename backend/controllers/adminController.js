@@ -3316,6 +3316,104 @@ publishIndividualMarksheet: async (req, res) => {
     });
   }
 },
+
+
+getExamEvent: async (req, res) => {
+  const { id } = req.params;
+  const schoolId = req.school._id;
+  const connection = req.connection;
+  const ExamEvent = getModel("ExamEvent", connection);
+
+  try {
+    const examEvent = await ExamEvent.findOne({
+      _id: id,
+      school: schoolId,
+    })
+      .populate("classes", "name division")
+      .populate("createdBy", "name")
+      .lean();
+
+    if (!examEvent) {
+      return res.status(404).json({
+        success: false,
+        message: "Exam event not found",
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: examEvent,
+      message: "Exam event retrieved successfully",
+    });
+  } catch (error) {
+    console.error("Error in getExamEvent:", error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      message: "Failed to retrieve exam event",
+    });
+  }
+},
+
+getExamSchedulesForEvent: async (req, res) => {
+  const { id } = req.params;
+  const schoolId = req.school._id;
+  const connection = req.connection;
+  const Exam = getModel("Exam", connection);
+  const User = getModel("User", connection);
+
+  try {
+    const exams = await Exam.find({ 
+      school: schoolId,
+      examEvent: id 
+    })
+      .populate("subject", "name")
+      .populate("class", "name division")
+      .populate("examEvent", "name examType customExamType")
+      .populate({
+        path: "seatingArrangement.arrangement.students.student",
+        model: User,
+        select: "name studentDetails.grNumber",
+      })
+      .sort({ examDate: 1, startTime: 1 })
+      .lean();
+
+    const schedule = {};
+    exams.forEach((exam) => {
+      const dateKey = exam.examDate.toISOString().split("T")[0];
+      if (!schedule[dateKey]) {
+        schedule[dateKey] = [];
+      }
+      schedule[dateKey].push({
+        ...exam,
+        examType:
+          exam.examType === "Other"
+            ? exam.examEvent.customExamType
+            : exam.examType,
+        displayExamType:
+          exam.examType === "Other"
+            ? exam.examEvent.customExamType
+            : exam.examType,
+      });
+    });
+
+    res.status(200).json({
+      success: true,
+      data: {
+        schedule,
+        totalExams: exams.length,
+      },
+      message: "Exam schedules for event retrieved successfully",
+    });
+  } catch (error) {
+    console.error("Error in getExamSchedulesForEvent:", error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      message: "Failed to retrieve exam schedules for event",
+    });
+  }
+},
   
 
   enterResults: async (req, res) => {

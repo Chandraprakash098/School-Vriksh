@@ -273,6 +273,19 @@ router.get(
   adminController.getExamSchedules
 );
 
+router.get(
+  "/exam-event/:id",
+  [auth, roleCheck(["admin"])],
+  adminController.getExamEvent
+);
+
+// Get exam schedules for a specific exam event
+router.get(
+  "/exam-event/:id/schedules",
+  [auth, roleCheck(["admin"])],
+  adminController.getExamSchedulesForEvent
+);
+
 // Updated Exam Results Workflow
 router.get(
   "/exams/:examId/classes/:classId/review",
