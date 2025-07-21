@@ -102,7 +102,8 @@ const adminController = {
 
       const users = await User.find({
         school: schoolId,
-        role: { $ne: "student" }, // Exclude users with role 'student'
+        // role: { $ne: "student" }, // Exclude users with role 'student'
+        role: { $nin: ["student", "teacher"] },
       })
         .select("-password")
         .populate("permissions.canTakeAttendance", "name division", Class)
