@@ -1175,3 +1175,12 @@
 {"level":"info","message":"Book requested: The Great Gatsby (Updated Edition) by student 6822dd97f0aacc87bdd67cc2","schoolId":"6822d8d81267a79341641261","timestamp":"2025-06-18T04:58:57.956Z"}
 {"error":{},"level":"error","message":"Error fetching homework: Schema hasn't been registered for model \"Subject\".\nUse mongoose.model(name, schema)","timestamp":"2025-07-14T07:32:06.261Z"}
 {"level":"info","message":"Homework fetched for student 6843c4332113a4f005c0ab82","timestamp":"2025-07-14T07:32:36.605Z"}
+{"error":{},"level":"error","message":"Error fetching homework: connection.model is not a function","timestamp":"2025-08-02T06:46:12.281Z"}
+{"error":{},"level":"error","message":"Error fetching homework: connection.model is not a function","timestamp":"2025-08-02T06:49:00.986Z"}
+{"error":{},"level":"error","message":"Error fetching homework: connection.model is not a function","timestamp":"2025-08-02T06:49:26.659Z"}
+{"error":{},"level":"error","message":"Error fetching homework: connection.model is not a function","timestamp":"2025-08-02T06:49:54.505Z"}
+{"error":{},"level":"error","message":"Error fetching homework: connection.model is not a function","timestamp":"2025-08-02T06:52:37.140Z"}
+{"error":{},"level":"error","message":"Error fetching homework: connection.model is not a function","timestamp":"2025-08-02T06:53:42.805Z"}
+{"error":{},"level":"error","message":"Error fetching homework: connection.model is not a function","timestamp":"2025-08-02T06:57:05.131Z"}
+{"level":"info","message":"Homework fetched for child 6822dd97f0aacc87bdd67cc2","timestamp":"2025-08-02T06:58:37.580Z"}
+{"level":"info","message":"Homework fetched for child 6822dd97f0aacc87bdd67cc2","timestamp":"2025-08-02T06:58:57.750Z"}

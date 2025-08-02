@@ -28,7 +28,8 @@ const models = {
   DailyWork: require('../models/DailyWork'),
   AuditLog:require('../models/AuditLog'),
   Marks: require("../models/marks"),
-  Library:require("../models/Library")
+  Library:require("../models/Library"),
+  Homework:require("../models/Homework")
 };
 
 console.log('Loaded models:', Object.keys(models).map(name => ({

@@ -1025,7 +1025,6 @@
 
 
 
-
 const mongoose = require("mongoose");
 const Razorpay = require("razorpay");
 const Stripe = require("stripe");
@@ -1046,6 +1045,7 @@ const {
   getPublicFileUrl,
   streamS3Object,
 } = require("../config/s3Upload");
+
 
 // Initialize Razorpay
 const razorpay = new Razorpay({
@@ -2262,7 +2262,7 @@ const parentController = {
     }
   },
 
-  // Get study materials for a specific child
+ 
   
 
   // Get assigned homework for a specific child
@@ -2271,7 +2271,10 @@ const parentController = {
       const { childId } = req.params;
       const schoolId = req.school._id.toString();
       const parentId = req.user._id.toString();
-      const connection = req.connection;
+      const connection = req.dbConnection;
+
+      
+
       const UserModel = User(connection);
       const Homework = require("../models/Homework")(connection);
       const ClassModel = Class(connection);

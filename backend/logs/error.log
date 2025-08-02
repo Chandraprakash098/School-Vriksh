@@ -228,3 +228,10 @@
 {"error":{},"level":"error","message":"Error fetching books for student: Schema hasn't been registered for model \"Class\".\nUse mongoose.model(name, schema)","timestamp":"2025-06-18T04:39:19.574Z"}
 {"error":{},"level":"error","message":"Error fetching books for student: Schema hasn't been registered for model \"Class\".\nUse mongoose.model(name, schema)","timestamp":"2025-06-18T04:40:52.199Z"}
 {"error":{},"level":"error","message":"Error fetching homework: Schema hasn't been registered for model \"Subject\".\nUse mongoose.model(name, schema)","timestamp":"2025-07-14T07:32:06.261Z"}
+{"error":{},"level":"error","message":"Error fetching homework: connection.model is not a function","timestamp":"2025-08-02T06:46:12.281Z"}
+{"error":{},"level":"error","message":"Error fetching homework: connection.model is not a function","timestamp":"2025-08-02T06:49:00.986Z"}
+{"error":{},"level":"error","message":"Error fetching homework: connection.model is not a function","timestamp":"2025-08-02T06:49:26.659Z"}
+{"error":{},"level":"error","message":"Error fetching homework: connection.model is not a function","timestamp":"2025-08-02T06:49:54.505Z"}
+{"error":{},"level":"error","message":"Error fetching homework: connection.model is not a function","timestamp":"2025-08-02T06:52:37.140Z"}
+{"error":{},"level":"error","message":"Error fetching homework: connection.model is not a function","timestamp":"2025-08-02T06:53:42.805Z"}
+{"error":{},"level":"error","message":"Error fetching homework: connection.model is not a function","timestamp":"2025-08-02T06:57:05.131Z"}
