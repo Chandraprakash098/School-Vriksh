@@ -1184,3 +1184,10 @@
 {"error":{},"level":"error","message":"Error fetching homework: connection.model is not a function","timestamp":"2025-08-02T06:57:05.131Z"}
 {"level":"info","message":"Homework fetched for child 6822dd97f0aacc87bdd67cc2","timestamp":"2025-08-02T06:58:37.580Z"}
 {"level":"info","message":"Homework fetched for child 6822dd97f0aacc87bdd67cc2","timestamp":"2025-08-02T06:58:57.750Z"}
+{"level":"info","message":"Marksheets fetched for child 6822dd97f0aacc87bdd67cc2","timestamp":"2025-08-08T05:39:10.387Z"}
+{"level":"error","message":"Marksheet not found for examEvent: 6822df3bf0aacc87bdd67d23, child: 6822dd97f0aacc87bdd67cc2, school: 6822d8d81267a79341641261","timestamp":"2025-08-08T05:45:01.526Z"}
+{"level":"error","message":"Marksheet not found for examEvent: 6822df3bf0aacc87bdd67d23, child: 6822dd97f0aacc87bdd67cc2, school: 6822d8d81267a79341641261","timestamp":"2025-08-08T05:48:39.181Z"}
+{"level":"error","message":"Document key mismatch. Expected: 6822dd97f0aacc87bdd67cc2_1747117462909.pdf, Got: 6822e01624a164d9dd743146","timestamp":"2025-08-08T05:49:00.857Z"}
+{"level":"info","message":"Marksheet for exam event 6822df3af0aacc87bdd67d1c downloaded for child 6822dd97f0aacc87bdd67cc2","timestamp":"2025-08-08T05:49:25.440Z"}
+{"level":"info","message":"Marksheets fetched for child 6822dd97f0aacc87bdd67cc2","timestamp":"2025-08-08T05:49:53.050Z"}
+{"level":"info","message":"Marksheet for exam event 6822df3af0aacc87bdd67d1c downloaded for child 6822dd97f0aacc87bdd67cc2","timestamp":"2025-08-08T05:50:26.528Z"}

@@ -2807,72 +2807,133 @@ const parentController = {
   },
 
   // Download marksheet for a specific child
+  // downloadMarksheet: async (req, res) => {
+  //   try {
+  //     const { childId, examEventId, documentKey } = req.params;
+  //     const schoolId = req.school._id.toString();
+  //     const parentId = req.user._id.toString();
+  //     const connection = req.connection;
+  //     const Result = require("../models/Results")(connection);
+  //     const User= require("../models/User")(connection);
+
+  //     // Verify parent-child relationship
+  //     const parent = await User.findById(parentId).select(
+  //       "studentDetails.children"
+  //     );
+  //     if (
+  //       !parent ||
+  //       !parent.studentDetails.children.some((id) => id.toString() === childId)
+  //     ) {
+  //       return res
+  //         .status(403)
+  //         .json({ message: "Unauthorized: Child not linked to this parent" });
+  //     }
+
+  //     if (
+  //       !mongoose.Types.ObjectId.isValid(childId) ||
+  //       !mongoose.Types.ObjectId.isValid(examEventId)
+  //     ) {
+  //       return res
+  //         .status(400)
+  //         .json({ message: "Invalid child or exam event ID" });
+  //     }
+
+  //     const result = await Result.findOne({
+  //       examEvent: new mongoose.Types.ObjectId(examEventId),
+  //       school: new mongoose.Types.ObjectId(schoolId),
+  //       student: new mongoose.Types.ObjectId(childId),
+  //       status: "published",
+  //       marksheet: { $ne: null },
+  //     });
+
+  //     if (!result) {
+  //       return res.status(404).json({
+  //         message: "Marksheet not found or not published",
+  //       });
+  //     }
+
+  //     if (
+  //       !result.marksheet.key ||
+  //       !result.marksheet.key.endsWith(documentKey)
+  //     ) {
+  //       return res.status(404).json({ message: "Document not found" });
+  //     }
+
+  //     res.setHeader("Content-Type", "application/pdf");
+  //     res.setHeader(
+  //       "Content-Disposition",
+  //       `attachment; filename=marksheet_${examEventId}.pdf`
+  //     );
+
+  //     await streamS3Object(result.marksheet.key, res);
+  //     logger.info(
+  //       `Marksheet for exam event ${examEventId} downloaded for child ${childId}`
+  //     );
+  //   } catch (error) {
+  //     logger.error(`Error downloading marksheet: ${error.message}`, { error });
+  //     res.status(500).json({ error: error.message });
+  //   }
+  // },
+
+
   downloadMarksheet: async (req, res) => {
     try {
-      const { childId, examEventId, documentKey } = req.params;
-      const schoolId = req.school._id.toString();
-      const parentId = req.user._id.toString();
-      const connection = req.connection;
-      const Result = require("../models/Results")(connection);
+        const { childId, examEventId, documentKey } = req.params;
+        const schoolId = req.school._id.toString();
+        const parentId = req.user._id.toString();
+        const connection = req.connection;
+        const Result = require("../models/Results")(connection);
+        const User = require("../models/User")(connection);
 
-      // Verify parent-child relationship
-      const parent = await User.findById(parentId).select(
-        "studentDetails.children"
-      );
-      if (
-        !parent ||
-        !parent.studentDetails.children.some((id) => id.toString() === childId)
-      ) {
-        return res
-          .status(403)
-          .json({ message: "Unauthorized: Child not linked to this parent" });
-      }
+        // Verify parent-child relationship
+        const parent = await User.findById(parentId).select("studentDetails.children");
+        if (
+            !parent ||
+            !parent.studentDetails.children.some((id) => id.toString() === childId)
+        ) {
+            return res.status(403).json({ message: "Unauthorized: Child not linked to this parent" });
+        }
 
-      if (
-        !mongoose.Types.ObjectId.isValid(childId) ||
-        !mongoose.Types.ObjectId.isValid(examEventId)
-      ) {
-        return res
-          .status(400)
-          .json({ message: "Invalid child or exam event ID" });
-      }
+        if (
+            !mongoose.Types.ObjectId.isValid(childId) ||
+            !mongoose.Types.ObjectId.isValid(examEventId)
+        ) {
+            return res.status(400).json({ message: "Invalid child or exam event ID" });
+        }
 
-      const result = await Result.findOne({
-        examEvent: new mongoose.Types.ObjectId(examEventId),
-        school: new mongoose.Types.ObjectId(schoolId),
-        student: new mongoose.Types.ObjectId(childId),
-        status: "published",
-        marksheet: { $ne: null },
-      });
-
-      if (!result) {
-        return res.status(404).json({
-          message: "Marksheet not found or not published",
+        const result = await Result.findOne({
+            examEvent: new mongoose.Types.ObjectId(examEventId),
+            school: new mongoose.Types.ObjectId(schoolId),
+            student: new mongoose.Types.ObjectId(childId),
+            status: "published",
+            marksheet: { $ne: null },
         });
-      }
 
-      if (
-        !result.marksheet.key ||
-        !result.marksheet.key.endsWith(documentKey)
-      ) {
-        return res.status(404).json({ message: "Document not found" });
-      }
+        if (!result) {
+            logger.error(`Marksheet not found for examEvent: ${examEventId}, child: ${childId}, school: ${schoolId}`);
+            return res.status(404).json({ message: "Marksheet not found or not published" });
+        }
 
-      res.setHeader("Content-Type", "application/pdf");
-      res.setHeader(
-        "Content-Disposition",
-        `attachment; filename=marksheet_${examEventId}.pdf`
-      );
+        console.log("Result:", JSON.stringify(result, null, 2)); // Debug log
+        const expectedDocumentKey = result.marksheet.key.split("/").pop(); // Extract filename
+        if (!result.marksheet.key || expectedDocumentKey !== documentKey) {
+            logger.error(`Document key mismatch. Expected: ${expectedDocumentKey}, Got: ${documentKey}`);
+            return res.status(404).json({ message: "Document not found" });
+        }
 
-      await streamS3Object(result.marksheet.key, res);
-      logger.info(
-        `Marksheet for exam event ${examEventId} downloaded for child ${childId}`
-      );
+        res.setHeader("Content-Type", "application/pdf");
+        res.setHeader(
+            "Content-Disposition",
+            `attachment; filename=marksheet_${examEventId}.pdf`
+        );
+
+        await streamS3Object(result.marksheet.key, res);
+        logger.info(`Marksheet for exam event ${examEventId} downloaded for child ${childId}`);
     } catch (error) {
-      logger.error(`Error downloading marksheet: ${error.message}`, { error });
-      res.status(500).json({ error: error.message });
+        logger.error(`Error downloading marksheet: ${error.message}`, { error });
+        res.status(500).json({ error: error.message });
     }
-  },
+},
 
   // Get report card for a specific child
   getReportCard: async (req, res) => {
